@@ -9,14 +9,28 @@ from typing import Callable, Sequence
 from .theme import COLORI, font
 
 
+_TK_DISPONIBILE: bool | None = None
+
+
 def tk_available() -> bool:
-    """True se questa macchina può aprire finestre (evita errori nei test senza schermo)."""
-    try:
-        finestra = tk.Tk()
-    except tk.TclError:
-        return False
-    finestra.destroy()
-    return True
+    """True se questa macchina può aprire finestre (evita errori nei test senza schermo).
+
+    Il risultato viene ricordato: su macOS creare e chiudere più finestre nello stesso
+    processo è sconsigliato.
+    """
+    global _TK_DISPONIBILE
+    if _TK_DISPONIBILE is None:
+        if tk._default_root is not None:
+            _TK_DISPONIBILE = True
+        else:
+            try:
+                finestra = tk.Tk()
+            except tk.TclError:
+                _TK_DISPONIBILE = False
+            else:
+                finestra.destroy()
+                _TK_DISPONIBILE = True
+    return _TK_DISPONIBILE
 
 
 class StepIndicator(ttk.Frame):

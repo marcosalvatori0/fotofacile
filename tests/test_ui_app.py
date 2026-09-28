@@ -1,22 +1,10 @@
 import pytest
 
-from fotofacile.core.demo import DemoAdbBackend
 from fotofacile.core.errors import FotoFacileError
 from fotofacile.ui.widgets import tk_available
+from tests.aiuto import attendi
 
 pytestmark = pytest.mark.skipif(not tk_available(), reason="serve un ambiente grafico")
-
-
-@pytest.fixture
-def app(tmp_path, monkeypatch):
-    from fotofacile.ui.app import App
-
-    monkeypatch.setenv("HOME", str(tmp_path))
-    applicazione = App(backend=DemoAdbBackend(file_count=6), demo_mode=True)
-    applicazione.withdraw()
-    applicazione.stop_all_polling()
-    yield applicazione
-    applicazione.destroy()
 
 
 def test_pagine_registrate(app):
