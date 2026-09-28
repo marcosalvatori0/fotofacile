@@ -9,7 +9,6 @@ from tkinter import ttk
 
 from ..core.format import format_size
 from ..core.planner import TransferOptions, build_plan, ensure_space, suggested_destination
-from ..core.report import save_report
 from .theme import COLORI, font
 from .widgets import PathChooser
 
@@ -129,7 +128,14 @@ class OptionsPage(ttk.Frame):
         )
 
     def _aggiorna_spazio(self) -> None:
-        piano = self.build_plan()
+        try:
+            piano = self.build_plan()
+        except OSError as errore:
+            self.spazio.configure(
+                text=f"Non riesco a leggere la cartella scelta: {errore.strerror or errore}",
+                foreground=COLORI["errore"],
+            )
+            return
         libero = self.free_space()
         colore = COLORI["successo"] if piano.total_bytes <= libero else COLORI["errore"]
         self.spazio.configure(
@@ -150,7 +156,22 @@ class OptionsPage(ttk.Frame):
                 kind="avviso",
             )
             return
-        piano = self.build_plan()
+        if not opzioni.destination.is_absolute():
+            self.app.set_status(
+                "La cartella indicata non è completa.",
+                hint="Premi «Sfoglia…» e scegli la cartella dal riquadro che si apre.",
+                kind="avviso",
+            )
+            return
+        try:
+            piano = self.build_plan()
+        except OSError as errore:
+            self.app.set_status(
+                "Non riesco a leggere la cartella scelta.",
+                hint=f"Controlla di avere accesso a {opzioni.destination}: {errore}",
+                kind="errore",
+            )
+            return
         try:
             ensure_space(piano, opzioni.destination, self.free_space())
         except Exception as errore:
@@ -173,6 +194,3 @@ class OptionsPage(ttk.Frame):
         if piano.file_count == 0:
             self.app.log("Non c'è nulla di nuovo da copiare: le foto erano già state trasferite.")
         self.app.go_to("transfer")
-
-    def salva_note(self) -> None:  # pragma: no cover - funzione di servizio
-        save_report("", Path(self.chooser.get() or "."))

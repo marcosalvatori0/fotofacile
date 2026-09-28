@@ -95,14 +95,18 @@ class TransferPage(ttk.Frame):
         self.app.cancel_event.clear()
         self.started_at = time.time()
         seriale = self.app.device.serial if self.app.device is not None else ""
-        self.last_plan = build_plan(
-            self.app.media_files,
-            self.app.options,
-            serial=seriale,
-            history=self.app.history(),
-        )
+        try:
+            self.last_plan = self._pianifica(seriale)
+        except OSError as errore:
+            self.app.set_status(
+                "Non riesco a leggere la cartella di destinazione.",
+                hint=f"Controlla di poter aprire {self.app.options.destination}: {errore}",
+                kind="errore",
+            )
+            return
         self.app.log(
-            f"Da copiare: {self.last_plan.file_count} file ({format_size(self.last_plan.total_bytes)}); "
+            f"Da copiare: {self.last_plan.file_count} file "
+            f"({format_size(self.last_plan.total_bytes)}); "
             f"saltati: {self.last_plan.skipped_duplicates + self.last_plan.skipped_existing}."
         )
         generatore = transfer_steps(
@@ -115,6 +119,14 @@ class TransferPage(ttk.Frame):
             annulla=self.app.cancel_event,
         )
         self.app.run_task(generatore, on_done=self.show_summary)
+
+    def _pianifica(self, seriale: str) -> TransferPlan:
+        return build_plan(
+            self.app.media_files,
+            self.app.options,
+            serial=seriale,
+            history=self.app.history(),
+        )
 
     # ── avanzamento ───────────────────────────────────────────────────────
     def update_progress(self, progresso: Progress) -> None:
@@ -171,7 +183,7 @@ class TransferPage(ttk.Frame):
         self.app.cancel_event.set()
         self.stato.configure(text="Interruzione in corso…")
         self.bottone_annulla.state(["disabled"])
-        self.app.log("Interruzione richiesta: finisco il file in corso e mi fermo.")
+        self.app.log("Interruzione richiesta: mi fermo subito. Le foto già copiate restano al sicuro.")
 
     def open_folder(self) -> None:
         destinazione = self.app.options.destination
@@ -187,5 +199,17 @@ class TransferPage(ttk.Frame):
     def save_report(self) -> None:
         if not self.report_text:
             return
-        percorso = save_report(self.report_text, self.app.options.destination)
+        try:
+            percorso = save_report(self.report_text, self.app.options.destination)
+        except Exception as errore:
+            self.app.set_status(
+                getattr(errore, "message", "Non sono riuscito a salvare il resoconto."),
+                hint=getattr(
+                    errore,
+                    "hint",
+                    "Copia il testo dall'area «Dettagli» e incollalo in un documento.",
+                ),
+                kind="avviso",
+            )
+            return
         self.app.set_status("Resoconto salvato.", hint=f"Lo trovi qui: {percorso}", kind="successo")

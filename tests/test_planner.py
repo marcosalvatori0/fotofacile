@@ -140,7 +140,8 @@ def test_percorso_profondo_troppo_lungo_accorciato(tmp_path):
     assert percorso.name.endswith(".jpg")
 
 
-def test_collisione_non_sensibile_alle_maiuscole(tmp_path):
+def test_nome_con_maiuscole_diverse_e_un_file_diverso(tmp_path):
+    """FOTO.JPG e foto.jpg sono due foto diverse: non vanno confuse, né sovrascritte."""
     cartella = tmp_path / "DCIM" / "Camera"
     cartella.mkdir(parents=True)
     (cartella / "FOTO.JPG").write_bytes(b"x" * 100)
@@ -149,8 +150,9 @@ def test_collisione_non_sensibile_alle_maiuscole(tmp_path):
         TransferOptions(destination=tmp_path),
         case_insensitive=True,
     )
-    assert piano.files == []
-    assert piano.skipped_existing == 1
+    (previsto,) = piano.files
+    assert previsto.dest_path.name == "foto (1).jpg"
+    assert (cartella / "FOTO.JPG").read_bytes() == b"x" * 100  # intatto
 
 
 def test_su_linux_le_maiuscole_contano(tmp_path):

@@ -44,6 +44,10 @@ class History:
             except (json.JSONDecodeError, UnicodeDecodeError, AttributeError, TypeError):
                 self._metti_da_parte_file_corrotto()
                 self._dati = {}
+            except OSError:
+                # Il file c'è ma non si può leggere (permessi, disco di rete): si riparte da
+                # una cronologia vuota, senza toccare il file dell'utente.
+                self._dati = {}
         self._caricato = True
 
     def _metti_da_parte_file_corrotto(self) -> None:

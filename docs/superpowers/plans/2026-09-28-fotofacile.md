@@ -28,6 +28,11 @@
    in un processo con tempo massimo) perché in alcuni ambienti di automazione la finestra non
    può essere creata affatto.
 
+4. **Correzioni dalla revisione indipendente:** vedi «10-bis» della specifica; i test
+   corrispondenti sono in `tests/test_robustezza.py` (errori di disco, abbandono a metà copia,
+   cronologia non scrivibile, ritentativi inutili, maiuscole, stato `no permissions`, apertura
+   cartella multipiattaforma).
+
 ## Global Constraints
 
 - Runtime: **solo libreria standard**; nessun `pip install` richiesto all'utente finale.

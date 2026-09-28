@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import threading
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from typing import Any, Callable, Generator
 
 from ..core.adb import RealAdbBackend, find_adb
@@ -259,6 +259,28 @@ class App(tk.Tk):
 
     # ── chiusura ──────────────────────────────────────────────────────────
     def _chiusura(self) -> None:
+        """Chiude il programma; se sta copiando chiede conferma e non lascia file a metà."""
+        if self.task_in_corso:
+            prosegui = messagebox.askyesno(
+                "Copia in corso",
+                "Sto ancora copiando le foto.\n\nVuoi interrompere e chiudere?\n"
+                "Le foto già copiate restano al sicuro; il file in corso viene ripreso "
+                "la prossima volta.",
+                parent=self,
+            )
+            if not prosegui:
+                return
         self.stop_all_polling()
         self.cancel_event.set()
+        self.annulla_task()
+        self._pulisci_ambiente()
         self.destroy()
+
+    def _pulisci_ambiente(self) -> None:
+        """Rimuove i file temporanei di lavoro (elenchi di ricerca, file di appoggio)."""
+        pulisci = getattr(self.remote, "pulisci", None)
+        if callable(pulisci):
+            try:
+                pulisci()
+            except Exception:  # pragma: no cover - pulizia difensiva
+                pass

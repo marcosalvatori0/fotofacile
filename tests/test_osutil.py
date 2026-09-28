@@ -56,12 +56,12 @@ def test_apertura_cartella_senza_file_manager_mostra_il_percorso():
     assert "/tmp/foto" in exc.value.hint
 
 
-def test_codice_di_uscita_diverso_da_zero_e_un_errore():
+def test_codice_di_uscita_diverso_da_zero_e_un_errore_su_linux():
     def runner(comando, **_kwargs):
         return subprocess.CompletedProcess(comando, 1)
 
     with pytest.raises(FotoFacileError):
-        open_in_file_manager(Path("/tmp/foto"), system="win32", runner=runner)
+        open_in_file_manager(Path("/tmp/foto"), system="linux", runner=runner)
 
 
 def test_sensibilita_maiuscole_per_sistema():

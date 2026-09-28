@@ -258,6 +258,30 @@ TDD su tutto `core/` (test scritto prima, visto fallire, poi implementazione):
 | Telefono con migliaia di file | Scansione in un solo comando shell sul dispositivo, streaming, annullabile |
 | Nomi file insoliti | Quotazione sistematica e righe non valide ignorate e registrate |
 
+## 10-bis. Correzioni nate dalla revisione indipendente (tutte con test)
+
+| Difetto trovato | Correzione |
+|---|---|
+| Un errore di disco durante la copia reale (`OSError`) non veniva tradotto: `.part` residuo e intero lotto interrotto | `AdbAPassi.copia` traduce gli errori (`cores/errors.traduci_errore_file`), ha un `finally` che termina il processo e rimuove il `.part` anche quando il lavoro viene abbandonato |
+| Chiusura della finestra a metà copia: processo `adb` vivo e `.part` sul disco | `App._chiusura` chiede conferma, chiama `annulla_task()` (chiude il generatore, che ripulisce) e rimuove la cartella di lavoro |
+| Errore di salvataggio della cronologia dopo una copia riuscita: nessun resoconto, pagina bloccata | il salvataggio della cronologia non è più fatale: viene aggiunto un avviso in `TransferResults.warnings`, mostrato nel resoconto |
+| `OSError` dentro callback della grafica (cartella non leggibile, file sparito): nessun messaggio e pagina in stallo | `build_plan` e l'aggiornamento dello spazio sono protetti e mostrano un errore umano; `run_task` protegge anche i callback finali |
+| La ricerca non ripiegava su tutta la memoria (`/sdcard`): foto non trovate senza spiegazione | `AdbAPassi.cerca_media` esegue il secondo tentativo con `maxdepth`, come `scanner.list_media` |
+| Stato `no permissions` (Linux/udev) non riconosciuto | `parse_devices` interpreta la riga reale di adb |
+| `FOTO.JPG` e `foto.jpg` scambiati per lo stesso file (perdita silenziosa su dischi sensibili alle maiuscole) | «già presente» vale solo a parità esatta di nome; i nomi con maiuscole diverse diventano una copia con `(1)` |
+| Ritentativi inutili su errori non temporanei (disco pieno, permessi) | solo gli errori `ritentabile=True` (comunicazione col telefono) vengono ritentati |
+| File temporanei degli errori non cancellati quando il comando non parte | `ProcessoEsterno` ripulisce sempre, anche in caso di avvio fallito |
+| `xdg-open` bloccava la finestra; `explorer` dava un falso errore su Windows | apertura con processo leggero su macOS/Linux, `os.startfile` e nessun controllo del codice di uscita su Windows |
+| «Salva resoconto» falliva in silenzio | protetto con messaggio e suggerimento |
+| Chiusura senza conferma durante la copia e testo di «Interrompi» non veritiero | conferma esplicita e testo corretto ("mi fermo subito") |
+| Destinazione relativa scritta a mano, metodo morto `salva_note`, cartella di lavoro mai rimossa | destinazione assoluta obbligatoria, codice morto rimosso, cartella di lavoro rimossa alla chiusura |
+| Componente presente ma guasto: pulsante di installazione disabilitato per sempre | se il controllo fallisce per colpa del componente, il pulsante di installazione torna attivo |
+
+**Limiti noti e dichiarati** (non corretti in questa versione): estrazione del componente non
+atomica (un'interruzione a metà può richiedere di reinstallare), messaggi non differenziati per
+«disco pieno» nel percorso reale, barra di avanzamento del singolo file non distinta da quella
+generale, download non verificato con l'hash.
+
 ## 11. Estensioni future (non in questa versione)
 
 Collegamento Wi‑Fi (`adb connect`), profilatura automatica "solo elementi nuovi dall'ultima

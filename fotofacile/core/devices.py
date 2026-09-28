@@ -57,6 +57,8 @@ def parse_devices(output: str) -> list[DeviceInfo]:
         if len(campi) < 2:
             continue
         serial, state = campi[0], campi[1]
+        if state == "no" and len(campi) > 2 and campi[2].startswith("permissions"):
+            state = "no permissions"  # riga tipica di Linux quando mancano i permessi udev
         extra: dict[str, str] = {}
         for campo in campi[2:]:
             if ":" in campo:

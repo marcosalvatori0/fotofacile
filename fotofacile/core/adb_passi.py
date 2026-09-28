@@ -18,9 +18,15 @@ from typing import Callable, Generator, Sequence
 
 from .adb import CHUNK_SIZE, shell_quote
 from .devices import DeviceInfo, parse_devices
-from .errors import FotoFacileError
+from .errors import FotoFacileError, traduci_errore_file
 from .ops import Annullato, ProcessoEsterno
-from .scanner import MediaFile, parse_stat_stream
+from .scanner import (
+    FALLBACK_MAX_DEPTH,
+    FALLBACK_ROOT,
+    MediaFile,
+    build_scan_command,
+    parse_stat_stream,
+)
 
 TIMEOUT_SCANSIONE = 180.0
 TIMEOUT_COPIA = 900.0
@@ -67,6 +73,15 @@ class AdbAPassi:
             orologio=self.orologio,
         )
 
+    def pulisci(self) -> None:
+        """Rimuove la cartella di appoggio usata per gli elenchi temporanei."""
+        import shutil
+
+        try:
+            shutil.rmtree(self.cartella_lavoro, ignore_errors=True)
+        except OSError:  # pragma: no cover - pulizia difensiva
+            pass
+
     def _ripulisci(self, percorso: Path) -> None:
         try:
             percorso.unlink(missing_ok=True)
@@ -86,9 +101,30 @@ class AdbAPassi:
         return parse_devices(esito.output)
 
     def cerca_media(
-        self, serial: str, comando: str, timeout: float = TIMEOUT_SCANSIONE
+        self,
+        serial: str,
+        comando: str,
+        timeout: float = TIMEOUT_SCANSIONE,
+        annulla=None,
+        ripiega: bool = True,
     ) -> Generator[float, None, list[MediaFile]]:
-        """Esegue la ricerca delle foto sul telefono e restituisce i file trovati."""
+        """Cerca le foto sul telefono; se non trova nulla guarda in tutta la memoria.
+
+        Il ripiego serve perché molti telefoni tengono le foto in cartelle non prevedibili
+        (per esempio Telegram, WeChat, «Edited»): senza di esso l'utente non vedrebbe nulla
+        e non saprebbe perché.
+        """
+        trovati = yield from self._esegui_ricerca(serial, comando, timeout, annulla)
+        if trovati or not ripiega or (annulla is not None and annulla.is_set()):
+            return trovati
+        comando_ampio = build_scan_command(
+            [FALLBACK_ROOT], include_videos=True, max_depth=FALLBACK_MAX_DEPTH
+        )
+        return (yield from self._esegui_ricerca(serial, comando_ampio, timeout, annulla))
+
+    def _esegui_ricerca(
+        self, serial: str, comando: str, timeout: float, annulla
+    ) -> Generator[float, None, list[MediaFile]]:
         file_output = self._file_temporaneo("ricerca-")
         processo = self._processo(
             ["-s", serial, "shell", comando],
@@ -98,9 +134,22 @@ class AdbAPassi:
             output_file=file_output,
         )
         try:
-            esito = yield from processo.aspetta()
+            processo.avvia()
+            while processo.passo():
+                if annulla is not None and annulla.is_set():
+                    processo.termina()
+                    raise Annullato()
+                if processo.scaduto():
+                    processo.termina()
+                    raise FotoFacileError(
+                        "La ricerca delle foto è durata troppo tempo.",
+                        hint="Riprova: se succede sempre, prova con un altro cavo USB.",
+                    )
+                yield self.intervallo
+            esito = processo.esito()
             return parse_stat_stream(esito.output)
         finally:
+            processo.termina()
             self._ripulisci(file_output)
 
     def copia(
@@ -115,7 +164,6 @@ class AdbAPassi:
     ) -> Generator[float, None, int]:
         """Copia un file dal telefono: si scrive un file ``.part`` e lo si rinomina alla fine."""
         destinazione = Path(destinazione)
-        destinazione.parent.mkdir(parents=True, exist_ok=True)
         temporaneo = destinazione.with_name(destinazione.name + ".part")
         processo = self._processo(
             ["-s", serial, "exec-out", "cat", shell_quote(remoto)],
@@ -125,14 +173,14 @@ class AdbAPassi:
             output_file=temporaneo,
         )
         scritti = 0
+        completato = False
         try:
+            destinazione.parent.mkdir(parents=True, exist_ok=True)
             processo.avvia()
             while processo.passo():
                 if annulla is not None and annulla.is_set():
-                    processo.termina()
                     raise Annullato()
                 if processo.scaduto():
-                    processo.termina()
                     raise FotoFacileError(
                         f"La copia di {destinazione.name} è durata troppo tempo.",
                         hint="Riprova: se succede sempre con i video, prova un altro cavo USB.",
@@ -143,14 +191,19 @@ class AdbAPassi:
             processo.esito()
             self._rallenta_scrittura(temporaneo)
             os.replace(temporaneo, destinazione)
+            completato = True
         except Annullato:
-            processo.termina()
-            self._ripulisci(temporaneo)
             raise
         except FotoFacileError:
-            processo.termina()
-            self._ripulisci(temporaneo)
             raise
+        except OSError as errore:
+            raise traduci_errore_file(errore, destinazione) from errore
+        finally:
+            # Vale anche se il lavoro viene abbandonato (chiusura della finestra o cambio idea):
+            # il processo viene interrotto e il file parziale rimosso.
+            processo.termina()
+            if not completato:
+                self._ripulisci(temporaneo)
         return scritti
 
     def _dimensione(
@@ -185,7 +238,10 @@ class AdbAPassi:
             umano="Non sono riuscito a cancellare un file dal telefono.",
             hint="Il file resta sul telefono: puoi cancellarlo a mano in un secondo momento.",
         )
-        yield from processo.aspetta()
+        try:
+            yield from processo.aspetta()
+        finally:
+            processo.termina()
         return None
 
     def riavvia(self) -> Generator[float, None, None]:
@@ -281,6 +337,15 @@ class AdbDemoAPassi:
         yield self.intervallo
         self.backend.restart_server()
         return None
+
+    def pulisci(self) -> None:
+        """Rimuove la cartella di appoggio usata per gli elenchi temporanei."""
+        import shutil
+
+        try:
+            shutil.rmtree(self.cartella_lavoro, ignore_errors=True)
+        except OSError:  # pragma: no cover - pulizia difensiva
+            pass
 
     def _ripulisci(self, percorso: Path) -> None:
         try:

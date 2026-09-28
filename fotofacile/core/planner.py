@@ -160,7 +160,11 @@ def build_plan(
         )
         esistente = esistenza.trova(destinazione)
         if esistente is not None:
-            if file.size and esistente.stat().st_size == file.size:
+            # «già presente» vale solo se il nome è identico: se differisce solo per le
+            # maiuscole (FOTO.JPG contro foto.jpg) si tratta di un file diverso, e su un
+            # disco non sensibile alle maiuscole sovrascriverlo perderebbe una foto.
+            uguale = esistente.name == destinazione.name
+            if uguale and file.size and _dimensione(esistente) == file.size:
                 piano.skipped_existing += 1
                 continue
             destinazione = esistenza.nome_libero(destinazione)
@@ -168,6 +172,14 @@ def build_plan(
         piano.files.append(PlannedFile(media=file, rel_path=relativo, dest_path=destinazione))
         piano.total_bytes += file.size
     return piano
+
+
+def _dimensione(percorso: Path) -> int:
+    """Dimensione di un file esistente; -1 se nel frattempo è sparito."""
+    try:
+        return percorso.stat().st_size
+    except OSError:
+        return -1
 
 
 class _Esistenza:

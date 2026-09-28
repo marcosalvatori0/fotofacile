@@ -53,7 +53,9 @@ class SelectPage(ttk.Frame):
         ttk.Label(opzioni, text="Solo foto dal giorno (AAAA-MM-GG, vuoto = tutte):").grid(
             row=0, column=1, padx=(18, 6)
         )
-        ttk.Entry(opzioni, textvariable=self.data_minima, width=14).grid(row=0, column=2)
+        campo_data = ttk.Entry(opzioni, textvariable=self.data_minima, width=14)
+        campo_data.grid(row=0, column=2)
+        campo_data.bind("<KeyRelease>", lambda _evento: self._aggiorna_totale())
         self.bottone_cerca = ttk.Button(
             opzioni, text="Cerca di nuovo", style="Secondary.TButton", command=self.start_scan
         )
@@ -92,12 +94,23 @@ class SelectPage(ttk.Frame):
             return
         self.app.set_status("Sto cercando le foto sul telefono… può richiedere un momento.", kind="info")
         self.bottone_avanti.state(["disabled"])
+        self.bottone_cerca.state(["disabled"])
+        self.riepilogo.configure(text="Sto cercando…", foreground=COLORI["tenue"])
         seriale = self.app.device.serial if self.app.device is not None else ""
         comando = build_scan_command(DEFAULT_ROOTS, include_videos=self.sto_scegliendo_video.get())
-        self.app.run_task(self.app.remote.cerca_media(seriale, comando), on_done=self._scansione_finita)
+        self.app.run_task(
+            self.app.remote.cerca_media(seriale, comando, annulla=self.app.cancel_event),
+            on_done=self._scansione_finita,
+            on_error=self._scansione_fallita,
+        )
+
+    def _scansione_fallita(self, _errore) -> None:
+        self.bottone_cerca.state(["!disabled"])
+        self.riepilogo.configure(text="Ricerca non riuscita.", foreground=COLORI["avviso"])
 
     def _scansione_finita(self, file: list[MediaFile]) -> None:
         self._scansione_fatta = True
+        self.bottone_cerca.state(["!disabled"])
         self._files = list(file)
         self._folders = group_folders(self._files)
         self.rebuild_list(self._folders)
@@ -157,6 +170,14 @@ class SelectPage(ttk.Frame):
 
     def _aggiorna_totale(self) -> None:
         quanti, peso = self.selected_total()
+        data_scritta = self.data_minima.get().strip()
+        if data_scritta and parse_date(data_scritta) is None:
+            self.riepilogo.configure(
+                text="La data non è chiara: scrivila come AAAA-MM-GG (per esempio 2024-05-01).",
+                foreground=COLORI["avviso"],
+            )
+            self.bottone_avanti.state(["disabled"])
+            return
         self.riepilogo.configure(
             text=f"Hai scelto {quanti} file — circa {format_size(peso)}.",
             foreground=COLORI["testo"] if quanti else COLORI["avviso"],

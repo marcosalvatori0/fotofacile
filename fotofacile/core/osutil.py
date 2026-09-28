@@ -44,21 +44,31 @@ def open_in_file_manager(
     system: str | None = None,
     runner: Callable[..., object] | None = None,
 ) -> None:
-    """Apre la cartella nel file manager, con errore comprensibile se non è possibile."""
-    comando = file_manager_command(Path(path), _system(system))
-    esegui = runner or subprocess.run
+    """Apre la cartella nel file manager, senza bloccare la finestra e senza falsi allarmi."""
+    percorso = Path(path)
+    sistema = _system(system)
     try:
-        esito = esegui(comando, check=False)
+        if runner is not None:
+            esito = runner(file_manager_command(percorso, sistema), check=False)
+            # Su Windows «explorer» esce con codice 1 anche quando la cartella si apre:
+            # giudicare dal codice di uscita darebbe un errore inesistente.
+            if sistema != "win32" and getattr(esito, "returncode", 0) not in (0, None):
+                raise OSError(f"codice di uscita {getattr(esito, 'returncode', None)}")
+        elif sistema == "win32":
+            os.startfile(str(percorso))  # type: ignore[attr-defined]
+        else:
+            # Avvio e via: su alcuni sistemi il comando resta attivo finché il file
+            # manager è aperto, e attenderlo bloccherebbe la finestra.
+            subprocess.Popen(
+                file_manager_command(percorso, sistema),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
     except OSError as errore:
         raise FotoFacileError(
             f"Non riesco ad aprire la cartella {path}.",
             hint=f"Apri manualmente questa cartella: {path}",
         ) from errore
-    if getattr(esito, "returncode", 0) not in (0, None):
-        raise FotoFacileError(
-            f"Non riesco ad aprire la cartella {path}.",
-            hint=f"Apri manualmente questa cartella: {path}",
-        )
 
 
 def is_case_insensitive_fs(system: str | None = None) -> bool:

@@ -86,6 +86,10 @@ class ProcessoEsterno:
                 stdin=subprocess.DEVNULL,
             )
         except OSError as errore:
+            if verso_output is not None:
+                verso_output.close()
+            verso_errori.close()
+            self._pulisci_flussi()
             raise FotoFacileError(
                 self.umano or "Non riesco ad avviare il comando sul computer.",
                 hint=self.hint or "Riprova; se serve, apri la diagnosi con «doctor».",
@@ -93,7 +97,8 @@ class ProcessoEsterno:
         finally:
             if verso_output is not None:
                 verso_output.close()
-            verso_errori.close()
+            if not verso_errori.closed:
+                verso_errori.close()
         self._inizio = self.orologio()
 
     def passo(self) -> bool:
@@ -108,6 +113,7 @@ class ProcessoEsterno:
     def termina(self) -> None:
         """Interrompe il comando (usato quando l'utente annulla o allo scadere del tempo)."""
         if self.process is None:
+            self._pulisci_flussi()
             return
         if self.process.poll() is None:
             try:

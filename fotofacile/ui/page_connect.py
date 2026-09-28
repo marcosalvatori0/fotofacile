@@ -104,6 +104,7 @@ class ConnectPage(ttk.Frame):
         self.app = parent
         self.message = ""
         self._polling = False
+        self._ultimo_stato = ("", 0, 0)
 
         ttk.Label(self, text="Collega il telefono al computer", style="Titolo.TLabel").grid(
             row=0, column=0, sticky="w", pady=(4, 2)
@@ -188,6 +189,7 @@ class ConnectPage(ttk.Frame):
 
     def stop_polling(self) -> None:
         self._polling = False
+        self._ultimo_stato = ("", 0, 0)
 
     def _tick(self) -> None:
         if not self._polling:
@@ -204,14 +206,34 @@ class ConnectPage(ttk.Frame):
             return
         if self.app.task_in_corso:
             return  # c'è già un controllo in corso
-        self.app.run_task(self.app.remote.dispositivi(), on_done=self._dispositivi_ricevuti)
+        self.app.run_task(
+            self.app.remote.dispositivi(),
+            on_done=self._dispositivi_ricevuti,
+            on_error=self._controllo_fallito,
+        )
+
+    def _controllo_fallito(self, errore) -> None:
+        """Se il componente è guasto o assente, il pulsante di installazione torna attivo."""
+        testo = f"{errore.message} {errore.hint}".lower()
+        if "componente" in testo or "collegamento" in testo:
+            self.app.remote = None
+            self.app.demo_mode = False
+            self._aggiorna_bottone_installa()
+        self.set_message(errore.message, tono="avviso")
+        self.dettaglio.configure(text=errore.hint or "Premi «Riavvia collegamento» e riprova.")
 
     def _dispositivi_ricevuti(self, dispositivi) -> None:
-        pronto = next((dispositivo for dispositivo in dispositivi if dispositivo.is_ready), None)
+        pronti = [dispositivo for dispositivo in dispositivi if dispositivo.is_ready]
+        pronto = pronti[0] if pronti else None
         if pronto is not None:
+            if len(pronti) > 1:
+                nomi = ", ".join(dispositivo.display_name for dispositivo in pronti)
+                if self._ultimo_stato[1] != len(pronti):
+                    self.app.log(f"Più telefoni collegati ({nomi}): uso {pronto.display_name}.")
             self.app.device = pronto
             self.set_message(f"Perfetto! Telefono collegato: {pronto.display_name}", tono="successo")
             self.dettaglio.configure(text="Premi «Avanti» per scegliere quali foto copiare.")
+            self._ultimo_stato = ("device", len(pronti), 0)
             self.bottone_avanti.state(["!disabled"])
             self.stop_polling()
             return
@@ -229,6 +251,10 @@ class ConnectPage(ttk.Frame):
         )
         self.set_message(messaggio, tono="avviso")
         self.dettaglio.configure(text=suggerimento)
+        firma = (stato, len(dispositivi), 0)
+        if firma != self._ultimo_stato:  # nel registro solo quando la situazione cambia
+            self.app.log(f"Telefono: {stato}.")
+            self._ultimo_stato = firma
 
     # ── azioni ────────────────────────────────────────────────────────────
     def _avanti(self) -> None:

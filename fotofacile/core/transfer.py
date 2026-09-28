@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Callable, Generator
 
 from .adb import AdbBackend
-from .errors import FotoFacileError
+from .errors import FotoFacileError, traduci_errore_file
 from .history import History
 from .ops import Annullato, esegui_fino_alla_fine
 from .planner import TransferOptions, TransferPlan
@@ -52,6 +52,7 @@ class TransferResults:
     elapsed: float = 0.0
     cancelled: bool = False
     deleted_from_phone: int = 0
+    warnings: list[str] = field(default_factory=list)
 
 
 def _rimuovi(percorso: Path) -> None:
@@ -70,23 +71,7 @@ def _chiudi(generatore) -> None:
             pass
 
 
-def _trasforma(errore: Exception, destinazione: Path) -> FotoFacileError:
-    """Traduce un errore di sistema in una frase comprensibile per l'utente."""
-    testo = str(errore).lower()
-    if "no space" in testo or "disk full" in testo or getattr(errore, "errno", None) == 28:
-        return FotoFacileError(
-            f"Non c'è più spazio sul disco mentre copiavo {destinazione.name}.",
-            hint="Libera spazio e riprova: le foto già copiate sono al sicuro.",
-        )
-    if "permission" in testo or getattr(errore, "errno", None) == 13:
-        return FotoFacileError(
-            f"Non ho il permesso di scrivere {destinazione.name} nella cartella scelta.",
-            hint="Scegli un'altra cartella (per esempio Immagini) e riprova.",
-        )
-    return FotoFacileError(
-        f"Non sono riuscito a copiare {destinazione.name}.",
-        hint="Il telefono potrebbe essersi scollegato: controlla il cavo e riprova.",
-    )
+_trasforma = traduci_errore_file  # un unico posto dove si traducono gli errori di file
 
 
 def download_file_stream(
@@ -235,6 +220,8 @@ def transfer_steps(
             except FotoFacileError as errore:
                 avanzamento.bytes_done = bytes_prima
                 messaggio = errore.message
+                if not errore.ritentabile:
+                    break  # inutile ritentare: il motivo non è temporaneo
                 continue
             if pianificato.media.size and scritti != pianificato.media.size:
                 _rimuovi(pianificato.dest_path)
@@ -274,7 +261,15 @@ def transfer_steps(
     esiti.elapsed = max(orologio() - inizio, 0.0)
     _pubblica(on_progress, avanzamento, orologio, ultimo, forza=True)
     if history is not None:
-        history.save()
+        try:
+            history.save()
+        except OSError:
+            # Le foto sono già al sicuro: non riuscire a ricordare cosa è stato copiato
+            # non deve rovinare il risultato (al massimo la prossima volta si ricontrolla).
+            esiti.warnings.append(
+                "Non sono riuscito a salvare l'elenco dei file copiati: "
+                "alla prossima copia il programma ricontrollerà tutto."
+            )
     return esiti
 
 
