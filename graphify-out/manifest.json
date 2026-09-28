@@ -336,9 +336,9 @@
     "semantic_hash": "8a3bc1c49ceb5a7884f50d133443b165"
   },
   "README.md": {
-    "mtime": 1790607619.922043,
-    "seen": 1790607643.710088,
-    "ast_hash": "6c8e77748b5da4613335facb19988ce2",
+    "mtime": 1790609437.9768925,
+    "seen": 1790609530.157912,
+    "ast_hash": "ed112834cb3d52eb25296b9102288bc0",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-09-28-fotofacile.md": {
@@ -372,9 +372,9 @@
     "semantic_hash": ""
   },
   "HANDOFF.md": {
-    "mtime": 1790607851.8230085,
-    "seen": 1790607882.2605,
-    "ast_hash": "5f7b5cc5b6f9513926efe9eb90900abf",
+    "mtime": 1790609437.9773884,
+    "seen": 1790609530.157911,
+    "ast_hash": "42a291b0a5172b8e387278ac34cd15d4",
     "semantic_hash": ""
   },
   "assets/FotoFacile.iconset/icon_128x128.png": {
@@ -468,15 +468,51 @@
     "semantic_hash": ""
   },
   "scripts/crea_pacchetto_windows.py": {
-    "mtime": 1790607619.921723,
-    "seen": 1790607643.7100701,
-    "ast_hash": "103068c7f677998cdfb7dbf610c6b1fc",
+    "mtime": 1790608749.4130964,
+    "seen": 1790609530.157894,
+    "ast_hash": "59c1cbf60725d1b20fc6fe76690d076f",
     "semantic_hash": ""
   },
   "tests/test_pacchetto_windows.py": {
     "mtime": 1790607492.5311697,
     "seen": 1790607643.71008,
     "ast_hash": "714424fae486fe4553ea5c7c61c120c2",
+    "semantic_hash": ""
+  },
+  "installer/windows/DisinstallaFotoFacile.ps1": {
+    "mtime": 1790608530.3718412,
+    "seen": 1790609530.157891,
+    "ast_hash": "e4b82652a19ff86d71d05cde990b66fb",
+    "semantic_hash": ""
+  },
+  "installer/windows/InstallaFotoFacile.ps1": {
+    "mtime": 1790608530.371843,
+    "seen": 1790609530.157892,
+    "ast_hash": "d5a277a39c006cffdc8b17e0b3596918",
+    "semantic_hash": ""
+  },
+  "scripts/crea_installer_mac.py": {
+    "mtime": 1790608420.8095474,
+    "seen": 1790609530.1578932,
+    "ast_hash": "9bf42dc01e56707ffcb4271cdc1aa3c0",
+    "semantic_hash": ""
+  },
+  "tests/test_installer_pacchetti.py": {
+    "mtime": 1790608863.3622837,
+    "seen": 1790609530.157902,
+    "ast_hash": "9e4ad3d197fd6112e044b15f8262563b",
+    "semantic_hash": ""
+  },
+  ".github/workflows/build-installers.yml": {
+    "mtime": 1790608932.6648223,
+    "seen": 1790609530.157911,
+    "ast_hash": "bc6c57123c246a985b7bbbaff542d04e",
+    "semantic_hash": ""
+  },
+  "LEGGIMI - Installazione.txt": {
+    "mtime": 1790608594.813511,
+    "seen": 1790609530.157911,
+    "ast_hash": "287b401e91a645fc42ff1573c96a6f3d",
     "semantic_hash": ""
   }
 }
