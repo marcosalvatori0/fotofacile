@@ -111,6 +111,20 @@ pacchetto: `FotoFacile.app/Contents/MacOS/FotoFacile --selftest` (apre e chiude 
 stampa l'esito), oppure `... doctor` per la diagnosi. L'icona è generata da
 `python3 scripts/make_icon.py` (nessuna libreria esterna).
 
+## Installer pronti da scaricare (GitHub)
+
+Ogni versione pubblicata ha gli installer costruiti automaticamente su computer veri:
+
+**https://github.com/marcosalvatori0/fotofacile/releases/latest**
+
+| File | A cosa serve |
+|---|---|
+| `FotoFacile-Setup-<versione>.exe` | installer Windows: copia il programma, crea i collegamenti sul Desktop e nel menu Start, registra la disinstallazione in Impostazioni → App |
+| `FotoFacile-portable.zip` | Windows senza installare nulla: si scompatta e si usa |
+| `FotoFacile-<versione>.dmg` | installer macOS: si apre e si trascina l'app in Applicazioni |
+
+Gli installer li costruisce la pipeline in `.github/workflows/build-installers.yml` (runner macOS e Windows) e prima di pubblicarli esegue l'autocollaudo del programma.
+
 ## Cartella pronta per Windows
 
 `python3 scripts/crea_pacchetto_windows.py` crea sulla Scrivania la cartella

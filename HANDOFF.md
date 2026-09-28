@@ -2,7 +2,7 @@
 
 **Generato**: 2026-09-28 17:05
 **Branch**: `main` (repo locale, nessun remoto configurato)
-**Stato**: **Completo e verificato** (283 test verdi). Build macOS verificata, pacchetto Windows pronto sulla Scrivania. Restano solo due cose: collaudo con un telefono vero e creazione dell'eseguibile Windows (possibile **solo** su Windows).
+**Stato**: **Completo e verificato** (296 test verdi). **Repo GitHub pubblico** `marcosalvatori0/fotofacile` con pipeline che costruisce gli installer su runner macOS e Windows; Release `v0.1.0` con `FotoFacile-Setup-0.1.0.exe`, `FotoFacile-portable.zip`, `FotoFacile-0.1.0.dmg`. Scorciatoia Windows corretta (il controllo di Python falliva per un `^>=` finito dentro il codice Python). Restano solo due cose: collaudo con un telefono vero e creazione dell'eseguibile Windows (possibile **solo** su Windows).
 
 ## Goal
 
@@ -26,7 +26,7 @@ Permettere a **persone non tecniche** di copiare foto e video da un telefono And
 ## Not Yet Done
 
 - [ ] **Collaudo con un telefono Android vero** (autorizzazione Debug USB, copia reale, cancellazione dal telefono). Unica verifica mancante: in automazione non c'era un dispositivo.
-- [ ] **Creazione dell'eseguibile Windows**: richiede un PC Windows (doppio clic su `Crea l'eseguibile per Windows.bat`). Da macOS è impossibile — vedi Failed Approaches.
+- [x] ~~Creazione dell'eseguibile Windows~~ → risolto su GitHub: la pipeline `.github/workflows/build-installers.yml` costruisce `FotoFacile-Setup-<versione>.exe` (Inno Setup) su un runner Windows vero e lo allega alla Release. Verifica locale possibile solo per struttura (`file`: PE32 GUI, motore Inno Setup presente).
 - [ ] Limiti dichiarati non implementati: estrazione del componente non atomica; messaggio dedicato per «disco pieno» nel percorso reale; barra di avanzamento del singolo file distinta da quella generale; verifica hash del download.
 - [ ] Opzionale: firma/notarizzazione del `.app` macOS (senza firma: clic destro → Apri la prima volta).
 
@@ -44,7 +44,9 @@ Permettere a **persone non tecniche** di copiare foto e video da un telefono And
 10. **Test che dipendono dalla cartella utente reale**: dopo che l'app ha installato platform-tools, `test_find_adb_*` trovava un `adb` vero e falliva. **Soluzione**: i test passano `HOME`/`USERPROFILE` temporanei.
 11. **`explorer` su Windows esce con codice 1** anche quando la cartella si apre: giudicare dal codice dava un falso errore. Ora su Windows non si controlla; su macOS/Linux apertura fire-and-forget con `Popen`.
 12. **Cross-compilare l'eseguibile Windows da macOS**: impossibile (PyInstaller non fa cross-compilazione; niente Wine sulla macchina). Un `.exe` così prodotto sarebbe **non verificabile**, quindi non è stato consegnato: al suo posto la cartella con i `.bat` (avvio immediato + creazione eseguibile con un doppio clic su Windows).
-13. **Comandi distruttivi concatenati**: un `git checkout` messo in coda a un comando lungo ha ripristinato `fotofacile/ui/theme.py` appena riscritto, perdendo il lavoro. Mai mettere `git checkout`/`git clean` nello stesso comando di altro lavoro.
+13. **Caret di `cmd` dentro gli snippet Python dei `.bat`.** Avevo scritto `sys.version_info ^>= (3, 9)` per «proteggere» il `>`: dentro le virgolette il caret arriva **letteralmente a Python** → `SyntaxError` → il controllo falliva per ogni candidato e il file concludeva «Python non è installato» anche quando c'era. **Soluzione**: niente caret nel codice Python, e test `tests/test_installer_pacchetti.py` che **estrae e compila** ogni snippet `-c "..."` dei `.bat` (questa classe di errore non può più passare inosservata).
+14. **Workflow GitHub che non parte al primo tag.** Il tag era stato pubblicato pochi secondi dopo il branch: GitHub non aveva ancora registrato il workflow (`gh run list` vuoto). **Soluzione**: ripubblicare il tag (`git push origin :refs/tags/vX && git push origin vX`).
+15. **Comandi distruttivi concatenati**: un `git checkout` messo in coda a un comando lungo ha ripristinato `fotofacile/ui/theme.py` appena riscritto, perdendo il lavoro. Mai mettere `git checkout`/`git clean` nello stesso comando di altro lavoro.
 14. **Verifiche dipendenti dal tempo**: `assert app.attributes("-topmost")` falliva perché un `after` lo ripristinava. **Soluzione**: registrare le chiamate e verificare l'intenzione, non lo stato dopo il timer.
 
 ## Key Decisions
@@ -87,7 +89,9 @@ Permettere a **persone non tecniche** di copiare foto e video da un telefono And
 | `tests/pilota_app.py` | Collaudo end-to-end dell'app vera (variabili `FF_DEST`, `FF_ESITO`) |
 | `scripts/build_app.py` | Build multipiattaforma, icona, quarantena, scorciatoia, `--verify` |
 | `scripts/crea_pacchetto_windows.py` | Crea la cartella per Windows (sorgente + `.bat` + LEGGIMI) |
-| `~/Desktop/FotoFacile per Windows/` | Pacchetto pronto: avvio a doppio clic o creazione eseguibile |
+| `~/Desktop/FotoFacile - Installazione/` | Kit completo: `FotoFacile-Setup-0.1.0.exe`, `FotoFacile-portable.zip`, `FotoFacile-0.1.0.dmg`, cartella `Windows/` con il sorgente e i `.bat` |
+| `.github/workflows/build-installers.yml` | Pipeline: installer macOS (dmg) + Windows (Inno Setup) + Release |
+| `installer/windows/` | `InstallaFotoFacile.ps1` (installazione per utente + disinstallazione), `DisinstallaFotoFacile.ps1`, `FotoFacile.iss` (Inno Setup) |
 | `graphify-out/wiki/index.md` | Punto d'ingresso del grafo della conoscenza |
 
 ## Code Context
