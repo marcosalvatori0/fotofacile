@@ -76,6 +76,13 @@ def is_case_insensitive_fs(system: str | None = None) -> bool:
     return _system(system) in ("win32", "darwin", "cygwin")
 
 
+def flag_nascosta(system: str | None = None) -> int:
+    """Su Windows nasconde la finestra nera dei comandi esterni (0 = nessun flag altrove)."""
+    if _system(system) != "win32":
+        return 0
+    return getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+
+
 def python_command(system: str | None = None) -> str:
     """Come si avvia Python da terminale su questo sistema."""
     return "py" if _system(system) == "win32" else "python3"

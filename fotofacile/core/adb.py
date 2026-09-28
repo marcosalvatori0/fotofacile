@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Iterator, Mapping, Protocol, Sequence, runtime_checkable
 
 from .errors import AdbError
+from .osutil import flag_nascosta
 
 CHUNK_SIZE = 64 * 1024
 
@@ -113,6 +114,7 @@ class RealAdbBackend:
                 capture_output=True,
                 text=True,
                 timeout=timeout if timeout is not None else 30,
+                creationflags=flag_nascosta(),
             )
         except FileNotFoundError as errore:
             raise AdbError(
@@ -175,6 +177,7 @@ class RealAdbBackend:
             [self.adb_path, "-s", serial, "exec-out", "cat", shell_quote(remote_path)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            creationflags=flag_nascosta(),
         )
         try:
             assert processo.stdout is not None

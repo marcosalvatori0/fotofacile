@@ -111,6 +111,22 @@ pacchetto: `FotoFacile.app/Contents/MacOS/FotoFacile --selftest` (apre e chiude 
 stampa l'esito), oppure `... doctor` per la diagnosi. L'icona è generata da
 `python3 scripts/make_icon.py` (nessuna libreria esterna).
 
+## Cartella pronta per Windows
+
+`python3 scripts/crea_pacchetto_windows.py` crea sulla Scrivania la cartella
+**«FotoFacile per Windows»**, con dentro il programma completo, due file da doppio clic e le
+istruzioni (`LEGGIMI - Windows.txt`):
+
+| File | Cosa fa |
+|---|---|
+| `Avvia FotoFacile.bat` | fa partire il programma subito; se Python manca lo installa (winget) o spiega come fare |
+| `Crea l'eseguibile per Windows.bat` | crea `dist\FotoFacile\FotoFacile.exe` con PyInstaller e lo verifica subito con l'autocollaudo |
+
+**Perché una cartella e non un `.exe` già pronto:** un eseguibile Windows si può creare e
+collaudare **solo su Windows** (PyInstaller non compila da un sistema per un altro). Un `.exe`
+prodotto su macOS non sarebbe verificabile, quindi non è stato incluso: la cartella permette di
+ottenerlo con un doppio clic, e di usare il programma anche senza creare nulla.
+
 ## Collaudo automatico (per chi vuole verificare)
 
 ```

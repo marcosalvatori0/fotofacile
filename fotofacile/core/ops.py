@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Callable, Generator, Iterator, Sequence
 
 from .errors import FotoFacileError
+from .osutil import flag_nascosta
 
 INTERVALLO_PRECEDENTE = 0.02  # secondi fra un controllo e il successivo
 TIMEOUT_PREDEFINITO = 30.0
@@ -84,6 +85,7 @@ class ProcessoEsterno:
                 stdout=verso_output if verso_output is not None else subprocess.PIPE,
                 stderr=verso_errori,
                 stdin=subprocess.DEVNULL,
+                creationflags=flag_nascosta(),
             )
         except OSError as errore:
             if verso_output is not None:

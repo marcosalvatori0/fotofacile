@@ -129,8 +129,10 @@ def ripulisci_quarantena(pacchetto: Path) -> None:
     subprocess.run(["xattr", "-dr", "com.apple.quarantine", str(pacchetto)], capture_output=True, check=False)
 
 
-def crea_scorciatoia() -> Path:
-    """Crea «Avvia FotoFacile.command»: doppio clic dalla cartella del progetto."""
+def crea_scorciatoia() -> Path | None:
+    """Crea «Avvia FotoFacile.command» (macOS/Linux): su Windows serve il file .bat."""
+    if sys.platform == "win32":
+        return None
     percorso = RADICE / "Avvia FotoFacile.command"
     percorso.write_text(
         "#!/bin/bash\n"
@@ -185,7 +187,8 @@ def main(argv: list[str] | None = None) -> int:
     pacchetto = pacchetto_creato()
     ripulisci_quarantena(pacchetto)
     scorciatoia = crea_scorciatoia()
-    print(f"Scorciatoia creata: {scorciatoia.name} (doppio clic nella cartella del progetto)")
+    if scorciatoia is not None:
+        print(f"Scorciatoia creata: {scorciatoia.name} (doppio clic nella cartella del progetto)")
     if sys.platform == "darwin":
         # su macOS il pacchetto da consegnare è il .app: la cartella intermedia è inutile
         shutil.rmtree(RADICE / "dist" / NOME, ignore_errors=True)

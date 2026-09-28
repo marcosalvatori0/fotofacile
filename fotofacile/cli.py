@@ -11,7 +11,7 @@ from typing import Mapping, Sequence
 from . import __version__
 from .core.adb import find_adb
 from .core.devices import get_devices
-from .core.osutil import app_dir
+from .core.osutil import app_dir, flag_nascosta
 
 
 def build_doctor_report(
@@ -164,7 +164,12 @@ def prova_finestra(timeout: float = 10.0) -> bool:
 
     codice = "import tkinter as tk; r=tk.Tk(); r.withdraw(); r.update(); r.destroy()"
     try:
-        esito = subprocess.run([sys.executable, "-c", codice], capture_output=True, timeout=timeout)
+        esito = subprocess.run(
+            [sys.executable, "-c", codice],
+            capture_output=True,
+            timeout=timeout,
+            creationflags=flag_nascosta(),
+        )
     except (subprocess.TimeoutExpired, OSError):
         return False
     return esito.returncode == 0
@@ -187,7 +192,7 @@ def avviso_visibile(
         esegui = runner or subprocess.run
         script = f'display alert "FotoFacile" message {json.dumps(testo)} as critical'
         try:
-            esegui(["osascript", "-e", script], capture_output=True)
+            esegui(["osascript", "-e", script], capture_output=True, creationflags=flag_nascosta())
         except OSError:  # pragma: no cover - osascript sempre presente su macOS
             pass
 

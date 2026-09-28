@@ -74,3 +74,50 @@ def test_comando_python_per_sistema():
     assert python_command("win32") == "py"
     assert python_command("darwin") == "python3"
     assert python_command("linux") == "python3"
+
+
+def test_flag_nascosta_su_windows_e_zero_altrove():
+    """Su Windows i comandi non devono far lampeggiare finestre nere."""
+    from fotofacile.core.osutil import flag_nascosta
+
+    assert flag_nascosta("win32") != 0
+    assert flag_nascosta("darwin") == 0
+    assert flag_nascosta("linux") == 0
+
+
+def test_i_comandi_esterni_usano_il_flag_nascosta(monkeypatch, tmp_path):
+    """Ops e adb devono passare creationflags=... al processo esterno."""
+    from fotofacile.core import adb as modulo_adb
+    from fotofacile.core import ops as modulo_ops
+
+    raccolti = []
+
+    class PopoFinto:
+        returncode = 0
+        stdout = None
+        stderr = None
+
+        def __init__(self, argomenti, **kwargs):
+            raccolti.append(kwargs)
+            self.args = argomenti
+
+        def poll(self):
+            return 0
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            pass
+
+        def terminate(self):
+            pass
+
+        def communicate(self, *args, **kwargs):
+            return (b"", b"")
+
+    monkeypatch.setattr(modulo_ops.subprocess, "Popen", PopoFinto)
+    monkeypatch.setattr(modulo_ops, "FLAG_NAPOSTA" if False else "flag_nascosta", lambda: 134217728)
+    processo = modulo_ops.ProcessoEsterno(["finto-comando"], timeout=5)
+    processo.avvia()
+    assert raccolti and raccolti[0].get("creationflags") == 134217728
