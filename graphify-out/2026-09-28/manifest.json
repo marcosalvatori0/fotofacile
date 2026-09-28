@@ -1,0 +1,362 @@
+{
+  "fotofacile.py": {
+    "mtime": 1790599285.4615922,
+    "seen": 1790605197.242191,
+    "ast_hash": "30a13fad51eadd25d598366c1f845ebf",
+    "semantic_hash": "30a13fad51eadd25d598366c1f845ebf"
+  },
+  "fotofacile/__init__.py": {
+    "mtime": 1790598742.3016818,
+    "seen": 1790605197.242193,
+    "ast_hash": "a475900f339e67646414014953d5c811",
+    "semantic_hash": "a475900f339e67646414014953d5c811"
+  },
+  "fotofacile/cli.py": {
+    "mtime": 1790604976.4453273,
+    "seen": 1790605197.242193,
+    "ast_hash": "cf06a25dd73266049a89d604251c4405",
+    "semantic_hash": "cf06a25dd73266049a89d604251c4405"
+  },
+  "fotofacile/core/__init__.py": {
+    "mtime": 1790598742.3019543,
+    "seen": 1790605197.242194,
+    "ast_hash": "b4a8c8e7819a0f05004fa80c18e2646b",
+    "semantic_hash": "b4a8c8e7819a0f05004fa80c18e2646b"
+  },
+  "fotofacile/core/adb.py": {
+    "mtime": 1790598786.4447153,
+    "seen": 1790605197.242194,
+    "ast_hash": "bb8e5e4e00c0c3a60221d6198058596c",
+    "semantic_hash": "bb8e5e4e00c0c3a60221d6198058596c"
+  },
+  "fotofacile/core/adb_passi.py": {
+    "mtime": 1790602857.8697345,
+    "seen": 1790605197.242195,
+    "ast_hash": "6a9e9551f970e35296d2680b12bb70ef",
+    "semantic_hash": "6a9e9551f970e35296d2680b12bb70ef"
+  },
+  "fotofacile/core/demo.py": {
+    "mtime": 1790599145.9544766,
+    "seen": 1790605197.242195,
+    "ast_hash": "9a85b695a9ea4f7f6bd9e8fbdbb3aa8c",
+    "semantic_hash": "9a85b695a9ea4f7f6bd9e8fbdbb3aa8c"
+  },
+  "fotofacile/core/devices.py": {
+    "mtime": 1790602792.6837535,
+    "seen": 1790605197.242195,
+    "ast_hash": "ce2fb722efedb9c5f937d8e4e9c65ec9",
+    "semantic_hash": "ce2fb722efedb9c5f937d8e4e9c65ec9"
+  },
+  "fotofacile/core/errors.py": {
+    "mtime": 1790602792.6396356,
+    "seen": 1790605197.242196,
+    "ast_hash": "8462df887d80fa59d3ca45b7558e6f07",
+    "semantic_hash": "8462df887d80fa59d3ca45b7558e6f07"
+  },
+  "fotofacile/core/format.py": {
+    "mtime": 1790598837.29115,
+    "seen": 1790605197.242196,
+    "ast_hash": "f732d2ab9c224f593e9b59d7dcc40d1e",
+    "semantic_hash": "f732d2ab9c224f593e9b59d7dcc40d1e"
+  },
+  "fotofacile/core/history.py": {
+    "mtime": 1790602836.126613,
+    "seen": 1790605197.242196,
+    "ast_hash": "8e13eb4ebc71cd3153a828ed529fd45f",
+    "semantic_hash": "8e13eb4ebc71cd3153a828ed529fd45f"
+  },
+  "fotofacile/core/installer.py": {
+    "mtime": 1790600793.5222394,
+    "seen": 1790605197.242197,
+    "ast_hash": "9c80e5d3f667bcbe4b084e7928f121fe",
+    "semantic_hash": "9c80e5d3f667bcbe4b084e7928f121fe"
+  },
+  "fotofacile/core/ops.py": {
+    "mtime": 1790602792.6397922,
+    "seen": 1790605197.242197,
+    "ast_hash": "ed13da78d59e8d3ae4a667e265ccda52",
+    "semantic_hash": "ed13da78d59e8d3ae4a667e265ccda52"
+  },
+  "fotofacile/core/osutil.py": {
+    "mtime": 1790602792.683845,
+    "seen": 1790605197.242197,
+    "ast_hash": "14557cc6621fa1f599b4ef7d880a7d5e",
+    "semantic_hash": "14557cc6621fa1f599b4ef7d880a7d5e"
+  },
+  "fotofacile/core/planner.py": {
+    "mtime": 1790602893.6422126,
+    "seen": 1790605197.242198,
+    "ast_hash": "72b8ec847784499b9d33c146969b0428",
+    "semantic_hash": "72b8ec847784499b9d33c146969b0428"
+  },
+  "fotofacile/core/report.py": {
+    "mtime": 1790599099.650385,
+    "seen": 1790605197.242198,
+    "ast_hash": "872ffa0ecde27f03ccbc61cc6a0eca9d",
+    "semantic_hash": "872ffa0ecde27f03ccbc61cc6a0eca9d"
+  },
+  "fotofacile/core/scanner.py": {
+    "mtime": 1790598847.0812073,
+    "seen": 1790605197.242198,
+    "ast_hash": "fceb9f3edd427dfcb9a30474a2e5737e",
+    "semantic_hash": "fceb9f3edd427dfcb9a30474a2e5737e"
+  },
+  "fotofacile/core/transfer.py": {
+    "mtime": 1790602792.6832395,
+    "seen": 1790605197.242199,
+    "ast_hash": "11161c660c3471a2c9332d5347b2012d",
+    "semantic_hash": "11161c660c3471a2c9332d5347b2012d"
+  },
+  "fotofacile/ui/__init__.py": {
+    "mtime": 1790598742.3020515,
+    "seen": 1790605197.242199,
+    "ast_hash": "b4a8c8e7819a0f05004fa80c18e2646b",
+    "semantic_hash": "b4a8c8e7819a0f05004fa80c18e2646b"
+  },
+  "fotofacile/ui/app.py": {
+    "mtime": 1790602857.8695917,
+    "seen": 1790605197.242199,
+    "ast_hash": "dcf8a5fd2fb7272b3d3a15701caf67df",
+    "semantic_hash": "dcf8a5fd2fb7272b3d3a15701caf67df"
+  },
+  "fotofacile/ui/page_connect.py": {
+    "mtime": 1790602857.9125087,
+    "seen": 1790605197.242199,
+    "ast_hash": "15606a029b6cff1c5cfd08380f23cbef",
+    "semantic_hash": "15606a029b6cff1c5cfd08380f23cbef"
+  },
+  "fotofacile/ui/page_options.py": {
+    "mtime": 1790602857.8907528,
+    "seen": 1790605197.2422001,
+    "ast_hash": "5a3435f2b4e34a211427fe4fad17e923",
+    "semantic_hash": "5a3435f2b4e34a211427fe4fad17e923"
+  },
+  "fotofacile/ui/page_select.py": {
+    "mtime": 1790602857.8910012,
+    "seen": 1790605197.2422001,
+    "ast_hash": "66811af041a6bd07f6102e77f1fc5754",
+    "semantic_hash": "66811af041a6bd07f6102e77f1fc5754"
+  },
+  "fotofacile/ui/page_transfer.py": {
+    "mtime": 1790602934.5973568,
+    "seen": 1790605197.242201,
+    "ast_hash": "3dd68e68e73a6d8483d1339867e1575b",
+    "semantic_hash": "3dd68e68e73a6d8483d1339867e1575b"
+  },
+  "fotofacile/ui/theme.py": {
+    "mtime": 1790599243.571322,
+    "seen": 1790605197.242201,
+    "ast_hash": "917dbcc140085686f7b156a32a93d471",
+    "semantic_hash": "917dbcc140085686f7b156a32a93d471"
+  },
+  "fotofacile/ui/widgets.py": {
+    "mtime": 1790601523.2057283,
+    "seen": 1790605197.242201,
+    "ast_hash": "3ff33230a05d57dafa5d266b22d09eed",
+    "semantic_hash": "3ff33230a05d57dafa5d266b22d09eed"
+  },
+  "scripts/run_tests.sh": {
+    "mtime": 1790598742.2970424,
+    "seen": 1790605197.242201,
+    "ast_hash": "d819d9c4da733e782413d8f64d483a6e",
+    "semantic_hash": "d819d9c4da733e782413d8f64d483a6e"
+  },
+  "tests/__init__.py": {
+    "mtime": 1790598742.3021524,
+    "seen": 1790605197.242202,
+    "ast_hash": "b4a8c8e7819a0f05004fa80c18e2646b",
+    "semantic_hash": "b4a8c8e7819a0f05004fa80c18e2646b"
+  },
+  "tests/aiuto.py": {
+    "mtime": 1790600841.727664,
+    "seen": 1790605197.242202,
+    "ast_hash": "e571957c56c30524bbd685aaef2046eb",
+    "semantic_hash": "e571957c56c30524bbd685aaef2046eb"
+  },
+  "tests/conftest.py": {
+    "mtime": 1790602257.9712763,
+    "seen": 1790605197.242202,
+    "ast_hash": "ca757dc9d4fc390b3a6c838b9cf401eb",
+    "semantic_hash": "ca757dc9d4fc390b3a6c838b9cf401eb"
+  },
+  "tests/pilota_app.py": {
+    "mtime": 1790602154.7366076,
+    "seen": 1790605197.242203,
+    "ast_hash": "55da7d2b6398e58bd320824bf39603b2",
+    "semantic_hash": "55da7d2b6398e58bd320824bf39603b2"
+  },
+  "tests/test_adb.py": {
+    "mtime": 1790598800.1317163,
+    "seen": 1790605197.242203,
+    "ast_hash": "381371b6698b9d83c154785440e9a6bd",
+    "semantic_hash": "381371b6698b9d83c154785440e9a6bd"
+  },
+  "tests/test_adb_passi.py": {
+    "mtime": 1790600320.6852875,
+    "seen": 1790605197.242203,
+    "ast_hash": "c63a28ff419b649c64a87deceea35512",
+    "semantic_hash": "c63a28ff419b649c64a87deceea35512"
+  },
+  "tests/test_app_completa.py": {
+    "mtime": 1790602154.737218,
+    "seen": 1790605197.242204,
+    "ast_hash": "cb8f0e4dc4888f63461dfce64f4d58ea",
+    "semantic_hash": "cb8f0e4dc4888f63461dfce64f4d58ea"
+  },
+  "tests/test_cli.py": {
+    "mtime": 1790604976.4254324,
+    "seen": 1790605197.242204,
+    "ast_hash": "9de77943c22675b77b04b5207585777a",
+    "semantic_hash": "9de77943c22675b77b04b5207585777a"
+  },
+  "tests/test_demo.py": {
+    "mtime": 1790599166.139919,
+    "seen": 1790605197.242204,
+    "ast_hash": "7e8d04adb36c6a3b4a6b07beca2429b3",
+    "semantic_hash": "7e8d04adb36c6a3b4a6b07beca2429b3"
+  },
+  "tests/test_devices.py": {
+    "mtime": 1790598857.0182312,
+    "seen": 1790605197.242204,
+    "ast_hash": "66a249dfb2c425db749bf48151d6de6d",
+    "semantic_hash": "66a249dfb2c425db749bf48151d6de6d"
+  },
+  "tests/test_format.py": {
+    "mtime": 1790598814.6855052,
+    "seen": 1790605197.242205,
+    "ast_hash": "eab46ff62bc773e5291fbfb7d4932775",
+    "semantic_hash": "eab46ff62bc773e5291fbfb7d4932775"
+  },
+  "tests/test_history.py": {
+    "mtime": 1790598825.2595203,
+    "seen": 1790605197.242205,
+    "ast_hash": "e80742c8bbe6f78662bcf75c3b020e12",
+    "semantic_hash": "e80742c8bbe6f78662bcf75c3b020e12"
+  },
+  "tests/test_installer.py": {
+    "mtime": 1790599123.9157271,
+    "seen": 1790605197.242205,
+    "ast_hash": "1a11ba34dac0374e7f10e5e173c042b7",
+    "semantic_hash": "1a11ba34dac0374e7f10e5e173c042b7"
+  },
+  "tests/test_installer_passi.py": {
+    "mtime": 1790600783.486329,
+    "seen": 1790605197.2422059,
+    "ast_hash": "03bca673ce33246c4c0a079a0067d0a9",
+    "semantic_hash": "03bca673ce33246c4c0a079a0067d0a9"
+  },
+  "tests/test_ops.py": {
+    "mtime": 1790600216.9773846,
+    "seen": 1790605197.2422059,
+    "ast_hash": "373a548eb9db872bbd7e1314e439d219",
+    "semantic_hash": "373a548eb9db872bbd7e1314e439d219"
+  },
+  "tests/test_osutil.py": {
+    "mtime": 1790602893.6424248,
+    "seen": 1790605197.2422059,
+    "ast_hash": "bf837a8efd9ec669c49c52b759a60c7c",
+    "semantic_hash": "bf837a8efd9ec669c49c52b759a60c7c"
+  },
+  "tests/test_package.py": {
+    "mtime": 1790598742.3039236,
+    "seen": 1790605197.242207,
+    "ast_hash": "d2de1d09e796ceae735f0db7eade81fa",
+    "semantic_hash": "d2de1d09e796ceae735f0db7eade81fa"
+  },
+  "tests/test_page_connect.py": {
+    "mtime": 1790601955.137517,
+    "seen": 1790605197.242207,
+    "ast_hash": "a9102e2f1c9c3fd42c8a4c2a7663a3c9",
+    "semantic_hash": "a9102e2f1c9c3fd42c8a4c2a7663a3c9"
+  },
+  "tests/test_page_options.py": {
+    "mtime": 1790601955.1371622,
+    "seen": 1790605197.242207,
+    "ast_hash": "fbcfe61e01a829e53d04ec26c048f08a",
+    "semantic_hash": "fbcfe61e01a829e53d04ec26c048f08a"
+  },
+  "tests/test_page_select.py": {
+    "mtime": 1790601955.1373262,
+    "seen": 1790605197.242208,
+    "ast_hash": "951dfcd4f53840d4305c9e9a92c1b13a",
+    "semantic_hash": "951dfcd4f53840d4305c9e9a92c1b13a"
+  },
+  "tests/test_page_transfer.py": {
+    "mtime": 1790602297.4505005,
+    "seen": 1790605197.242208,
+    "ast_hash": "3fc0f7554ec49d7424f8cd2d932aea80",
+    "semantic_hash": "3fc0f7554ec49d7424f8cd2d932aea80"
+  },
+  "tests/test_planner.py": {
+    "mtime": 1790602893.6425123,
+    "seen": 1790605197.242208,
+    "ast_hash": "b634349fba069968344ec58d3f56069e",
+    "semantic_hash": "b634349fba069968344ec58d3f56069e"
+  },
+  "tests/test_report.py": {
+    "mtime": 1790599065.8293552,
+    "seen": 1790605197.242209,
+    "ast_hash": "5c1fe36ce3e92a6ff7571862085f47e0",
+    "semantic_hash": "5c1fe36ce3e92a6ff7571862085f47e0"
+  },
+  "tests/test_robustezza.py": {
+    "mtime": 1790602836.126753,
+    "seen": 1790605197.242209,
+    "ast_hash": "fb1d5b825a3e08c91cd92ceab1523256",
+    "semantic_hash": "fb1d5b825a3e08c91cd92ceab1523256"
+  },
+  "tests/test_scanner.py": {
+    "mtime": 1790598825.2594988,
+    "seen": 1790605197.242209,
+    "ast_hash": "157b122162b7a893dd8ccf9589baec6e",
+    "semantic_hash": "157b122162b7a893dd8ccf9589baec6e"
+  },
+  "tests/test_theme.py": {
+    "mtime": 1790599251.5807283,
+    "seen": 1790605197.2422101,
+    "ast_hash": "1fdfd97ebd99505e38c290b3b94c8ea9",
+    "semantic_hash": "1fdfd97ebd99505e38c290b3b94c8ea9"
+  },
+  "tests/test_transfer.py": {
+    "mtime": 1790599052.3367388,
+    "seen": 1790605197.2422101,
+    "ast_hash": "5229c0946a2bbe7e893b1ce93d229661",
+    "semantic_hash": "5229c0946a2bbe7e893b1ce93d229661"
+  },
+  "tests/test_ui_app.py": {
+    "mtime": 1790602154.7369099,
+    "seen": 1790605197.2422101,
+    "ast_hash": "c43a0c2a5ad318390b71581b1700e05a",
+    "semantic_hash": "c43a0c2a5ad318390b71581b1700e05a"
+  },
+  "tests/test_widgets.py": {
+    "mtime": 1790599491.607352,
+    "seen": 1790605197.242211,
+    "ast_hash": "8a3bc1c49ceb5a7884f50d133443b165",
+    "semantic_hash": "8a3bc1c49ceb5a7884f50d133443b165"
+  },
+  "README.md": {
+    "mtime": 1790605078.182249,
+    "seen": 1790605197.242211,
+    "ast_hash": "ab279e3bd5dbed79f47a1aba04bce715",
+    "semantic_hash": "ab279e3bd5dbed79f47a1aba04bce715"
+  },
+  "docs/superpowers/plans/2026-09-28-fotofacile.md": {
+    "mtime": 1790603004.0911787,
+    "seen": 1790605197.242211,
+    "ast_hash": "2a2bc28d58cd017986dd1af8f327512a",
+    "semantic_hash": "2a2bc28d58cd017986dd1af8f327512a"
+  },
+  "docs/superpowers/specs/2026-09-28-fotofacile-design.md": {
+    "mtime": 1790603004.0904906,
+    "seen": 1790605197.242212,
+    "ast_hash": "1ab02e3fa8adb957a3d0cbcaec7d0c7d",
+    "semantic_hash": "1ab02e3fa8adb957a3d0cbcaec7d0c7d"
+  },
+  "requirements-dev.txt": {
+    "mtime": 1790598742.2950134,
+    "seen": 1790605197.242212,
+    "ast_hash": "759e20096380537941eda23312f5c997",
+    "semantic_hash": "759e20096380537941eda23312f5c997"
+  }
+}
