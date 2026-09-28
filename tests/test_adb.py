@@ -52,13 +52,23 @@ def test_find_adb_ignora_variabile_inesistente_e_cerca_nel_percorso(tmp_path):
     adb.write_text("#!/bin/sh\n")
     adb.chmod(0o755)
     risultato = find_adb(
-        env={"FOTOFACILE_ADB": str(tmp_path / "nope"), "PATH": str(bin_dir)}, is_windows=False
+        env={
+            "FOTOFACILE_ADB": str(tmp_path / "nope"),
+            "PATH": str(bin_dir),
+            "HOME": str(tmp_path),  # non guardare la cartella utente reale
+        },
+        is_windows=False,
     )
     assert risultato == str(adb)
 
 
 def test_find_adb_ritorna_none_se_assente(tmp_path):
-    assert find_adb(env={"PATH": str(tmp_path / "vuoto")}, extra_dirs=(), is_windows=False) is None
+    vuoto = find_adb(
+        env={"PATH": str(tmp_path / "vuoto"), "HOME": str(tmp_path / "casa")},
+        extra_dirs=(),
+        is_windows=False,
+    )
+    assert vuoto is None
 
 
 def test_find_adb_su_windows_cerca_adb_exe_nel_profilo(tmp_path):

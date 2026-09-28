@@ -109,6 +109,7 @@ def azzera(applicazione, tmp_path) -> None:
     applicazione.step_indicator.set_step(0)
     applicazione.banner.hide()
     applicazione.log_pane.clear()
+    applicazione.area_dettagli.grid_remove()
 
 
 @pytest.fixture

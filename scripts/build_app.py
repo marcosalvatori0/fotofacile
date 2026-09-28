@@ -122,6 +122,33 @@ def crea_archivio(pacchetto: Path) -> Path:
     return archivio
 
 
+def ripulisci_quarantena(pacchetto: Path) -> None:
+    """Toglie il blocco di macOS che impedisce l'apertura di un pacchetto scaricato."""
+    if sys.platform != "darwin":
+        return
+    subprocess.run(["xattr", "-dr", "com.apple.quarantine", str(pacchetto)], capture_output=True, check=False)
+
+
+def crea_scorciatoia() -> Path:
+    """Crea «Avvia FotoFacile.command»: doppio clic dalla cartella del progetto."""
+    percorso = RADICE / "Avvia FotoFacile.command"
+    percorso.write_text(
+        "#!/bin/bash\n"
+        "# Avvia FotoFacile (doppio clic). Chiudendo questa finestra il programma si chiude.\n"
+        'cd "$(dirname "$0")" || exit 1\n'
+        'echo "Avvio di FotoFacile…"\n'
+        'python3 fotofacile.py "$@"\n'
+        'codice=$?\n'
+        'if [ $codice -ne 0 ]; then\n'
+        '  echo "Il programma è uscito con codice $codice. Diagnosi:"\n'
+        '  python3 fotofacile.py doctor\n'
+        'fi\n'
+        'echo "Puoi chiudere questa finestra."\n'
+    )
+    percorso.chmod(0o755)
+    return percorso
+
+
 def verifica(pacchetto: Path) -> bool:
     """Esegue l'autocollaudo del pacchetto: apre e chiude la finestra, senza toccare foto."""
     eseguibile = eseguibile_dentro(pacchetto)
@@ -156,6 +183,9 @@ def main(argv: list[str] | None = None) -> int:
         return esito.returncode
 
     pacchetto = pacchetto_creato()
+    ripulisci_quarantena(pacchetto)
+    scorciatoia = crea_scorciatoia()
+    print(f"Scorciatoia creata: {scorciatoia.name} (doppio clic nella cartella del progetto)")
     if sys.platform == "darwin":
         # su macOS il pacchetto da consegnare è il .app: la cartella intermedia è inutile
         shutil.rmtree(RADICE / "dist" / NOME, ignore_errors=True)
@@ -171,12 +201,13 @@ def main(argv: list[str] | None = None) -> int:
         archivio = crea_archivio(pacchetto)
         print(f"Archivio da condividere: {archivio} ({dimensione_mb(archivio):.1f} MB)")
 
-    print(
-        "\nPer provarlo:\n"
-        f"  macOS:   open '{pacchetto}'      (prima volta: clic destro → Apri)\n"
-        f"  Windows: doppio clic su {pacchetto.name}\n"
-        f"  Linux:   {eseguibile_dentro(pacchetto)}"
-    )
+    if sys.platform == "darwin":
+        suggerimento = f"  macOS:   open '{pacchetto}'   (prima volta: clic destro → Apri)"
+    elif sys.platform == "win32":
+        suggerimento = f"  Windows: doppio clic su {eseguibile_dentro(pacchetto)}"
+    else:
+        suggerimento = f"  Linux:   {eseguibile_dentro(pacchetto)}"
+    print("\nPer provarlo:\n" + suggerimento)
     return 0
 
 

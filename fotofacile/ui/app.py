@@ -59,20 +59,33 @@ class App(tk.Tk):
         self._history = History()
         self._history.load()
 
-        self.step_indicator = StepIndicator(self, PASSI)
-        self.step_indicator.grid(row=0, column=0, sticky="w", padx=18, pady=(14, 4))
+        self.intestazione = ttk.Frame(self)
+        self.intestazione.grid(row=0, column=0, sticky="ew", padx=18, pady=(12, 0))
+        self.step_indicator = StepIndicator(self.intestazione, PASSI)
+        self.step_indicator.grid(row=0, column=0, sticky="w")
+        self.intestazione.columnconfigure(0, weight=1)
+
         self.banner = Banner(self)
-        self.banner.grid(row=1, column=0, sticky="ew", padx=18, pady=(4, 8))
+        self.banner.grid(row=1, column=0, sticky="ew", padx=18, pady=(6, 6))
         self.banner.hide()
 
         self.container = ttk.Frame(self)
         self.container.grid(row=2, column=0, sticky="nsew", padx=18, pady=6)
-        self.log_pane = LogPane(self, height=7)
-        self.log_pane.grid(row=3, column=0, sticky="nsew", padx=18, pady=(6, 14))
+
+        # I «Dettagli» restano nascosti finché non c'è davvero qualcosa da raccontare:
+        # una grande area vuota confonde chi usa il programma.
+        self.area_dettagli = ttk.Frame(self)
+        self.area_dettagli.grid(row=3, column=0, sticky="ew", padx=18, pady=(0, 14))
+        ttk.Label(self.area_dettagli, text="Dettagli delle operazioni", style="Tenue.TLabel").grid(
+            row=0, column=0, sticky="w", pady=(0, 2)
+        )
+        self.log_pane = LogPane(self.area_dettagli, height=6)
+        self.log_pane.grid(row=1, column=0, sticky="ew")
+        self.area_dettagli.columnconfigure(0, weight=1)
+        self.area_dettagli.grid_remove()
 
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(2, weight=3)
-        self.grid_rowconfigure(3, weight=1, minsize=110)
+        self.grid_rowconfigure(2, weight=1)  # solo il contenuto si allarga
 
         if backend is not None:
             self._usa_backend(backend)
@@ -86,6 +99,14 @@ class App(tk.Tk):
 
         self.protocol("WM_DELETE_WINDOW", self._chiusura)
         self.go_to("connect")
+        self._porta_in_primo_piano()
+
+    def _porta_in_primo_piano(self) -> None:
+        """Mette la finestra davanti alle altre: avviata dal Terminale resterebbe dietro."""
+        self.lift()
+        self.attributes("-topmost", True)
+        self.after(700, lambda: self.attributes("-topmost", False))
+        self.focus_force()
 
     # ── backend ───────────────────────────────────────────────────────────
     def _usa_backend(self, backend) -> None:
@@ -141,6 +162,7 @@ class App(tk.Tk):
         self._costruisci_pagine()
 
     def register_page(self, key: str, page: ttk.Frame) -> None:
+        """Registra una pagina dentro il contenitore centrale (non sulla finestra)."""
         self.pages[key] = page
         page.grid(row=0, column=0, sticky="nsew")
         self.container.grid_rowconfigure(0, weight=1)
@@ -166,6 +188,9 @@ class App(tk.Tk):
 
     # ── messaggi e registro ───────────────────────────────────────────────
     def log(self, testo: str) -> None:
+        # grid_info() è vuoto quando l'area è nascosta: funziona anche a finestra non ancora mostrata
+        if not self.area_dettagli.grid_info():
+            self.area_dettagli.grid()
         self.log_pane.append(testo)
 
     def set_status(self, text: str, hint: str = "", kind: str = "info") -> None:

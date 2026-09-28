@@ -68,6 +68,27 @@ Diagnosi completa del computer e del collegamento:
 python3 fotofacile.py doctor      (Windows: py fotofacile.py doctor)
 ```
 
+## Se il programma non si apre
+
+1. **Modo più semplice**: doppio clic su **`Avvia FotoFacile.command`** nella cartella del
+   progetto (si apre una finestra nera del Terminale: è normale, serve ad avviare il programma).
+   In alternativa, doppio clic su **`dist/FotoFacile.app`**.
+2. Se compare un avviso di macOS («sviluppatore non verificato»): **clic destro sull'app → Apri**
+   (solo la prima volta; il pacchetto non è firmato).
+3. Se non succede nulla, guarda il file **`~/.fotofacile/avvio.log`**: contiene la data e il
+   motivo dell'ultimo tentativo.
+4. Verifica la grafica con:
+   ```
+   python3 fotofacile.py --selftest      # apre e chiude la finestra, stampa l'esito
+   python3 fotofacile.py doctor          # diagnosi completa del computer
+   ```
+   Se `--selftest` risponde `{"ok": true, ...}` la finestra funziona: il problema è solo il modo
+   in cui il programma viene avviato (per esempio da una sessione non grafica).
+
+Il programma **si adatta da solo alla modalità chiara o scura** del sistema (su macOS lo rileva
+con `defaults read -g AppleInterfaceStyle`): prima, in modalità scura, il testo risultava scuro su
+fondo scuro e la finestra sembrava vuota.
+
 ## Creare il pacchetto da regalare (build)
 
 Per dare il programma a qualcuno che **non ha Python** si crea un pacchetto che contiene tutto:
@@ -80,6 +101,7 @@ python3 scripts/build_app.py --verify   # crea e verifica subito il pacchetto
 | Sistema | Cosa viene creato | Come si apre |
 |---|---|---|
 | macOS | `dist/FotoFacile.app` (+ `.zip` da condividere) | doppio clic; la prima volta **clic destro → Apri** (il pacchetto non è firmato) |
+| qualsiasi | `Avvia FotoFacile.command` | doppio clic: avvia la versione da sorgente (serve Python) |
 | Windows | `dist/FotoFacile/FotoFacile.exe` | doppio clic (si può zippare la cartella `dist/FotoFacile`) |
 | Linux | `dist/FotoFacile/FotoFacile` | `./dist/FotoFacile/FotoFacile` |
 

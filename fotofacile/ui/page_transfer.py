@@ -20,7 +20,9 @@ class TransferPage(ttk.Frame):
     """Barra di avanzamento, velocità, tempo rimanente e resoconto finale."""
 
     def __init__(self, parent) -> None:
-        super().__init__(parent)
+        # le pagine vivono dentro app.container: la finestra resta libera per
+        # intestazione (indicatore dei passi), avvisi e dettagli
+        super().__init__(parent.container)
         self.app = parent
         self.results: TransferResults | None = None
         self.report_text = ""

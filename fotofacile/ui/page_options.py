@@ -17,7 +17,9 @@ class OptionsPage(ttk.Frame):
     """Destinazione, struttura delle cartelle, duplicati e cancellazione dal telefono."""
 
     def __init__(self, parent) -> None:
-        super().__init__(parent)
+        # le pagine vivono dentro app.container: la finestra resta libera per
+        # intestazione (indicatore dei passi), avvisi e dettagli
+        super().__init__(parent.container)
         self.app = parent
         self.mantieni_cartelle = tk.BooleanVar(value=True)
         self.salta_gia_copiate = tk.BooleanVar(value=True)

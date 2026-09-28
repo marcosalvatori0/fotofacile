@@ -20,6 +20,21 @@ def app(finestra_condivisa, tmp_path):
     azzera(finestra_condivisa, tmp_path)
 
 
+def test_la_finestra_si_mette_davanti(app):
+    """Senza questo, avviata dal Terminale, la finestra può restare nascosta dietro."""
+    chiamate = []
+    originale = app.attributes
+
+    def registra(nome, *valori):
+        if nome == "-topmost":
+            chiamate.append(valori)
+        return originale(nome, *valori)
+
+    app.attributes = registra  # type: ignore[method-assign]
+    app._porta_in_primo_piano()
+    assert (True,) in chiamate
+
+
 def test_pagine_registrate(app):
     assert set(app.pages) == {"connect", "select", "options", "transfer"}
     for pagina in app.pages.values():
@@ -47,6 +62,15 @@ def test_navigazione_non_esce_dai_limiti(app):
 def test_indicatore_passi_segue_la_pagina(app):
     app.go_to("options")
     assert app.step_indicator.current == 2
+
+
+def test_i_dettagli_si_mostrano_solo_quando_servono(app):
+    """Un'area vuota sempre presente confonde: compare al primo messaggio."""
+    assert app.area_dettagli.grid_info() == {}
+    app.log("qualcosa da raccontare")
+    app.update_idletasks()
+    assert app.area_dettagli.grid_info() != {}
+    assert "qualcosa da raccontare" in app.log_pane.get_text()
 
 
 def test_registro_e_stato(app):

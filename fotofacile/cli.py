@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from pathlib import Path
 from typing import Mapping, Sequence
 
 from . import __version__
@@ -129,24 +130,99 @@ def selftest() -> int:
     return 0 if dati["ok"] else 1
 
 
+def scrivi_log_avvio(testo: str, env: Mapping[str, str] | None = None) -> Path:
+    """Annota un messaggio nel registro di avvio (~/.fotofacile/avvio.log).
+
+    Se il programma non si apre, questo file dice sempre cosa è successo.
+    """
+    from datetime import datetime
+
+    percorso = app_dir(env) / "avvio.log"
+    path_obj = Path(percorso)
+    path_obj.parent.mkdir(parents=True, exist_ok=True)
+    with path_obj.open("a", encoding="utf-8") as uscita:
+        uscita.write(f"{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}  {testo}\n")
+    return path_obj
+
+
+def contesto_grafico_dubbio(env: Mapping[str, str] | None = None, system: str | None = None) -> bool:
+    """True se non ci sono segnali di una sessione grafica (automazione, servizi, ssh).
+
+    Serve a non restare appesi in silenzio: se il contesto è dubbio si fa una prova rapida
+    e, se fallisce, si spiega all'utente cosa fare.
+    """
+    ambiente = dict(env if env is not None else os.environ)
+    sistema = system or sys.platform
+    if sistema != "darwin":
+        return False
+    return not (ambiente.get("TERM_PROGRAM") or ambiente.get("__CFBundleIdentifier"))
+
+
+def prova_finestra(timeout: float = 10.0) -> bool:
+    """Prova ad aprire una finestra in un processo separato, senza bloccare l'avvio."""
+    import subprocess
+
+    codice = "import tkinter as tk; r=tk.Tk(); r.withdraw(); r.update(); r.destroy()"
+    try:
+        esito = subprocess.run([sys.executable, "-c", codice], capture_output=True, timeout=timeout)
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    return esito.returncode == 0
+
+
+def avviso_visibile(
+    testo: str,
+    env: Mapping[str, str] | None = None,
+    system: str | None = None,
+    runner=None,
+) -> None:
+    """Fa vedere un avviso anche quando la finestra del programma non può aprirsi."""
+    import json
+    import subprocess
+
+    sistema = system or sys.platform
+    scrivi_log_avvio(testo.replace("\n", " | "), env)
+    print(testo)
+    if sistema == "darwin":
+        esegui = runner or subprocess.run
+        script = f'display alert "FotoFacile" message {json.dumps(testo)} as critical'
+        try:
+            esegui(["osascript", "-e", script], capture_output=True)
+        except OSError:  # pragma: no cover - osascript sempre presente su macOS
+            pass
+
+
 def start_gui(demo: bool = False) -> int:
     """Apre la finestra principale; se la grafica non è disponibile lo spiega con calma."""
     import tkinter as tk
 
     from .ui.app import App
 
+    scrivi_log_avvio("avvio dell'interfaccia grafica" + (" (modalità demo)" if demo else ""))
+    if contesto_grafico_dubbio() and not prova_finestra():
+        messaggio = (
+            "Non riesco ad aprire la finestra di FotoFacile in questo contesto.\n"
+            "Avvia il programma dalla sessione grafica del computer:\n"
+            "• doppio clic su FotoFacile.app, oppure\n"
+            "• dal Terminale: python3 fotofacile.py\n"
+            "Per la diagnosi completa: fotofacile doctor"
+        )
+        avviso_visibile(messaggio)
+        return 1
     try:
         applicazione = App(demo_mode=demo)
     except tk.TclError as errore:
-        print(
+        messaggio = (
             "Non riesco ad aprire la finestra del programma.\n"
             f"Motivo tecnico: {errore}\n"
             "Su Linux serve il pacchetto della grafica (per esempio «python3-tk»);\n"
             "su macOS e Windows reinstalla Python dalle impostazioni consigliate.\n"
             "Per controllare il computer puoi usare:  fotofacile doctor"
         )
+        avviso_visibile(messaggio)
         return 1
     applicazione.mainloop()
+    scrivi_log_avvio("finestra chiusa")
     return 0
 
 

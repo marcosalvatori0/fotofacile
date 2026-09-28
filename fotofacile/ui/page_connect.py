@@ -100,7 +100,9 @@ class ConnectPage(ttk.Frame):
     INTERVALLO_SONDAGGIO = 2000
 
     def __init__(self, parent) -> None:
-        super().__init__(parent)
+        # le pagine vivono dentro app.container: la finestra resta libera per
+        # intestazione (indicatore dei passi), avvisi e dettagli
+        super().__init__(parent.container)
         self.app = parent
         self.message = ""
         self._polling = False
