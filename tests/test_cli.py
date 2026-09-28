@@ -104,3 +104,54 @@ def test_senza_finestra_grafica_spiega_come_risolvere(monkeypatch, capsys):
     assert esito == 1
     assert "finestra" in messaggio or "grafica" in messaggio
     assert "doctor" in messaggio
+
+
+def test_autocollaudo_riporta_esito_positivo(capsys, monkeypatch):
+    """L'autocollaudo serve a verificare una build impacchettata: deve dire chiaramente ok."""
+    from fotofacile import cli
+
+    class AppFinta:
+        def __init__(self, **_kwargs):
+            self.pages = {"connect": 1, "select": 2, "options": 3, "transfer": 4}
+            self.current_page = "connect"
+
+        def withdraw(self):
+            pass
+
+        def update(self):
+            pass
+
+        def destroy(self):
+            pass
+
+        def stop_all_polling(self):
+            pass
+
+    monkeypatch.setattr("fotofacile.ui.app.App", AppFinta, raising=False)
+    esito = cli.main(["--selftest"], env={})
+    assert esito == 0
+    uscita = capsys.readouterr().out
+    assert '"ok": true' in uscita
+    assert "connect" in uscita
+
+
+def test_autocollaudo_riporta_esito_negativo(capsys, monkeypatch):
+    import tkinter as tk
+
+    from fotofacile import cli
+
+    class AppRotta:
+        def __init__(self, **_kwargs):
+            raise tk.TclError("no display")
+
+    monkeypatch.setattr("fotofacile.ui.app.App", AppRotta, raising=False)
+    assert cli.main(["--selftest"], env={}) == 1
+    uscita = capsys.readouterr().out
+    assert '"ok": false' in uscita
+    assert "no display" in uscita
+
+
+def test_aiuto_menziona_autocollaudo(capsys):
+    with pytest.raises(SystemExit):
+        main(["--help"], env={})
+    assert "--selftest" in capsys.readouterr().out

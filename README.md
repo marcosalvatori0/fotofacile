@@ -68,6 +68,27 @@ Diagnosi completa del computer e del collegamento:
 python3 fotofacile.py doctor      (Windows: py fotofacile.py doctor)
 ```
 
+## Creare il pacchetto da regalare (build)
+
+Per dare il programma a qualcuno che **non ha Python** si crea un pacchetto che contiene tutto:
+
+```
+python3 scripts/build_app.py            # crea dist/FotoFacile.app e l'archivio .zip
+python3 scripts/build_app.py --verify   # crea e verifica subito il pacchetto
+```
+
+| Sistema | Cosa viene creato | Come si apre |
+|---|---|---|
+| macOS | `dist/FotoFacile.app` (+ `.zip` da condividere) | doppio clic; la prima volta **clic destro → Apri** (il pacchetto non è firmato) |
+| Windows | `dist/FotoFacile/FotoFacile.exe` | doppio clic (si può zippare la cartella `dist/FotoFacile`) |
+| Linux | `dist/FotoFacile/FotoFacile` | `./dist/FotoFacile/FotoFacile` |
+
+Il pacchetto pesa circa 25–55 MB, non richiede installazioni e si comporta come la versione da
+sorgente (compreso il download automatico del componente di collegamento). Per verificare un
+pacchetto: `FotoFacile.app/Contents/MacOS/FotoFacile --selftest` (apre e chiude la finestra e
+stampa l'esito), oppure `... doctor` per la diagnosi. L'icona è generata da
+`python3 scripts/make_icon.py` (nessuna libreria esterna).
+
 ## Collaudo automatico (per chi vuole verificare)
 
 ```

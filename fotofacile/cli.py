@@ -99,6 +99,36 @@ def doctor(env: Mapping[str, str] | None = None) -> int:
     return 0
 
 
+def selftest() -> int:
+    """Autocollaudo: apre la finestra, costruisce i quattro passi e si chiude.
+
+    Serve soprattutto a verificare una versione impacchettata (build): dice in una riga
+    se la parte grafica funziona su questo computer, senza toccare nessuna foto.
+    """
+    import json
+
+    dati: dict = {"ok": False, "motivo": ""}
+    try:
+        from .ui.app import App
+
+        applicazione = App(demo_mode=True)
+        applicazione.withdraw()
+        for _ in range(5):
+            applicazione.update()
+        dati = {
+            "ok": True,
+            "pagina": applicazione.current_page,
+            "pagine": sorted(applicazione.pages),
+            "motivo": "",
+        }
+        applicazione.stop_all_polling()
+        applicazione.destroy()
+    except Exception as errore:  # qualunque problema va riportato, non nascosto
+        dati = {"ok": False, "motivo": f"{type(errore).__name__}: {errore}"}
+    print(json.dumps(dati, ensure_ascii=False))
+    return 0 if dati["ok"] else 1
+
+
 def start_gui(demo: bool = False) -> int:
     """Apre la finestra principale; se la grafica non è disponibile lo spiega con calma."""
     import tkinter as tk
@@ -129,6 +159,11 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--demo", action="store_true", help="prova il programma senza telefono")
+    parser.add_argument(
+        "--selftest",
+        action="store_true",
+        help="apre e chiude la finestra per verificare che tutto funzioni",
+    )
     parser.add_argument("--version", action="version", version=f"FotoFacile {__version__}")
     parser.add_argument(
         "comando",
@@ -143,4 +178,6 @@ def main(argv: Sequence[str] | None = None, env: Mapping[str, str] | None = None
     argomenti = build_parser().parse_args(list(argv) if argv is not None else None)
     if argomenti.comando == "doctor":
         return doctor(env)
+    if argomenti.selftest:
+        return selftest()
     return start_gui(demo=argomenti.demo)
