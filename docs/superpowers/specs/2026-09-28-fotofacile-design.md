@@ -23,8 +23,9 @@ lo spiega e propone il rimedio in un pulsante.
 | Decisione | Scelta | Motivazione |
 |---|---|---|
 | Trasporto dati | **ADB** (Android platform-tools) via USB | Unico metodo affidabile e multipiattaforma; MTP non esiste su macOS e MTP/libmtp è instabile. Supporta qualsiasi Android 5+. |
-| Linguaggio/UI | **Python 3.9+ con Tkinter** (solo libreria standard) | Zero dipendenze da installare per l'utente finale: `python3 fotofacile.py`. Tkinter è già presente su macOS/Windows/Linux. |
-| Installazione componente mancante | **Auto-download di platform-tools ufficiali Google** in `~/.fotofacile/platform-tools`, fallback `brew` | L'utente non deve mai aprire un terminale. |
+| Linguaggio/UI | **Python 3.9+ con Tkinter** (solo libreria standard) | Zero dipendenze da installare per l'utente finale: `python3 fotofacile.py` (o `py fotofacile.py` su Windows). Tkinter è già presente su macOS/Windows/Linux. |
+| Piattaforme | **Windows 10/11, macOS 11+, Linux (Ubuntu/Fedora/Debian)** — nessuna funzione esclusiva di un sistema | Richiesta esplicita dell'utente: software multi-piattaforma. Ogni differenza di sistema è isolata in `core/osutil.py`, `core/adb.py`, `core/installer.py`, `ui/theme.py`. |
+| Installazione componente mancante | **Auto-download di platform-tools ufficiali Google** in `~/.fotofacile/platform-tools`, fallback `brew` (macOS) / istruzioni manuali (Windows/Linux) | L'utente non deve mai aprire un terminale. Su Windows si estraggono anche `AdbWinApi.dll` e `AdbWinUsbApi.dll` (obbligatorie per far funzionare `adb.exe`). |
 | Lingua UI | **Italiano semplice**, niente gergo (mai la parola "ADB" a schermo) | Pubblico non tecnico. |
 | Privacy | Nessuna rete in uscita, nessun upload, nessuna telemetria; l'unica connessione di rete è il download di platform-tools da dl.google.com su richiesta | Fiducia: le foto non escono dal computer. |
 | Modo demo | Backend finto (`FakeAdbBackend`) attivabile dall'UI e usato nei test | Consente di provare tutta la procedura, e di testare la GUI, senza un telefono collegato. |
@@ -42,7 +43,8 @@ fotofacile.py                  # avvio: python3 fotofacile.py [demo|doctor|--hel
 fotofacile/
   cli.py                       # argomenti CLI, avvio GUI o diagnostica
   core/                        # logica pura, testabile, zero Tkinter
-    adb.py                     # individuazione eseguibile, esecuzione comandi, errori
+    adb.py                     # individuazione eseguibile (adb / adb.exe), esecuzione comandi, errori
+    osutil.py                  # differenze di sistema: apri cartella, sensibilità maiuscole, cartelle utente
     devices.py                 # scoperta dispositivi e stati (device/unauthorized/...)
     scanner.py                 # elenco file multimediali presenti sul telefono
     planner.py                 # costruzione piano di copia (filtri, dedup, percorsi)
@@ -64,6 +66,11 @@ tests/                         # test unitari della logica + smoke test GUI
 **Principi:**
 - `core/` non importa mai `tkinter`: tutta la logica è testabile in isolamento.
 - `ui/` non contiene logica di business: legge lo stato e chiama `core/`.
+- **Multi-piattaforma:** nessun percorso "cablato" per un solo sistema operativo; le differenze
+  sono confinate in `core/osutil.py` (cartelle utente, apertura del file manager, sensibilità
+  maiuscole del file system), `core/adb.py` (nome dell'eseguibile, percorsi noti),
+  `core/installer.py` (URL per piattaforma, estrazione delle librerie Windows) e
+  `ui/theme.py` (tema ttk e font disponibili). Il codice di logica e UI resta identico.
 - Nessun lavoro bloccante sul thread dell'interfaccia: ogni operazione ADB gira in un thread
   worker e comunica con la UI attraverso una coda (`queue.Queue`) drenata da `after(…, 50)`
   — pattern standard e sicuro per Tkinter.
@@ -148,22 +155,46 @@ Scrittura atomica (file temporaneo + `os.replace`); file corrotto → copiato in
 9. **Nomi difficili:** percorsi con apostrofi, spazi, parentesi, `#`, `&`, caratteri non
    latini vengono quotati correttamente; righe di output non interpretabili vengono saltate e
    registrate nel log, mai fatte esplodere.
-10. **Nessun blocco dell'interfaccia:** ogni comando ADB ha timeout (scansione 120 s, copia
+10. **Nomi validi su ogni sistema (Windows incluso):** i caratteri proibiti da Windows
+    (`\ / : * ? " < > |`, caratteri di controllo) diventano `_`; i nomi riservati
+    (`CON`, `PRN`, `AUX`, `NUL`, `COM1`…`COM9`, `LPT1`…`LPT9`) vengono prefissati con `_`;
+     i punti e gli spazi finali vengono rimossi; i nomi troppo lunghi (> 150 caratteri) e i
+     percorsi oltre 240 caratteri vengono accorciati mantenendo l'estensione. Così la stessa
+      cartella creata su macOS funziona anche su Windows.
+11. **Collisioni con maiuscole diverse:** su Windows e macOS (file system non sensibile alle
+     maiuscole) `Foto.jpg` e `foto.jpg` sono considerati lo stesso file per i controlli di
+     presenza e di collisione; su Linux resta il confronto esatto.
+12. **Nessun blocco dell'interfaccia:** ogni comando ADB ha timeout (scansione 120 s, copia
     per singolo file 15 min) e può essere annullato.
-11. **Retry:** un errore transitorio di lettura durante la copia viene ritentato fino a 2 volte
+13. **Retry:** un errore transitorio di lettura durante la copia viene ritentato fino a 2 volte
     prima di marcare il file come errore.
-12. **Autodiagnosi:** `python3 fotofacile.py doctor` stampa stato di: Python/Tkinter, adb
-    trovato (con percorso e versione), dispositivi collegati, cartella di lavoro — utile al
-    supporto.
+14. **Autodiagnosi:** `python3 fotofacile.py doctor` (su Windows `py fotofacile.py doctor`)
+    stampa stato di: sistema operativo, versione Python/Tkinter, adb trovato (con percorso e
+    versione), dispositivi collegati, cartella di lavoro, accesso in scrittura alla
+    destinazione — utile al supporto su tutti i sistemi.
+15. **Apertura cartella:** al termine, il pulsante «Apri la cartella delle foto» usa il file
+    manager del sistema (Finder su macOS, Esplora file su Windows, xdg-open su Linux) e, se
+    fallisce, mostra il percorso da copiare a mano invece di dare un errore tecnico.
 
 ## 7. Dipendenze e compatibilità
 
 - Runtime: **Python 3.9+** con Tkinter, solo libreria standard (`subprocess`, `threading`,
   `queue`, `zipfile`, `urllib`, `json`, `shutil`, `pathlib`, `dataclasses`).
-- Esterno: eseguibile `adb` (scaricato automaticamente, oppure già presente nel sistema).
+- Esterno: eseguibile `adb` (`adb.exe` su Windows), scaricato automaticamente dall'app
+  oppure già presente nel sistema.
 - Sviluppo: `pytest` in `.venv`.
-- Piattaforme: macOS (primaria), Linux, Windows (le parti dipendenti dalla piattaforma sono
-  isolate in `adb.py` e `installer.py`).
+
+| Aspetto | Windows | macOS | Linux |
+|---|---|---|---|
+| Avvio | `py fotofacile.py` | `python3 fotofacile.py` | `python3 fotofacile.py` |
+| Eseguibile componente | `adb.exe` (+ `AdbWinApi.dll`, `AdbWinUsbApi.dll`) | `adb` | `adb` |
+| URL platform-tools | `…-windows.zip` | `…-darwin.zip` | `…-linux.zip` |
+| Percorsi cercati | `%LOCALAPPDATA%\Android\Sdk\platform-tools`, `%USERPROFILE%\AppData\Local\Android\Sdk\platform-tools`, PATH | `~/.fotofacile/platform-tools`, `/opt/homebrew/bin`, `/usr/local/bin`, `~/Library/Android/sdk/platform-tools`, PATH | `~/.fotofacile/platform-tools`, `/usr/bin`, `/usr/local/bin`, PATH |
+| Cartella dati app | `%USERPROFILE%\.fotofacile` | `~/.fotofacile` | `~/.fotofacile` |
+| Apri cartella | `explorer` / `os.startfile` | `open` | `xdg-open` |
+| Tema GUI | `vista` | `aqua` | `clam` |
+| Font | Segoe UI | Helvetica Neue | DejaVu Sans / Liberation Sans |
+| Esecuzione file | rimozione dei bit eseguibili non necessaria, `chmod` saltato | `chmod 755` | `chmod 755` |
 
 ## 8. Test
 
@@ -174,7 +205,8 @@ TDD su tutto `core/` (test scritto prima, visto fallire, poi implementazione):
 | `adb.py` | quotazione comandi difficili, ordine di ricerca dell'eseguibile, errori con messaggi umani, timeout |
 | `devices.py` | `adb devices -l` vuoto/uno/molti/unauthorized/offline, modello assente, righe spurie |
 | `scanner.py` | parsing flusso size/mtime/nome, filtro estensioni, file con `|` nel nome, righe corrotte, cartelle inesistenti |
-| `planner.py` | totali e conteggi, filtro per data, dedup da cronologia, mappatura percorsi con/senza struttura, collisioni e rinomina |
+| `osutil.py` | comando di apertura cartella per sistema, sensibilità maiuscole simulata, percorsi utente, fallback quando il file manager non è disponibile |
+| `planner.py` | totali e conteggi, filtro per data, dedup da cronologia, mappatura percorsi con/senza struttura, collisioni e rinomina, nomi non validi su Windows, nomi riservati, nomi lunghi, confronto maiuscole su Windows/macOS |
 | `history.py` | caricamento mancante, salvataggio atomico, round-trip, file corrotto → backup, isolamento per seriale |
 | `transfer.py` | copia corretta, progressi monotoni, annulla a metà senza residui, retry, dimensione errata → errore, cancella-dopo-solo-se-verificato, `.part` pulito |
 | `installer.py` | download finto → estrazione → adb eseguibile, zip corrotto → errore umano, annulla download |
@@ -191,7 +223,11 @@ TDD su tutto `core/` (test scritto prima, visto fallire, poi implementazione):
 4. Al termine esistono sul computer tanti file quanti indicati nel resoconto, tutti integri
    (dimensione verificata), e un secondo avvio non ricopia ciò che è già stato copiato.
 5. La modalità demo permette di provare l'intera procedura su una macchina senza telefono.
-6. `python3 -m pytest tests -q` passa completamente.
+6. **Multi-piattaforma:** a parità di versione Python, il programma funziona su Windows,
+   macOS e Linux; nessun modulo fuori da `core/osutil.py`, `core/adb.py`, `core/installer.py`
+   e `ui/theme.py` contiene riferimenti a un sistema operativo specifico (verificato dal test
+   `tests/test_multipiattaforma.py`).
+7. `python3 -m pytest tests -q` passa completamente.
 
 ## 10. Rischi e mitigazioni
 
@@ -208,7 +244,8 @@ TDD su tutto `core/` (test scritto prima, visto fallire, poi implementazione):
 ## 11. Estensioni future (non in questa versione)
 
 Collegamento Wi‑Fi (`adb connect`), profilatura automatica "solo elementi nuovi dall'ultima
-volta", impacchettamento `.app`/`.exe` con PyInstaller, supporto iPhone, anteprima miniature.
+volta", impacchettamento `.app`/`.exe`/`.AppImage` con PyInstaller, supporto iPhone, anteprima
+miniature, integrazione con il file manager di sistema.
 
 ## 12. Punti di attenzione per la revisione (imbocco "Review Focus")
 
@@ -220,3 +257,8 @@ volta", impacchettamento `.app`/`.exe` con PyInstaller, supporto iPhone, antepri
 5. Due telefoni collegati contemporaneamente → l'utente sceglie il dispositivo, il seriale
    corretto viene usato in ogni comando.
 6. Cronologia corrotta o cancellata a mano → nessun crash, ricostruzione pulita.
+7. Stessa foto con nomi non validi su Windows (`IMG:01?.jpg`) o nomi riservati (`CON.jpg`)
+   → copiata con nome reso sicuro, e la cartella risultante è utilizzabile sia su macOS sia
+   su Windows.
+8. Su Windows con «Debug USB» attivo ma driver USB del produttore mancante → messaggio che
+   indica di installare il driver, invece di restare in attesa indefinita.
