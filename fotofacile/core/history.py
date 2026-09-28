@@ -1,0 +1,75 @@
+"""Archivio dei file già copiati, per non ricopiarli una seconda volta.
+
+Separato per dispositivo: due telefoni diversi possono avere foto con lo stesso nome.
+La scrittura è atomica e un file corrotto viene messo da parte invece di far crashare l'app.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import time
+from pathlib import Path
+
+from .osutil import app_dir
+
+VERSIONE = 1
+
+
+def default_path() -> Path:
+    return app_dir() / "history.json"
+
+
+class History:
+    """Cronologia per-dispositivo: percorso relativo → dimensione, data, destinazione."""
+
+    def __init__(self, path: Path | None = None) -> None:
+        self.path = Path(path) if path is not None else default_path()
+        self._dati: dict[str, dict[str, dict]] = {}
+        self._caricato = False
+
+    # ── lettura e scrittura ───────────────────────────────────────────────
+    def load(self) -> None:
+        self._dati = {}
+        if self.path.is_file():
+            try:
+                contenuto = json.loads(self.path.read_text(encoding="utf-8"))
+                dispositivi = contenuto.get("devices", {})
+                if isinstance(dispositivi, dict):
+                    self._dati = {
+                        str(seriale): dict(voci)
+                        for seriale, voci in dispositivi.items()
+                        if isinstance(voci, dict)
+                    }
+            except (json.JSONDecodeError, UnicodeDecodeError, AttributeError, TypeError):
+                self._metti_da_parte_file_corrotto()
+                self._dati = {}
+        self._caricato = True
+
+    def _metti_da_parte_file_corrotto(self) -> None:
+        backup = self.path.with_name(f"{self.path.name}.corrupt-{int(time.time())}")
+        try:
+            self.path.replace(backup)
+        except OSError:  # pragma: no cover - non deve mai bloccare l'utente
+            pass
+
+    def save(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporaneo = self.path.with_name(self.path.name + ".tmp")
+        contenuto = {"version": VERSIONE, "devices": self._dati}
+        temporaneo.write_text(json.dumps(contenuto, ensure_ascii=False, indent=1), encoding="utf-8")
+        os.replace(temporaneo, self.path)
+
+    # ── interrogazioni ────────────────────────────────────────────────────
+    def contains(self, serial: str, rel_path: str, size: int, mtime: int) -> bool:
+        """True se quel file, con la stessa dimensione e data, è già stato copiato."""
+        voce = self._dati.get(serial, {}).get(rel_path)
+        if not voce:
+            return False
+        return voce.get("size") == size and voce.get("mtime") == mtime
+
+    def record(self, serial: str, rel_path: str, size: int, mtime: int, dest: str) -> None:
+        self._dati.setdefault(serial, {})[rel_path] = {"size": size, "mtime": mtime, "dest": dest}
+
+    def count(self, serial: str) -> int:
+        return len(self._dati.get(serial, {}))
