@@ -1,0 +1,69 @@
+import pytest
+
+from fotofacile.ui.widgets import Banner, LogPane, PathChooser, StepIndicator, tk_available
+
+pytestmark = pytest.mark.skipif(not tk_available(), reason="serve un ambiente grafico")
+
+
+@pytest.fixture
+def root():
+    import tkinter as tk
+
+    finestra = tk.Tk()
+    finestra.withdraw()
+    yield finestra
+    finestra.destroy()
+
+
+def test_indicatore_passi(root):
+    indicatore = StepIndicator(root, ["Collega", "Scegli", "Opzioni", "Copia"])
+    indicatore.set_step(0)
+    assert indicatore.current == 0
+    indicatore.set_step(3)
+    assert indicatore.current == 3
+    indicatore.set_step(99)
+    assert indicatore.current == 3
+    indicatore.set_step(-5)
+    assert indicatore.current == 0
+
+
+def test_pannello_registro(root):
+    pannello = LogPane(root)
+    pannello.append("prima riga")
+    pannello.append("seconda riga")
+    assert "prima riga" in pannello.get_text()
+    assert "seconda riga" in pannello.get_text()
+    pannello.clear()
+    assert pannello.get_text() == ""
+
+
+def test_banner_mostra_messaggio_e_suggerimento(root):
+    banner = Banner(root)
+    banner.show("Telefono non collegato", hint="Controlla il cavo", kind="avviso")
+    assert banner.visible is True
+    assert "Telefono non collegato" in banner.message_text
+    assert "Controlla il cavo" in banner.hint_text
+    assert banner.kind == "avviso"
+    banner.hide()
+    assert banner.visible is False
+
+
+def test_banner_accetta_tutti_i_toni(root):
+    banner = Banner(root)
+    for tono in ("info", "successo", "avviso", "errore"):
+        banner.show("messaggio", kind=tono)
+        assert banner.kind == tono
+
+
+def test_scelta_cartella_aggiorna_il_valore(root, tmp_path):
+    cambi = []
+    chooser = PathChooser(root, on_change=cambi.append)
+    chooser.set(str(tmp_path))
+    assert chooser.get() == str(tmp_path)
+    assert cambi == [str(tmp_path)]
+
+
+def test_scelta_cartella_senza_callback(root, tmp_path):
+    chooser = PathChooser(root)
+    chooser.set(str(tmp_path))
+    assert chooser.get() == str(tmp_path)
