@@ -7,6 +7,9 @@ pytestmark = pytest.mark.skipif(not tk_available(), reason="questo ambiente non 
 
 
 def _scansiona(app) -> bool:
+    from fotofacile.core.devices import DeviceInfo
+
+    app.device = DeviceInfo(serial="DEMO12345", state="device", model="Pixel_7_demo", product="demo")
     app.go_to("select")
     pagina = app.pages["select"]
     return attendi(app, lambda: pagina._scansione_fatta, passi=400)

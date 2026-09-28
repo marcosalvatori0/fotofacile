@@ -11,6 +11,9 @@ pytestmark = pytest.mark.skipif(not tk_available(), reason="questo ambiente non 
 
 
 def _prepara(app, destinazione: Path) -> None:
+    from fotofacile.core.devices import DeviceInfo
+
+    app.device = DeviceInfo(serial="DEMO12345", state="device", model="Pixel_7_demo", product="demo")
     app.go_to("select")
     assert attendi(app, lambda: app.pages["select"]._scansione_fatta, passi=400)
     app.pages["select"].go_next()
@@ -29,6 +32,9 @@ def test_proposta_cartella_e_opzioni(app, tmp_path):
 
 
 def test_cartella_proposta_quando_vuota(app, tmp_path):
+    from fotofacile.core.devices import DeviceInfo
+
+    app.device = DeviceInfo(serial="DEMO12345", state="device", model="Pixel_7_demo", product="demo")
     app.go_to("select")
     assert attendi(app, lambda: app.pages["select"]._scansione_fatta, passi=400)
     app.pages["select"].go_next()

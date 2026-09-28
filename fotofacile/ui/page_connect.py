@@ -104,7 +104,6 @@ class ConnectPage(ttk.Frame):
         self.app = parent
         self.message = ""
         self._polling = False
-        self._controllo_in_corso = False
 
         ttk.Label(self, text="Collega il telefono al computer", style="Titolo.TLabel").grid(
             row=0, column=0, sticky="w", pady=(4, 2)
@@ -203,13 +202,11 @@ class ConnectPage(ttk.Frame):
             self.set_message("Manca il componente di collegamento.", tono="avviso")
             self.dettaglio.configure(text="Premi «Installa componente mancante»: lo scarico io da internet.")
             return
-        if self._controllo_in_corso:
-            return
-        self._controllo_in_corso = True
+        if self.app.task_in_corso:
+            return  # c'è già un controllo in corso
         self.app.run_task(self.app.remote.dispositivi(), on_done=self._dispositivi_ricevuti)
 
     def _dispositivi_ricevuti(self, dispositivi) -> None:
-        self._controllo_in_corso = False
         pronto = next((dispositivo for dispositivo in dispositivi if dispositivo.is_ready), None)
         if pronto is not None:
             self.app.device = pronto

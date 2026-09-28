@@ -22,7 +22,6 @@ class SelectPage(ttk.Frame):
         self._folders: list = []
         self._files: list[MediaFile] = []
         self._scansione_fatta = False
-        self._scansione_in_corso = False
 
         ttk.Label(self, text="Scegli cosa copiare", style="Titolo.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
@@ -79,7 +78,7 @@ class SelectPage(ttk.Frame):
 
     # ── ciclo di vita ─────────────────────────────────────────────────────
     def on_show(self) -> None:
-        if not self._scansione_fatta and not self._scansione_in_corso:
+        if not self._scansione_fatta and not self.app.task_in_corso:
             self.start_scan()
 
     # ── ricerca ───────────────────────────────────────────────────────────
@@ -93,13 +92,11 @@ class SelectPage(ttk.Frame):
             return
         self.app.set_status("Sto cercando le foto sul telefono… può richiedere un momento.", kind="info")
         self.bottone_avanti.state(["disabled"])
-        self._scansione_in_corso = True
         seriale = self.app.device.serial if self.app.device is not None else ""
         comando = build_scan_command(DEFAULT_ROOTS, include_videos=self.sto_scegliendo_video.get())
         self.app.run_task(self.app.remote.cerca_media(seriale, comando), on_done=self._scansione_finita)
 
     def _scansione_finita(self, file: list[MediaFile]) -> None:
-        self._scansione_in_corso = False
         self._scansione_fatta = True
         self._files = list(file)
         self._folders = group_folders(self._files)

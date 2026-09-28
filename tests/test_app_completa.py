@@ -29,6 +29,7 @@ def test_app_completa_la_copia_in_modalita_demo(tmp_path):
     esito_file = tmp_path / "esito.json"
     ambiente = {
         **os.environ,
+        "PYTHONPATH": str(RADICE),
         "HOME": str(tmp_path),
         "USERPROFILE": str(tmp_path),
         "FF_DEST": str(destinazione),
@@ -50,6 +51,7 @@ def test_app_completa_la_copia_in_modalita_demo(tmp_path):
     assert dati["copiati"] >= 10
     assert dati["errori"] == []
     assert "Copiate" in dati["resoconto"]
+    assert "Ho copiato" in dati["riepilogo"]
     for percorso in dati["file"]:
         assert Path(percorso).is_file()
     copiati = sorted(destinazione.rglob("*"))

@@ -93,6 +93,7 @@ def test_task_con_errore_imprevisto_non_chiude_il_programma(app):
         yield 0.0
         raise RuntimeError("errore inatteso")
 
+    app.banner.hide()
     app.run_task(lavoro())
     assert attendi(app, lambda: app.banner.visible, passi=200)
     assert "funzionato" in app.banner.message_text.lower()
@@ -152,3 +153,58 @@ def test_chiusura_ferma_i_sondaggi(app):
     app.pages["connect"].start_polling()
     app.stop_all_polling()
     assert app.pages["connect"]._polling is False
+
+
+def test_un_task_abbandonato_si_ferma_subito(app):
+    """Se l'utente cambia idea, il lavoro in corso deve fermarsi davvero."""
+    eseguiti = []
+
+    def lavoro():
+        for indice in range(1000):
+            eseguiti.append(indice)
+            yield 0.0
+        return "mai"
+
+    app.run_task(lavoro())
+    assert attendi(app, lambda: len(eseguiti) > 0, passi=200)
+    app.annulla_task()
+    fermi = len(eseguiti)
+    for _ in range(50):
+        app.update()
+    assert len(eseguiti) == fermi  # non avanza più
+    assert app.task_in_corso is False
+
+
+def test_un_task_abbandonato_chiude_il_generatore(app):
+    stato = {"chiuso": False, "avviato": False}
+
+    def lavoro():
+        try:
+            for _ in range(1000):
+                stato["avviato"] = True
+                yield 0.0
+        finally:
+            stato["chiuso"] = True
+
+    app.run_task(lavoro())
+    assert attendi(app, lambda: stato["avviato"], passi=200)
+    app.annulla_task()
+    assert stato["chiuso"] is True
+
+
+def test_errore_nella_callback_non_ferma_il_programma(app):
+    def lavoro():
+        yield 0.0
+        return "valore"
+
+    def callback_rotta(_valore):
+        raise RuntimeError("la grafica ha fatto i capricci")
+
+    app.banner.hide()
+    app.run_task(lavoro(), on_done=callback_rotta)
+    for _ in range(100):
+        app.update()
+        if app.banner.visible:
+            break
+    assert app.banner.visible is True
+    assert "grafica" in app.log_pane.get_text().lower() or "aggiornato" in app.banner.message_text.lower()

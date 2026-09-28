@@ -71,7 +71,8 @@ def main() -> int:
                         "byte": risultati.bytes_copied,
                         "file": file_scritti[:5],
                         "pagina": applicazione.current_page,
-                        "resoconto": applicazione.pages["transfer"].riepilogo_testo(),
+                        "riepilogo": applicazione.pages["transfer"].riepilogo_testo(),
+                        "resoconto": applicazione.pages["transfer"].report_text,
                     }
                 )
                 applicazione.destroy()

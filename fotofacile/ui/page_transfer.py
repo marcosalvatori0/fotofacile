@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import time
-import tkinter as tk
+from pathlib import Path
+
 from tkinter import ttk
 
+from ..core.devices import DeviceInfo
 from ..core.format import format_eta, format_size, format_speed
 from ..core.osutil import open_in_file_manager
 from ..core.planner import TransferPlan, build_plan
@@ -78,6 +80,13 @@ class TransferPage(ttk.Frame):
 
     # ── ciclo di vita ─────────────────────────────────────────────────────
     def on_show(self) -> None:
+        if self.app.options is None or self.app.remote is None:
+            self.app.set_status(
+                "Manca un'informazione per iniziare la copia.",
+                hint="Torna al passo «Destinazione» e premi di nuovo «Copia le foto».",
+                kind="avviso",
+            )
+            return
         self.app.set_status("Sto copiando le foto: non scollegare il telefono.", kind="info")
         self.bottone_annulla.state(["!disabled"])
         self.start_transfer()
@@ -146,9 +155,9 @@ class TransferPage(ttk.Frame):
         self.report_text = build_report(
             risultati,
             self.last_plan,
-            self.app.device,
+            self.app.device or DeviceInfo(serial="—", state="device", model="Telefono", product=""),
             self.started_at,
-            self.app.options.destination,
+            self.app.options.destination if self.app.options is not None else Path("."),
         )
         for bottone in (self.bottone_apri, self.bottone_salva, self.bottone_chiudi):
             bottone.state(["!disabled"])

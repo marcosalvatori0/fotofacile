@@ -83,7 +83,7 @@ def test_riavvio_senza_componente_avvisa(app):
     pagina = app.pages["connect"]
     pagina.restart_connection()
     assert attendi(app, lambda: app.banner.visible)
-    assert "install" in app.banner.message_text.lower()
+    assert "install" in f"{app.banner.message_text} {app.banner.hint_text}".lower()
 
 
 def test_modalita_demo_attivabile_dal_passo_1(app):

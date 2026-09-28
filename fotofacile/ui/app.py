@@ -55,6 +55,7 @@ class App(tk.Tk):
         self.cancel_event = threading.Event()
         self.current_page = ""
         self._task: Generator | None = None
+        self._epoca_task = 0
         self._history = History()
         self._history.load()
 
@@ -129,6 +130,16 @@ class App(tk.Tk):
         self.register_page("options", OptionsPage(self))
         self.register_page("transfer", TransferPage(self))
 
+    def ricostruisci_pagine(self) -> None:
+        """Ricrea le schermate da zero: si riparte puliti, senza riaprire il programma."""
+        self.stop_all_polling()
+        self.annulla_task()
+        for pagina in self.pages.values():
+            pagina.destroy()
+        self.pages.clear()
+        self.current_page = ""
+        self._costruisci_pagine()
+
     def register_page(self, key: str, page: ttk.Frame) -> None:
         self.pages[key] = page
         page.grid(row=0, column=0, sticky="nsew")
@@ -174,20 +185,24 @@ class App(tk.Tk):
     ) -> None:
         """Porta avanti un generatore a passi dentro il ciclo della grafica."""
         attesa = self.INTERVALLO_PASSI if intervallo is None else intervallo
+        self._epoca_task += 1
+        epoca = self._epoca_task
         self._task = generatore
 
         def tick() -> None:
+            if epoca != self._epoca_task:
+                return  # questo lavoro è stato abbandonato: non deve più toccare niente
             try:
                 pausa = next(generatore)
             except StopIteration as fine:
                 self._task = None
                 if on_done is not None:
-                    on_done(fine.value)
+                    self._esegui_callback(on_done, fine.value)
                 return
             except FotoFacileError as errore:
                 self._task = None
                 if on_error is not None:
-                    on_error(errore)
+                    self._esegui_callback(on_error, errore)
                 else:
                     self.set_status(errore.message, hint=errore.hint, kind="errore")
                     self.log(f"Errore: {errore.message} {errore.hint}".strip())
@@ -202,9 +217,37 @@ class App(tk.Tk):
                 self.log(f"Errore imprevisto: {errore!r}")
                 return
             ritardo = pausa if isinstance(pausa, (int, float)) else attesa
-            self.after(max(1, int(ritardo * 1000)), tick)
+            self.after(max(0, int(ritardo * 1000)), tick)
 
         self.after(1, tick)
+
+    def annulla_task(self) -> None:
+        """Ferma il lavoro in corso (l'utente ha cambiato idea o è tornato indietro).
+
+        Il generatore viene chiuso, così la sua pulizia (per esempio la rimozione dei file
+        ``.part``) viene eseguita subito.
+        """
+        self._epoca_task += 1
+        generatore, self._task = self._task, None
+        if generatore is not None:
+            chiusura = getattr(generatore, "close", None)
+            if chiusura is not None:
+                try:
+                    chiusura()
+                except Exception as errore:  # pragma: no cover - pulizia difensiva
+                    self.log(f"Problema durante l'interruzione: {errore!r}")
+
+    def _esegui_callback(self, callback: Callable[[Any], None], valore: Any) -> None:
+        """Esegue il seguito di un task senza che un errore di grafica fermi il programma."""
+        try:
+            callback(valore)
+        except Exception as errore:  # pragma: no cover - rete di sicurezza
+            self.set_status(
+                "Ho finito, ma qualcosa non si è aggiornato come doveva.",
+                hint="Riprova; se il problema resta, salva il registro delle operazioni.",
+                kind="errore",
+            )
+            self.log(f"Errore di grafica: {errore!r}")
 
     @property
     def task_in_corso(self) -> bool:

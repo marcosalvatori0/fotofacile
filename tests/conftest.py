@@ -8,6 +8,7 @@ con lo stato azzerato fra un test e l'altro.
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 import threading
 
@@ -15,6 +16,7 @@ import pytest
 
 from fotofacile.core.demo import DemoAdbBackend
 from fotofacile.core.history import History
+from fotofacile.core.planner import TransferPlan
 from fotofacile.ui.widgets import tk_available
 
 
@@ -22,9 +24,11 @@ from fotofacile.ui.widgets import tk_available
 def casa_temporanea():
     """Cartella utente finta: i test non devono mai toccare i file reali dell'utente."""
     with tempfile.TemporaryDirectory() as cartella:
-        precedenti = {chiave: os.environ.get(chiave) for chiave in ("HOME", "USERPROFILE")}
+        chiavi = ("HOME", "USERPROFILE")
+        precedenti = {chiave: os.environ.get(chiave) for chiave in chiavi}
         os.environ["HOME"] = cartella
-        os.environ["USERPROFILE"] = cartella
+        if sys.platform == "win32":  # su Windows la cartella utente è USERPROFILE
+            os.environ["USERPROFILE"] = cartella
         yield cartella
         for chiave, valore in precedenti.items():
             if valore is None:
@@ -49,7 +53,7 @@ def finestra_condivisa(casa_temporanea):
 def azzera(applicazione, tmp_path) -> None:
     """Riporta la finestra allo stato iniziale (Passo 1, telefono demo pronto)."""
     applicazione.stop_all_polling()
-    applicazione._usa_backend(DemoAdbBackend(file_count=54))
+    applicazione._usa_backend(DemoAdbBackend(file_count=12, delay=0.0))
     applicazione.demo_mode = True
     applicazione.device = None
     applicazione.media_files = []
@@ -59,11 +63,45 @@ def azzera(applicazione, tmp_path) -> None:
     applicazione.cancel_event = threading.Event()
     applicazione._history = History(tmp_path / "history.json")
     applicazione._history.load()
-    applicazione._task = None
+    applicazione.annulla_task()
     applicazione.cancel_event.clear()
+    applicazione.ricostruisci_pagine()
+
+    seleziona = applicazione.pages["select"]
+    seleziona._files = []
+    seleziona._folders = []
+    seleziona.folder_vars.clear()
+    seleziona._scansione_fatta = False
+    seleziona._scansione_in_corso = False
+    seleziona.data_minima.set("")
+    seleziona.sto_scegliendo_video.set(True)
+    seleziona.riepilogo.configure(text="")
+    seleziona.bottone_avanti.state(["disabled"])
+    seleziona2 = applicazione.pages["select"].lista
+    for figlio in seleziona2.winfo_children():
+        figlio.destroy()
+
+    opzioni = applicazione.pages["options"]
+    opzioni.chooser.set("")
+    opzioni.mantieni_cartelle.set(True)
+    opzioni.salta_gia_copiate.set(True)
+    opzioni.elimina_dopo_copia.set(False)
+    opzioni._conferma_eliminazione = False
+    opzioni.avviso_eliminazione.grid_remove()
+
+    trasferimento = applicazione.pages["transfer"]
+    trasferimento.results = None
+    trasferimento.report_text = ""
+    trasferimento.last_plan = TransferPlan()
+    trasferimento.barra_totale.configure(value=0)
+    trasferimento.barra_file.configure(value=0)
+    trasferimento.riepilogo.configure(text="")
+    trasferimento.riepilogo_errori.configure(text="")
+    for bottone in (trasferimento.bottone_apri, trasferimento.bottone_salva, trasferimento.bottone_chiudi):
+        bottone.state(["disabled"])
+
     pagina = applicazione.pages["connect"]
     pagina._polling = False
-    pagina._in_corso = False
     pagina.bottone_avanti.state(["disabled"])
     pagina.set_message("Collega il telefono con il cavo e sbloccalo.")
     pagina.tkraise()
