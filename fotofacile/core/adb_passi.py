@@ -208,3 +208,82 @@ class AdbAPassi:
         )
         yield from avvio.aspetta()
         return None
+
+
+class AdbDemoAPassi:
+    """Telefono finto a passi: identico a :class:`AdbAPassi`, ma senza dispositivo vero.
+
+    Serve alla modalità demo: permette di provare tutta la procedura (compresa la barra di
+    avanzamento) su un computer dove non è collegato nessun telefono.
+    """
+
+    def __init__(self, backend=None, intervallo: float = 0.02, pezzi_per_passo: int = 4) -> None:
+        from .demo import DemoAdbBackend
+
+        self.backend = backend if backend is not None else DemoAdbBackend()
+        self.intervallo = intervallo
+        self.pezzi_per_passo = max(1, pezzi_per_passo)
+
+    def dispositivi(self) -> Generator[float, None, list[DeviceInfo]]:
+        yield self.intervallo
+        return parse_devices(self.backend.devices_raw())
+
+    def cerca_media(self, serial: str, comando: str, **_kwargs) -> Generator[float, None, list[MediaFile]]:
+        yield self.intervallo
+        return parse_stat_stream(self.backend.list_media_raw(serial, comando))
+
+    def copia(
+        self,
+        serial: str,
+        remoto: str,
+        destinazione: Path,
+        on_scritti: Callable[[int], None] | None = None,
+        annulla=None,
+        chunk_size: int = CHUNK_SIZE,
+    ) -> Generator[float, None, int]:
+        destinazione = Path(destinazione)
+        destinazione.parent.mkdir(parents=True, exist_ok=True)
+        temporaneo = destinazione.with_name(destinazione.name + ".part")
+        scritti = 0
+        try:
+            with open(temporaneo, "wb") as uscita:
+                for indice, blocco in enumerate(
+                    self.backend.stream_file(serial, remoto, chunk_size=chunk_size), start=1
+                ):
+                    if annulla is not None and annulla.is_set():
+                        raise Annullato()
+                    uscita.write(blocco)
+                    scritti += len(blocco)
+                    if on_scritti is not None:
+                        on_scritti(scritti)
+                    if indice % self.pezzi_per_passo == 0:
+                        yield self.intervallo
+                uscita.flush()
+                os.fsync(uscita.fileno())
+            os.replace(temporaneo, destinazione)
+        except Annullato:
+            self._ripulisci(temporaneo)
+            raise
+        except OSError as errore:
+            self._ripulisci(temporaneo)
+            raise FotoFacileError(
+                f"Non sono riuscito a copiare {destinazione.name}.",
+                hint="Riprova; se il problema resta, salva il registro e contattaci.",
+            ) from errore
+        return scritti
+
+    def cancella(self, serial: str, remoto: str) -> Generator[float, None, None]:
+        yield self.intervallo
+        self.backend.delete_file(serial, remoto)
+        return None
+
+    def riavvia(self) -> Generator[float, None, None]:
+        yield self.intervallo
+        self.backend.restart_server()
+        return None
+
+    def _ripulisci(self, percorso: Path) -> None:
+        try:
+            percorso.unlink(missing_ok=True)
+        except OSError:  # pragma: no cover - difensivo
+            pass

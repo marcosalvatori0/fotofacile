@@ -11,7 +11,7 @@ import shutil
 import sys
 import zipfile
 from pathlib import Path
-from typing import Callable, Mapping
+from typing import Callable, Generator, Mapping
 
 from .errors import FotoFacileError
 from .osutil import app_dir
@@ -147,4 +147,24 @@ def install_component(
     archivio = cartella.parent / "platform-tools.zip"
     archivio.parent.mkdir(parents=True, exist_ok=True)
     scarica(indirizzo, archivio, on_progress=on_progress, cancel=cancel)
+    return extract_component(archivio, cartella, system=system)
+
+
+def installa_a_passi(
+    target_dir: Path | None = None,
+    url: str | None = None,
+    on_progress: Callable[[dict], None] | None = None,
+    annulla=None,
+    opener: Callable | None = None,
+    system: str | None = None,
+) -> "Generator[float, None, Path]":
+    """Scarica ed estrae il componente **a piccoli passi**, senza bloccare la finestra."""
+    from .ops import ScaricatoreAPassi
+
+    cartella = Path(target_dir) if target_dir is not None else component_dir()
+    indirizzo = url or platform_tools_url(system)
+    archivio = cartella.parent / "platform-tools.zip"
+    yield from ScaricatoreAPassi(
+        indirizzo, archivio, on_progress=on_progress, annulla=annulla, opener=opener
+    ).scarica()
     return extract_component(archivio, cartella, system=system)

@@ -1,19 +1,20 @@
-"""Finestra principale: navigazione fra i passi, lavoro in background e registro.
+"""Finestra principale: navigazione fra i passi, lavoro a piccoli passi, registro.
 
-Regola importante: **nessuna** operazione lunga gira sul thread dell'interfaccia.
-I thread di lavoro mettono i risultati in una coda che viene svuotata da
-:meth:`App.pump_events`, l'unico punto in cui la grafica viene aggiornata.
+Regola importante: **niente thread**. Le operazioni lunghe (ricerca, copia, download) sono
+generatori che cedono il controllo alla finestra fra un passo e l'altro: la grafica resta
+reattiva e il programma non dipende dalla sicurezza dei thread di Tk, che su alcune
+combinazioni (macOS con Tk 9) blocca l'intera applicazione.
 """
 
 from __future__ import annotations
 
-import queue
 import threading
 import tkinter as tk
 from tkinter import ttk
-from typing import Any, Callable
+from typing import Any, Callable, Generator
 
-from ..core.adb import AdbBackend, RealAdbBackend, find_adb
+from ..core.adb import RealAdbBackend, find_adb
+from ..core.adb_passi import AdbAPassi, AdbDemoAPassi
 from ..core.demo import DemoAdbBackend
 from ..core.errors import FotoFacileError
 from ..core.history import History
@@ -27,32 +28,33 @@ ORDINE = ("connect", "select", "options", "transfer")
 class App(tk.Tk):
     """Contenitore della procedura guidata: crea le pagine e coordina il lavoro."""
 
+    INTERVALLO_PASSI = 0.02  # secondi fra due passi (abbassato nei test)
+
     def __init__(
         self,
-        backend: AdbBackend | None = None,
+        backend: Any | None = None,
         demo_mode: bool = False,
         adb_path: str | None = None,
     ) -> None:
         super().__init__()
         self.title("FotoFacile — copia le foto dal telefono al computer")
-        self.geometry("1000x760")
-        self.minsize(900, 680)
+        self.geometry("1020x780")
+        self.minsize(920, 700)
         apply_theme(self)
 
-        self.demo_mode = demo_mode
         self.adb_path = adb_path or find_adb()
-        self.backend: AdbBackend | None = backend or (
-            DemoAdbBackend() if demo_mode else self._crea_backend()
-        )
+        self.backend: Any = None
+        self.remote: Any = None
+        self.demo_mode = False
+
         self.device = None
         self.media_files: list = []
         self.selected_folders: list[str] = []
         self.options = None
         self.results = None
         self.cancel_event = threading.Event()
-        self.events: queue.Queue = queue.Queue()
         self.current_page = ""
-        self._threads: list[threading.Thread] = []
+        self._task: Generator | None = None
         self._history = History()
         self._history.load()
 
@@ -68,22 +70,54 @@ class App(tk.Tk):
         self.log_pane.grid(row=3, column=0, sticky="nsew", padx=18, pady=(6, 14))
 
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(2, weight=1)
-        self.grid_rowconfigure(3, weight=1, minsize=120)
+        self.grid_rowconfigure(2, weight=3)
+        self.grid_rowconfigure(3, weight=1, minsize=110)
+
+        if backend is not None:
+            self._usa_backend(backend)
+        elif demo_mode:
+            self.attiva_demo()
+        elif self.adb_path:
+            self._usa_adb(self.adb_path)
 
         self.pages: dict[str, ttk.Frame] = {}
         self._costruisci_pagine()
 
         self.protocol("WM_DELETE_WINDOW", self._chiusura)
         self.go_to("connect")
-        self.after(50, self.pump_events)
 
-    # ── costruzione ───────────────────────────────────────────────────────
-    def _crea_backend(self) -> AdbBackend | None:
-        if not self.adb_path:
-            return None
-        return RealAdbBackend(self.adb_path)
+    # ── backend ───────────────────────────────────────────────────────────
+    def _usa_backend(self, backend) -> None:
+        """Usa un backend in memoria (test) o il telefono demo."""
+        self.backend = backend
+        self.remote = AdbDemoAPassi(backend, intervallo=self.INTERVALLO_PASSI)
+        self.demo_mode = True
 
+    def _usa_adb(self, percorso: str) -> None:
+        self.adb_path = percorso
+        self.backend = RealAdbBackend(percorso)
+        self.remote = AdbAPassi(percorso, intervallo=self.INTERVALLO_PASSI)
+        self.demo_mode = False
+
+    def attiva_demo(self) -> None:
+        """Passa al telefono finto: permette di provare tutto senza dispositivo collegato."""
+        self._usa_backend(DemoAdbBackend(file_count=54))
+        self.log("Modalità demo attiva: verrà usato un telefono finto.")
+
+    def usa_telefono_vero(self, percorso: str | None = None) -> bool:
+        """Torna al telefono vero, se il componente di collegamento è disponibile."""
+        percorso = percorso or self.adb_path or find_adb()
+        if not percorso:
+            return False
+        self._usa_adb(percorso)
+        self.log(f"Collegamento pronto: {percorso}")
+        return True
+
+    @property
+    def component_mancante(self) -> bool:
+        return self.remote is None and not self.demo_mode
+
+    # ── costruzione e navigazione ─────────────────────────────────────────
     def _costruisci_pagine(self) -> None:
         from .page_connect import ConnectPage
         from .page_options import OptionsPage
@@ -101,7 +135,6 @@ class App(tk.Tk):
         self.container.grid_rowconfigure(0, weight=1)
         self.container.grid_columnconfigure(0, weight=1)
 
-    # ── navigazione ───────────────────────────────────────────────────────
     def go_to(self, key: str) -> None:
         if key == "prev":
             key = ORDINE[max(0, ORDINE.index(self.current_page) - 1)]
@@ -115,7 +148,6 @@ class App(tk.Tk):
         self.banner.hide()
 
     def stop_all_polling(self) -> None:
-        """Ferma i controlli periodici (usato alla chiusura e nei test)."""
         for pagina in self.pages.values():
             ferma = getattr(pagina, "stop_polling", None)
             if callable(ferma):
@@ -132,53 +164,55 @@ class App(tk.Tk):
         """Cronologia dei file già copiati, caricata una volta sola."""
         return self._history
 
-    # ── lavoro in background ──────────────────────────────────────────────
-    def run_async(
+    # ── lavoro a passi (nessun thread) ────────────────────────────────────
+    def run_task(
         self,
-        funzione: Callable[[], Any],
+        generatore: Generator[float, None, Any],
         on_done: Callable[[Any], None] | None = None,
         on_error: Callable[[FotoFacileError], None] | None = None,
+        intervallo: float | None = None,
     ) -> None:
-        """Esegue ``funzione`` in un thread e consegna l'esito al thread della grafica."""
+        """Porta avanti un generatore a passi dentro il ciclo della grafica."""
+        attesa = self.INTERVALLO_PASSI if intervallo is None else intervallo
+        self._task = generatore
 
-        def lavora() -> None:
+        def tick() -> None:
             try:
-                risultato = funzione()
+                pausa = next(generatore)
+            except StopIteration as fine:
+                self._task = None
+                if on_done is not None:
+                    on_done(fine.value)
+                return
             except FotoFacileError as errore:
-                self.events.put(("errore", errore, on_error))
-            except Exception as errore:  # rete di sicurezza: l'app non deve mai chiudersi
-                self.events.put(("imprevisto", errore, on_error))
-            else:
-                self.events.put(("fatto", risultato, on_done))
-
-        filo = threading.Thread(target=lavora, daemon=True)
-        self._threads.append(filo)
-        filo.start()
-
-    def pump_events(self) -> None:
-        """Svuota la coda dei risultati; è l'unico punto in cui la grafica cambia."""
-        while True:
-            try:
-                tipo, dato, callback = self.events.get_nowait()
-            except queue.Empty:
-                break
-            if tipo == "fatto":
-                if callback is not None:
-                    callback(dato)
-            elif tipo == "errore":
-                if callback is not None:
-                    callback(dato)
+                self._task = None
+                if on_error is not None:
+                    on_error(errore)
                 else:
-                    self.set_status(dato.message, hint=dato.hint, kind="errore")
-                    self.log(f"Errore: {dato.message} {dato.hint}".strip())
-            else:
+                    self.set_status(errore.message, hint=errore.hint, kind="errore")
+                    self.log(f"Errore: {errore.message} {errore.hint}".strip())
+                return
+            except Exception as errore:  # rete di sicurezza: l'app non deve mai chiudersi
+                self._task = None
                 self.set_status(
                     "Qualcosa non ha funzionato come previsto.",
-                    hint="Riprova; se il problema resta, salva il registro e contatta il supporto.",
+                    hint="Riprova; se il problema resta, salva il registro delle operazioni.",
                     kind="errore",
                 )
-                self.log(f"Errore imprevisto: {dato!r}")
-        self.after(50, self.pump_events)
+                self.log(f"Errore imprevisto: {errore!r}")
+                return
+            ritardo = pausa if isinstance(pausa, (int, float)) else attesa
+            self.after(max(1, int(ritardo * 1000)), tick)
+
+        self.after(1, tick)
+
+    @property
+    def task_in_corso(self) -> bool:
+        return self._task is not None
+
+    def pump_events(self) -> None:
+        """Compatibilità: con il lavoro a passi non c'è nessuna coda da svuotare."""
+        self.update_idletasks()
 
     # ── chiusura ──────────────────────────────────────────────────────────
     def _chiusura(self) -> None:

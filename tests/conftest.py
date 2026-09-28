@@ -49,7 +49,7 @@ def finestra_condivisa(casa_temporanea):
 def azzera(applicazione, tmp_path) -> None:
     """Riporta la finestra allo stato iniziale (Passo 1, telefono demo pronto)."""
     applicazione.stop_all_polling()
-    applicazione.backend = DemoAdbBackend(file_count=54)
+    applicazione._usa_backend(DemoAdbBackend(file_count=54))
     applicazione.demo_mode = True
     applicazione.device = None
     applicazione.media_files = []
@@ -59,6 +59,8 @@ def azzera(applicazione, tmp_path) -> None:
     applicazione.cancel_event = threading.Event()
     applicazione._history = History(tmp_path / "history.json")
     applicazione._history.load()
+    applicazione._task = None
+    applicazione.cancel_event.clear()
     pagina = applicazione.pages["connect"]
     pagina._polling = False
     pagina._in_corso = False

@@ -44,6 +44,8 @@ fotofacile/
   cli.py                       # argomenti CLI, avvio GUI o diagnostica
   core/                        # logica pura, testabile, zero Tkinter
     adb.py                     # individuazione eseguibile (adb / adb.exe), esecuzione comandi, errori
+    ops.py                     # comandi esterni e download eseguiti A PASSI (senza thread)
+    adb_passi.py               # le operazioni adb a passi: dispositivi, ricerca, copia, cancella
     osutil.py                  # differenze di sistema: apri cartella, sensibilità maiuscole, cartelle utente
     devices.py                 # scoperta dispositivi e stati (device/unauthorized/...)
     scanner.py                 # elenco file multimediali presenti sul telefono
@@ -65,15 +67,22 @@ tests/                         # test unitari della logica + smoke test GUI
 
 **Principi:**
 - `core/` non importa mai `tkinter`: tutta la logica è testabile in isolamento.
+- I generatori a passi sono la sola forma di "asincronia" ammessa nel progetto.
 - `ui/` non contiene logica di business: legge lo stato e chiama `core/`.
 - **Multi-piattaforma:** nessun percorso "cablato" per un solo sistema operativo; le differenze
   sono confinate in `core/osutil.py` (cartelle utente, apertura del file manager, sensibilità
   maiuscole del file system), `core/adb.py` (nome dell'eseguibile, percorsi noti),
   `core/installer.py` (URL per piattaforma, estrazione delle librerie Windows) e
   `ui/theme.py` (tema ttk e font disponibili). Il codice di logica e UI resta identico.
-- Nessun lavoro bloccante sul thread dell'interfaccia: ogni operazione ADB gira in un thread
-  worker e comunica con la UI attraverso una coda (`queue.Queue`) drenata da `after(…, 50)`
-  — pattern standard e sicuro per Tkinter.
+- **Niente thread.** Le operazioni lunghe (ricerca sul telefono, copia, download del
+  componente) sono **generatori a piccoli passi** portati avanti da `after()` dentro il ciclo
+  della grafica: l'interfaccia resta reattiva senza dipendere dalla sicurezza dei thread di Tk.
+  Motivo concreto: su macOS con Tk 9 creare un thread mentre la finestra è aperta **blocca
+  l'intero programma** (verificato: anche un thread che non tocca Tk). Il costo è un motore
+  cooperativo (`core/ops.py`, `core/adb_passi.py`) al posto di `threading`; il beneficio è un
+  programma che non può bloccarsi e test deterministici. L'output lungo dei comandi esterni
+  viene scritto su file temporanei, così i processi non si bloccano mai sul tubo di
+  comunicazione.
 - Interfaccia unica verso il telefono (`AdbBackend`) implementata da `RealAdbBackend`,
   `FakeAdbBackend` (demo/test) e iniettabile: nessun test tocca un dispositivo reale.
 
@@ -206,11 +215,15 @@ TDD su tutto `core/` (test scritto prima, visto fallire, poi implementazione):
 | `devices.py` | `adb devices -l` vuoto/uno/molti/unauthorized/offline, modello assente, righe spurie |
 | `scanner.py` | parsing flusso size/mtime/nome, filtro estensioni, file con `|` nel nome, righe corrotte, cartelle inesistenti |
 | `osutil.py` | comando di apertura cartella per sistema, sensibilità maiuscole simulata, percorsi utente, fallback quando il file manager non è disponibile |
+| `ops.py` | comando esterno a passi (avvio, attesa, termine, output su file, errori umani), download a blocchi, annullamento |
+| `adb_passi.py` | dispositivi, ricerca file, copia con `.part`, cancellazione e riavvio del collegamento, tutto a passi; versione demo equivalente |
 | `planner.py` | totali e conteggi, filtro per data, dedup da cronologia, mappatura percorsi con/senza struttura, collisioni e rinomina, nomi non validi su Windows, nomi riservati, nomi lunghi, confronto maiuscole su Windows/macOS |
 | `history.py` | caricamento mancante, salvataggio atomico, round-trip, file corrotto → backup, isolamento per seriale |
 | `transfer.py` | copia corretta, progressi monotoni, annulla a metà senza residui, retry, dimensione errata → errore, cancella-dopo-solo-se-verificato, `.part` pulito |
 | `installer.py` | download finto → estrazione → adb eseguibile, zip corrotto → errore umano, annulla download |
-| `ui` | smoke test: finestra, navigazione fra i passi, avvio e chiusura pulita |
+| `ops.py` / `adb_passi.py` | avvio/attesa/termine di processi reali (script finti), output grande su file, scadenza del tempo, annullamento a metà copia, nessun file temporaneo residuo |
+| `ui` | navigazione fra i passi, avanzamento dei task a passi, messaggi di errore umani, pagine 1-4 con telefono demo |
+| `test_app_completa.py` | la vera applicazione in un processo separato: avvio, quattro passi, copia reale su disco, resoconto (salta da sé se il computer non ha sessione grafica) |
 
 ## 9. Criteri di accettazione
 
@@ -223,11 +236,15 @@ TDD su tutto `core/` (test scritto prima, visto fallire, poi implementazione):
 4. Al termine esistono sul computer tanti file quanti indicati nel resoconto, tutti integri
    (dimensione verificata), e un secondo avvio non ricopia ciò che è già stato copiato.
 5. La modalità demo permette di provare l'intera procedura su una macchina senza telefono.
-6. **Multi-piattaforma:** a parità di versione Python, il programma funziona su Windows,
+6. **Niente thread e niente blocchi:** durante la copia la finestra continua a rispondere
+   (i test verificano che non venga creato nessun thread e che la navigazione resti possibile).
+7. **Multi-piattaforma:** a parità di versione Python, il programma funziona su Windows,
    macOS e Linux; nessun modulo fuori da `core/osutil.py`, `core/adb.py`, `core/installer.py`
-   e `ui/theme.py` contiene riferimenti a un sistema operativo specifico (verificato dal test
-   `tests/test_multipiattaforma.py`).
-7. `python3 -m pytest tests -q` passa completamente.
+   e `ui/theme.py` contiene riferimenti a un sistema operativo specifico.
+8. `python3 -m pytest tests -q` passa completamente (i test che richiedono una finestra si
+   saltano da soli sui computer senza sessione grafica, senza bloccare la suite).
+9. `tests/pilota_app.py` guida la vera applicazione in modalità demo fino al resoconto finale:
+   è il collaudo che l'utente può eseguire sul proprio computer.
 
 ## 10. Rischi e mitigazioni
 

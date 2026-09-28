@@ -1,7 +1,7 @@
 """Passo 1: guidare la persona a collegare il telefono e autorizzare il computer.
 
-Questa schermata è la più delicata dell'app: se il telefono non viene riconosciuto,
-l'utente deve capire *cosa fare adesso* senza gergo tecnico.
+Questa schermata è la più delicata: se il telefono non viene riconosciuto, l'utente deve
+capire *cosa fare adesso*, senza gergo tecnico.
 """
 
 from __future__ import annotations
@@ -9,8 +9,8 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
-from ..core.devices import STATE_MESSAGE, get_devices
-from ..core.installer import install_component, is_installed
+from ..core.devices import STATE_MESSAGE
+from ..core.installer import installa_a_passi, is_installed
 from .theme import COLORI, font
 
 PASSI_SAMSUNG = [
@@ -51,8 +51,8 @@ PASSI_GENERICI = [
     "Attiva «Debug USB».",
 ]
 
-# Ogni marca è cercabile per nome; il menù mostra solo le voci principali.
 BRAND_SCONOSCIUTO = "Altro"
+# Ogni marca si trova cercandola per nome; il menù mostra solo le voci principali.
 HELP_BRANDS: dict[str, list[str]] = {
     "Samsung": PASSI_SAMSUNG,
     "Xiaomi": PASSI_XIAOMI,
@@ -79,9 +79,10 @@ CONSIGLI_FINALI = (
     "• scollega e ricollega il cavo dopo aver attivato il «Debug USB».",
 )
 
+
 def build_help_text(brand: str) -> str:
     """Istruzioni in italiano per attivare il «Debug USB», personalizzate per marca."""
-    passi = HELP_BRANDS.get(brand, HELP_BRANDS["Samsung"])
+    passi = HELP_BRANDS.get(brand, PASSI_GENERICI)
     righe = [
         f"Come attivare il «Debug USB» — {brand}",
         "",
@@ -103,7 +104,7 @@ class ConnectPage(ttk.Frame):
         self.app = parent
         self.message = ""
         self._polling = False
-        self._in_corso = False
+        self._controllo_in_corso = False
 
         ttk.Label(self, text="Collega il telefono al computer", style="Titolo.TLabel").grid(
             row=0, column=0, sticky="w", pady=(4, 2)
@@ -116,18 +117,17 @@ class ConnectPage(ttk.Frame):
             justify="left",
         ).grid(row=1, column=0, sticky="w", pady=(0, 10))
 
-        self.indicatore = ttk.Label(self, text="", font=font(16, bold=True), wraplength=860, justify="left")
+        self.indicatore = ttk.Label(self, text="", font=font(16, bold=True), wraplength=880, justify="left")
         self.indicatore.grid(row=2, column=0, sticky="w", pady=(6, 2))
-        self.dettaglio = ttk.Label(self, text="", style="Tenue.TLabel", font=font(12), wraplength=860, justify="left")
+        self.dettaglio = ttk.Label(
+            self, text="", style="Tenue.TLabel", font=font(12), wraplength=880, justify="left"
+        )
         self.dettaglio.grid(row=3, column=0, sticky="w")
 
         pulsanti = ttk.Frame(self)
         pulsanti.grid(row=4, column=0, sticky="w", pady=14)
         self.bottone_aiuto = ttk.Button(
-            pulsanti,
-            text="Come si attiva il Debug USB?",
-            style="Secondary.TButton",
-            command=self.show_help,
+            pulsanti, text="Come si attiva il Debug USB?", style="Secondary.TButton", command=self.show_help
         )
         self.bottone_aiuto.grid(row=0, column=0, padx=(0, 8))
         self.bottone_installa = ttk.Button(
@@ -138,18 +138,13 @@ class ConnectPage(ttk.Frame):
         )
         self.bottone_installa.grid(row=0, column=1, padx=8)
         self.bottone_ricarica = ttk.Button(
-            pulsanti,
-            text="Riavvia collegamento",
-            style="Secondary.TButton",
-            command=self.restart_connection,
+            pulsanti, text="Riavvia collegamento", style="Secondary.TButton", command=self.restart_connection
         )
         self.bottone_ricarica.grid(row=0, column=2, padx=8)
 
         navigazione = ttk.Frame(self)
         navigazione.grid(row=5, column=0, sticky="ew", pady=(6, 0))
-        self.bottone_avanti = ttk.Button(
-            navigazione, text="Avanti  →", style="Big.TButton", command=self._avanti
-        )
+        self.bottone_avanti = ttk.Button(navigazione, text="Avanti  →", style="Big.TButton", command=self._avanti)
         self.bottone_avanti.grid(row=0, column=1, sticky="e")
         navigazione.columnconfigure(1, weight=1)
 
@@ -158,7 +153,7 @@ class ConnectPage(ttk.Frame):
             text="Prova il programma senza telefono (demo)",
             style="Secondary.TButton",
             command=self.enable_demo,
-        ).grid(row=6, column=0, sticky="w", pady=(20, 0))
+        ).grid(row=6, column=0, sticky="w", pady=(22, 0))
         ttk.Label(
             self,
             text="Nella modalità demo viene usato un telefono finto: serve solo per vedere come funziona.",
@@ -174,15 +169,11 @@ class ConnectPage(ttk.Frame):
     # ── messaggi ──────────────────────────────────────────────────────────
     def set_message(self, testo: str, tono: str = "info") -> None:
         self.message = testo
-        colori = {
-            "info": COLORI["testo"],
-            "successo": COLORI["successo"],
-            "avviso": COLORI["avviso"],
-        }
+        colori = {"info": COLORI["testo"], "successo": COLORI["successo"], "avviso": COLORI["avviso"]}
         self.indicatore.configure(text=testo, foreground=colori.get(tono, COLORI["testo"]))
 
     def _aggiorna_bottone_installa(self) -> None:
-        serve = self.app.backend is None and not self.app.demo_mode
+        serve = self.app.component_mancante
         self.bottone_installa.state(["!disabled"] if serve else ["disabled"])
 
     # ── ciclo di vita e sondaggio ─────────────────────────────────────────
@@ -207,27 +198,18 @@ class ConnectPage(ttk.Frame):
 
     def check_now(self) -> None:
         """Chiede al telefono come sta e aggiorna il messaggio in base allo stato reale."""
-        backend = self.app.backend
         self._aggiorna_bottone_installa()
-        if backend is None:
+        if self.app.remote is None:
             self.set_message("Manca il componente di collegamento.", tono="avviso")
-            self.dettaglio.configure(
-                text="Premi «Installa componente mancante»: lo scarico io da internet."
-            )
+            self.dettaglio.configure(text="Premi «Installa componente mancante»: lo scarico io da internet.")
             return
-        if self._in_corso:
+        if self._controllo_in_corso:
             return
-        self._in_corso = True
-
-        def leggi():
-            try:
-                return get_devices(backend)
-            finally:
-                self._in_corso = False
-
-        self.app.run_async(leggi, on_done=self._dispositivi_ricevuti)
+        self._controllo_in_corso = True
+        self.app.run_task(self.app.remote.dispositivi(), on_done=self._dispositivi_ricevuti)
 
     def _dispositivi_ricevuti(self, dispositivi) -> None:
+        self._controllo_in_corso = False
         pronto = next((dispositivo for dispositivo in dispositivi if dispositivo.is_ready), None)
         if pronto is not None:
             self.app.device = pronto
@@ -274,12 +256,7 @@ class ConnectPage(ttk.Frame):
             testo.insert("1.0", build_help_text(marca.get()))
             testo.configure(state="disabled")
 
-        selettore = ttk.Combobox(
-            finestra,
-            textvariable=marca,
-            values=list(BRANDS_ORDINE),
-            state="readonly",
-        )
+        selettore = ttk.Combobox(finestra, textvariable=marca, values=list(BRANDS_ORDINE), state="readonly")
         selettore.grid(row=0, column=0, sticky="ew", padx=14, pady=12)
         selettore.bind("<<ComboboxSelected>>", aggiorna)
         ttk.Button(finestra, text="Ho capito", style="Secondary.TButton", command=finestra.destroy).grid(
@@ -300,24 +277,17 @@ class ConnectPage(ttk.Frame):
             percentuale = f" ({info['ricevuti'] * 100 // totale}%)" if totale else ""
             self.app.log(f"  scaricati {info['ricevuti'] // 1024} KB{percentuale}")
 
-        self.app.run_async(
-            lambda: install_component(on_progress=progresso), on_done=self._componente_pronto
-        )
+        self.app.run_task(installa_a_passi(on_progress=progresso), on_done=self._componente_pronto)
 
     def _componente_pronto(self, percorso) -> None:
-        from ..core.adb import RealAdbBackend
-
-        self.app.adb_path = str(percorso)
-        self.app.backend = RealAdbBackend(str(percorso))
         self.app.log(f"Componente pronto: {percorso}")
-        self.app.set_status(
-            "Componente installato. Ora collega il telefono.", kind="successo"
-        )
+        self.app.usa_telefono_vero(str(percorso))
+        self.app.set_status("Componente installato. Ora collega il telefono.", kind="successo")
         self._aggiorna_bottone_installa()
         self.check_now()
 
     def restart_connection(self) -> None:
-        if self.app.backend is None:
+        if self.app.remote is None:
             self.app.set_status(
                 "Prima serve il componente di collegamento.",
                 hint="Premi «Installa componente mancante».",
@@ -326,15 +296,11 @@ class ConnectPage(ttk.Frame):
             return
         self.app.set_status("Sto riavviando il collegamento…", kind="info")
         self.app.log("Riavvio del collegamento richiesto.")
-        self.app.run_async(self.app.backend.restart_server, on_done=lambda _esito: self.check_now())
+        self.app.run_task(self.app.remote.riavvia(), on_done=lambda _esito: self.check_now())
 
     def enable_demo(self) -> None:
         """Telefono finto: permette di provare tutta la procedura senza dispositivo."""
-        from ..core.demo import DemoAdbBackend
-
-        self.app.demo_mode = True
-        self.app.backend = DemoAdbBackend(file_count=54)
-        self.app.log("Modalità demo attiva: verrà usato un telefono finto.")
+        self.app.attiva_demo()
         self._aggiorna_bottone_installa()
         self.set_message("Modalità demo: telefono finto collegato.", tono="successo")
         self.check_now()

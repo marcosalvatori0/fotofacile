@@ -87,3 +87,20 @@ def test_avvio_normale_senza_demo(monkeypatch):
     monkeypatch.setattr(cli, "start_gui", lambda **kwargs: chiamate.update(kwargs) or 0)
     assert main([], env={}) == 0
     assert chiamate == {"demo": False}
+
+
+def test_senza_finestra_grafica_spiega_come_risolvere(monkeypatch, capsys):
+    import tkinter as tk
+
+    from fotofacile import cli
+
+    class AppRotta:
+        def __init__(self, **_kwargs):
+            raise tk.TclError("no display name and no $DISPLAY environment variable")
+
+    monkeypatch.setattr("fotofacile.ui.app.App", AppRotta, raising=False)
+    esito = cli.main([], env={})
+    messaggio = capsys.readouterr().out.lower()
+    assert esito == 1
+    assert "finestra" in messaggio or "grafica" in messaggio
+    assert "doctor" in messaggio

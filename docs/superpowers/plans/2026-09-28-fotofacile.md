@@ -10,6 +10,24 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-28-fotofacile-design.md`
 
+## Modifiche decise durante l'esecuzione
+
+1. **Niente thread (obbligatorio, non opzionale).** Verificato sul campo: su macOS con **Tk 9**
+   (Homebrew, Python 3.14) creare un thread mentre la finestra è aperta blocca l'intero
+   processo; con Tk 8.5/8.6 funziona. Poiché il programma deve funzionare anche lì, il motore è
+   stato riscritto in forma **cooperativa**: `core/ops.py` (processi esterni e download a passi)
+   e `core/adb_passi.py` (operazioni adb a passi), con `App.run_task` che avanza i generatori
+   con `after()`. `App.run_async` e la coda `queue.Queue` sono stati rimossi; i test che li
+   usavano sono stati sostituiti da test sui generatori.
+2. **Rifattorizzazione della copia:** `core/transfer.py` espone `transfer_steps(...)`
+   (generatore, stessa orchestrazione di prima: retry, verifica, `.part`, cancella-dopo,
+   cronologia) e `transfer(...)` come involucro diretto per test e riga di comando. Il
+   "copiatore" è iniettabile: `CopiatoreInterno` (demo/test) oppure `AdbAPassi` (telefono vero).
+3. **Collaudo dell'interfaccia in un processo separato:** `tests/test_app_completa.py` e
+   `tests/pilota_app.py`; i test grafici si saltano da soli (`tk_available()` esegue una prova
+   in un processo con tempo massimo) perché in alcuni ambienti di automazione la finestra non
+   può essere creata affatto.
+
 ## Global Constraints
 
 - Runtime: **solo libreria standard**; nessun `pip install` richiesto all'utente finale.

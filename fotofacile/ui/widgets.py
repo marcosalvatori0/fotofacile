@@ -12,25 +12,37 @@ from .theme import COLORI, font
 _TK_DISPONIBILE: bool | None = None
 
 
-def tk_available() -> bool:
-    """True se questa macchina può aprire finestre (evita errori nei test senza schermo).
+def tk_available(timeout: float = 8.0) -> bool:
+    """True se questa macchina riesce davvero ad aprire una finestra.
 
-    Il risultato viene ricordato: su macOS creare e chiudere più finestre nello stesso
-    processo è sconsigliato.
+    La verifica viene fatta in un processo separato con un tempo massimo: su alcuni sistemi
+    (per esempio dentro strumenti di automazione senza sessione grafica) la creazione della
+    finestra si blocca, e in quel caso è meglio saperlo subito invece di restare appesi.
+    Il risultato viene ricordato.
     """
     global _TK_DISPONIBILE
     if _TK_DISPONIBILE is None:
         if tk._default_root is not None:
             _TK_DISPONIBILE = True
         else:
-            try:
-                finestra = tk.Tk()
-            except tk.TclError:
-                _TK_DISPONIBILE = False
-            else:
-                finestra.destroy()
-                _TK_DISPONIBILE = True
+            _TK_DISPONIBILE = _prova_finestra(timeout)
     return _TK_DISPONIBILE
+
+
+def _prova_finestra(timeout: float) -> bool:
+    import subprocess
+    import sys
+
+    codice = "import tkinter as tk; r=tk.Tk(); r.withdraw(); r.update(); r.destroy()"
+    try:
+        esito = subprocess.run(
+            [sys.executable, "-c", codice],
+            capture_output=True,
+            timeout=timeout,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    return esito.returncode == 0
 
 
 class StepIndicator(ttk.Frame):

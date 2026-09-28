@@ -53,7 +53,8 @@ def test_nessun_telefono_invita_a_collegarlo(app):
 
 
 def test_senza_componente_lo_dice_e_propone_installazione(app):
-    app.backend = None
+    app.remote = None
+    app.demo_mode = False
     app.adb_path = None
     pagina = app.pages["connect"]
     pagina.check_now()
@@ -77,7 +78,8 @@ def test_riavvio_collegamento_richiama_il_backend(app):
 
 
 def test_riavvio_senza_componente_avvisa(app):
-    app.backend = None
+    app.remote = None
+    app.demo_mode = False
     pagina = app.pages["connect"]
     pagina.restart_connection()
     assert attendi(app, lambda: app.banner.visible)
@@ -85,7 +87,8 @@ def test_riavvio_senza_componente_avvisa(app):
 
 
 def test_modalita_demo_attivabile_dal_passo_1(app):
-    app.backend = None
+    app.remote = None
+    app.demo_mode = False
     app.adb_path = None
     pagina = app.pages["connect"]
     pagina.enable_demo()

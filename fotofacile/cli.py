@@ -100,10 +100,22 @@ def doctor(env: Mapping[str, str] | None = None) -> int:
 
 
 def start_gui(demo: bool = False) -> int:
-    """Apre la finestra principale."""
+    """Apre la finestra principale; se la grafica non è disponibile lo spiega con calma."""
+    import tkinter as tk
+
     from .ui.app import App
 
-    applicazione = App(demo_mode=demo)
+    try:
+        applicazione = App(demo_mode=demo)
+    except tk.TclError as errore:
+        print(
+            "Non riesco ad aprire la finestra del programma.\n"
+            f"Motivo tecnico: {errore}\n"
+            "Su Linux serve il pacchetto della grafica (per esempio «python3-tk»);\n"
+            "su macOS e Windows reinstalla Python dalle impostazioni consigliate.\n"
+            "Per controllare il computer puoi usare:  fotofacile doctor"
+        )
+        return 1
     applicazione.mainloop()
     return 0
 
