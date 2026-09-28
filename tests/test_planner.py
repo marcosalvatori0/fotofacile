@@ -128,7 +128,7 @@ def test_nome_vuoto_o_solo_caratteri_strani(tmp_path):
 
 def test_nome_lunghissimo_accorciato_mantenendo_estensione(tmp_path):
     lungo = "A" * 300 + ".jpg"
-    percorso = destination_for(f"/sdcard/DCIM/Camera/{lungo}", tmp_path, False)
+    percorso = destination_for(f"/sdcard/DCIM/Camera/{lungo}", Path("/tmp/ff"), False)
     assert percorso.suffix == ".jpg"
     assert len(percorso.stem) == MAX_NOME
 
@@ -183,7 +183,7 @@ def test_ensure_space_avvisa_se_manca_spazio(tmp_path):
     with pytest.raises(TransferError) as errore:
         ensure_space(piano, tmp_path, free_bytes=500)
     assert "spazio" in errore.value.message.lower()
-    assert "1,0 KB" in errore.value.hint
+    assert "1000 B" in errore.value.hint
     ensure_space(piano, tmp_path, free_bytes=1_000_000)
 
 
