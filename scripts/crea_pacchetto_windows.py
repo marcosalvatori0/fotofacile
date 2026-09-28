@@ -35,7 +35,7 @@ FILE_DA_COPIARE = (
 
 AVVIO_BAT = r"""@echo off
 chcp 65001 >nul
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 title FotoFacile - copia le foto dal telefono
 
@@ -49,6 +49,7 @@ call :trova_python
 if defined PY goto avvia
 
 echo Non ho trovato Python su questo computer.
+call :diagnostica
 echo.
 where winget >nul 2>nul
 if errorlevel 1 goto istruzioni
@@ -70,12 +71,12 @@ echo ------------------------------------------------------------
 echo  COSA FARE ADESSO
 echo ------------------------------------------------------------
 echo  1) Apri il Microsoft Store, cerca "Python 3.13" e installalo.
-echo     In alternativa scaricalo da: https://www.python.org/downloads/windows/
+echo     In alternativa: https://www.python.org/downloads/windows/
 echo  2) Durante l'installazione spunta "Add python.exe to PATH".
 echo  3) Poi fai di nuovo doppio clic su "Avvia FotoFacile.bat".
 echo.
-echo  Oppure, per avere un eseguibile che non richiede Python:
-echo  fai doppio clic su "Crea l'eseguibile per Windows.bat".
+echo  Oppure usa "Installa FotoFacile.bat": installa il programma
+echo  e, se serve, Python; in piu' crea i collegamenti sul Desktop.
 echo ------------------------------------------------------------
 echo.
 pause
@@ -83,7 +84,7 @@ exit /b 1
 
 :avvia
 echo Uso Python con: %PY%
-%PY% -c "import tkinter" >nul 2>nul
+%PY% -c "import sys, tkinter; sys.exit(0 if sys.version_info[:2] >= (3, 9) else 2)" >nul 2>nul
 if errorlevel 1 (
   echo.
   echo Questo Python non ha la grafica ^(tkinter^): reinstallalo dal sito python.org
@@ -105,26 +106,68 @@ if not "%CODICE%"=="0" (
   %PY% fotofacile.py doctor
   echo.
   echo Registro di avvio: %USERPROFILE%\.fotofacile\avvio.log
+  call :diagnostica
 )
 echo.
 pause
 exit /b 0
 
 :trova_python
-rem preferisce il launcher ufficiale "py" con Python 3, poi "python", poi "python3"
-for %%C in ("py -3" "python" "python3") do (
-  %%~C -c "import sys; raise SystemExit(0 if sys.version_info ^>= (3, 9) else 1)" >nul 2>nul
+rem --- 1) il launcher ufficiale «py» (il piu' affidabile su Windows) ---
+py -3 -c "import sys, tkinter; sys.exit(0 if sys.version_info[:2] >= (3, 9) else 2)" >nul 2>nul
+if not errorlevel 1 (
+  set "PY=py -3"
+  exit /b 0
+)
+rem --- 2) installazioni nei percorsi tipici (PATH non aggiornato) ---
+for %%B in ("%LOCALAPPDATA%\Programs\Python" "%ProgramFiles%\Python" "%ProgramFiles(x86)%\Python" "C:\Python3") do (
+  for /d %%V in ("%%~B\Python3*") do (
+    if exist "%%~V\python.exe" (
+      "%%~V\python.exe" -c "import sys, tkinter; sys.exit(0 if sys.version_info[:2] >= (3, 9) else 2)" >nul 2>nul
+      if not errorlevel 1 (
+        set "PY=%%~V\python.exe"
+        exit /b 0
+      )
+    )
+  )
+)
+rem --- 3) python / python3 presenti nel PATH ---
+for %%C in (python python3) do (
+  %%C -c "import sys, tkinter; sys.exit(0 if sys.version_info[:2] >= (3, 9) else 2)" >nul 2>nul
   if not errorlevel 1 (
-    set "PY=%%~C"
+    set "PY=%%C"
     exit /b 0
   )
 )
+rem --- 4) elenco del launcher «py»: dice dove sono le versioni installate ---
+where py >nul 2>nul
+if not errorlevel 1 (
+  for /f "delims=" %%L in ('py -0p 2^>nul') do (
+    for %%P in (%%L) do set "CANDIDATO=%%P"
+    if exist "!CANDIDATO!" (
+      "!CANDIDATO!" -c "import sys, tkinter; sys.exit(0 if sys.version_info[:2] >= (3, 9) else 2)" >nul 2>nul
+      if not errorlevel 1 (
+        set "PY=!CANDIDATO!"
+        exit /b 0
+      )
+    )
+  )
+)
 exit /b 0
+
+:diagnostica
+rem Dice esattamente cosa e' stato trovato: serve a capire perche' non parte.
+echo --- Cosa ho trovato su questo computer ---
+where python 2>nul || echo   python nel PATH: non trovato
+where py 2>nul || echo   launcher "py": non trovato
+py --version 2>&1
+py -0p 2>nul
+echo --------------------------------------------
 """
 
 ESEGUIBILE_BAT = r"""@echo off
 chcp 65001 >nul
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 title FotoFacile - crea l'eseguibile
 
@@ -136,8 +179,11 @@ echo.
 set "PY="
 call :trova_python
 if not defined PY (
-  echo Serve Python per creare l'eseguibile.
-  echo Fai prima doppio clic su "Avvia FotoFacile.bat": installa Python se manca.
+  echo Serve Python per creare l'eseguibile: ecco cosa ho trovato.
+  call :diagnostica
+  echo.
+  echo Fai prima doppio clic su "Avvia FotoFacile.bat" oppure su
+  echo "Installa FotoFacile.bat": installano Python se manca.
   echo.
   pause
   exit /b 1
@@ -145,7 +191,7 @@ if not defined PY (
 
 echo Uso Python con: %PY%
 echo.
-echo 1 di 3 - installo/aggiorno PyInstaller...
+echo 1 di 2 - installo/aggiorno PyInstaller...
 %PY% -m pip install --upgrade pip pyinstaller
 if errorlevel 1 (
   echo.
@@ -155,7 +201,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo 2 di 3 - creo l'eseguibile (puo' richiedere 1-2 minuti)...
+echo 2 di 2 - creo l'eseguibile (puo' richiedere 1-2 minuti)...
 %PY% scripts\build_app.py
 if errorlevel 1 (
   echo.
@@ -165,7 +211,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo 3 di 3 - provo l'eseguibile appena creato...
+echo Provo l'eseguibile appena creato...
 dist\FotoFacile\FotoFacile.exe --selftest
 echo.
 echo ------------------------------------------------------------
@@ -185,14 +231,56 @@ pause
 exit /b 0
 
 :trova_python
-for %%C in ("py -3" "python" "python3") do (
-  %%~C -c "import sys; raise SystemExit(0 if sys.version_info ^>= (3, 9) else 1)" >nul 2>nul
+rem --- 1) il launcher ufficiale «py» (il piu' affidabile su Windows) ---
+py -3 -c "import sys, tkinter; sys.exit(0 if sys.version_info[:2] >= (3, 9) else 2)" >nul 2>nul
+if not errorlevel 1 (
+  set "PY=py -3"
+  exit /b 0
+)
+rem --- 2) installazioni nei percorsi tipici (PATH non aggiornato) ---
+for %%B in ("%LOCALAPPDATA%\Programs\Python" "%ProgramFiles%\Python" "%ProgramFiles(x86)%\Python" "C:\Python3") do (
+  for /d %%V in ("%%~B\Python3*") do (
+    if exist "%%~V\python.exe" (
+      "%%~V\python.exe" -c "import sys, tkinter; sys.exit(0 if sys.version_info[:2] >= (3, 9) else 2)" >nul 2>nul
+      if not errorlevel 1 (
+        set "PY=%%~V\python.exe"
+        exit /b 0
+      )
+    )
+  )
+)
+rem --- 3) python / python3 presenti nel PATH ---
+for %%C in (python python3) do (
+  %%C -c "import sys, tkinter; sys.exit(0 if sys.version_info[:2] >= (3, 9) else 2)" >nul 2>nul
   if not errorlevel 1 (
-    set "PY=%%~C"
+    set "PY=%%C"
     exit /b 0
   )
 )
+rem --- 4) elenco del launcher «py»: dice dove sono le versioni installate ---
+where py >nul 2>nul
+if not errorlevel 1 (
+  for /f "delims=" %%L in ('py -0p 2^>nul') do (
+    for %%P in (%%L) do set "CANDIDATO=%%P"
+    if exist "!CANDIDATO!" (
+      "!CANDIDATO!" -c "import sys, tkinter; sys.exit(0 if sys.version_info[:2] >= (3, 9) else 2)" >nul 2>nul
+      if not errorlevel 1 (
+        set "PY=!CANDIDATO!"
+        exit /b 0
+      )
+    )
+  )
+)
 exit /b 0
+
+:diagnostica
+rem Dice esattamente cosa e' stato trovato: serve a capire perche' non parte.
+echo --- Cosa ho trovato su questo computer ---
+where python 2>nul || echo   python nel PATH: non trovato
+where py 2>nul || echo   launcher "py": non trovato
+py --version 2>&1
+py -0p 2>nul
+echo --------------------------------------------
 """
 
 LEGGIMI = """FotoFacile per Windows - istruzioni
@@ -296,6 +384,19 @@ def crea_pacchetto(destinazione: Path | None = None) -> Path:
     _scrivi_testo(cartella / "Avvia FotoFacile.bat", AVVIO_BAT)
     _scrivi_testo(cartella / "Crea l'eseguibile per Windows.bat", ESEGUIBILE_BAT)
     _scrivi_testo(cartella / "LEGGIMI - Windows.txt", LEGGIMI)
+
+    # installer vero: avvio dal pacchetto + script PowerShell accanto
+    origine_installer = RADICE / "installer" / "windows"
+    _scrivi_testo(
+        cartella / "Installa FotoFacile.bat",
+        (origine_installer / "Installa Foto Facile.bat").read_text(encoding="utf-8")
+        if (origine_installer / "Installa Foto Facile.bat").is_file()
+        else (origine_installer / "Installa FotoFacile.bat").read_text(encoding="utf-8"),
+    )
+    for nome in ("InstallaFotoFacile.ps1", "DisinstallaFotoFacile.ps1", "FotoFacile.iss"):
+        sorgente = origine_installer / nome
+        if sorgente.is_file():
+            _scrivi_testo(cartella / "installer" / "windows" / nome, sorgente.read_text(encoding="utf-8"))
 
     # pulizia finale: Finder crea da solo file .DS_Store che su Windows non servono
     for residuo in cartella.rglob(".DS_Store"):

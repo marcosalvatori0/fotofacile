@@ -1,0 +1,60 @@
+FotoFacile - installazione
+==========================
+
+FotoFacile copia le foto e i video dal telefono Android al computer con una procedura
+guidata in italiano: niente gestore file, niente cartelle difficili da trovare.
+
+In questa cartella trovi gli installatori per i due sistemi:
+
+  macOS    ->  FotoFacile-<versione>.dmg
+               Apri il file: si apre una finestra con l'icona del programma e la cartella
+               «Applicazioni». Trascina FotoFacile su «Applicazioni» e sei pronto.
+               La prima volta, in Applicazioni, fai clic destro sull'icona e scegli «Apri»
+               (il programma non e' firmato: macOS chiede conferma solo la prima volta).
+
+  Windows  ->  cartella «Windows»
+               - «Installa FotoFacile.bat»   installa il programma nel tuo profilo utente,
+                 crea il collegamento sul Desktop e nel menu Start, e registra la
+                 disinstallazione in Impostazioni -> App.
+               - «Avvia FotoFacile.bat»      usa il programma senza installare nulla.
+               - «Crea l'eseguibile per Windows.bat»  crea un unico FotoFacile.exe
+                 (da regalare: su quel computer non serve installare nulla).
+
+Ogni installatore ha accanto il proprio file di istruzioni dettagliate:
+  macOS    ->  LEGGIMI - macOS.txt (dentro il disco di installazione)
+  Windows  ->  Windows\LEGGIMI - Windows.txt
+
+
+PRIMA VOLTA: fai autorizzare il telefono (una volta sola)
+---------------------------------------------------------
+1. Collega il telefono con il cavo USB e sblocca lo schermo.
+2. Nel programma premi «Come si attiva il Debug USB?» e segui i passaggi della tua marca
+   (Samsung, Xiaomi, Google, Huawei, Oppo, ...).
+3. Quando il telefono chiede «Consentire il debug USB?», tocca «Consenti».
+4. Il programma scrive «Perfetto! Telefono collegato»: premi Avanti e scegli le foto.
+
+Se il telefono non viene riconosciuto: prova un altro cavo USB (alcuni ricaricano soltanto),
+un'altra porta del computer, oppure installa il driver USB del produttore del telefono.
+
+
+DIAGNOSI, SE QUALCOSA NON FUNZIONA
+----------------------------------
+  macOS    /Applications/FotoFacile.app/Contents/MacOS/FotoFacile doctor
+           /Applications/FotoFacile.app/Contents/MacOS/FotoFacile --selftest
+  Windows  dal prompt dei comandi:
+           "%LOCALAPPDATA%\Programs\FotoFacile\FotoFacile.exe" doctor
+           "%LOCALAPPDATA%\Programs\FotoFacile\FotoFacile.exe" --selftest
+
+Il registro di avvio (dice sempre perche' il programma non si e' aperto):
+  macOS    ~/.fotofacile/avvio.log
+  Windows  %USERPROFILE%\.fotofacile\avvio.log
+
+Il programma non invia nulla su internet: la usa solo, una volta e se manca, per scaricare
+il componente di collegamento ufficiale di Google.
+
+
+DOVE SONO GLI INSTALLATORI AGGIORNATI
+-------------------------------------
+Chi usa GitHub puo' scaricare gli installer gia' pronti dalla pagina delle release:
+gli stessi file vengono costruiti automaticamente a ogni nuova versione, sia su macOS sia
+su Windows (vedi la cartella .github/workflows del progetto).
