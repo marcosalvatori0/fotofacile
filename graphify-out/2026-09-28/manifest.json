@@ -358,5 +358,107 @@
     "seen": 1790605197.242212,
     "ast_hash": "759e20096380537941eda23312f5c997",
     "semantic_hash": "759e20096380537941eda23312f5c997"
+  },
+  "scripts/build_app.py": {
+    "mtime": 1790605117.5231397,
+    "seen": 1790605294.851477,
+    "ast_hash": "dbe63c78c9748440ebe7fe78bdc862ce",
+    "semantic_hash": ""
+  },
+  "scripts/make_icon.py": {
+    "mtime": 1790605003.4000216,
+    "seen": 1790605294.851478,
+    "ast_hash": "3824a2c53f1b465e5ab1568c54a25456",
+    "semantic_hash": ""
+  },
+  "HANDOFF.md": {
+    "mtime": 1790605293.4593244,
+    "seen": 1790605294.8514931,
+    "ast_hash": "e8c9a6f17b37481e80eb5f664c363886",
+    "semantic_hash": ""
+  },
+  "assets/FotoFacile.iconset/icon_128x128.png": {
+    "mtime": 1790605010.6183689,
+    "seen": 1790605294.851496,
+    "ast_hash": "ab7493be7da47f60e536ca6af62e2926",
+    "semantic_hash": ""
+  },
+  "assets/FotoFacile.iconset/icon_128x128@2x.png": {
+    "mtime": 1790605010.6202495,
+    "seen": 1790605294.851496,
+    "ast_hash": "ab7493be7da47f60e536ca6af62e2926",
+    "semantic_hash": ""
+  },
+  "assets/FotoFacile.iconset/icon_16x16.png": {
+    "mtime": 1790605010.6146262,
+    "seen": 1790605294.851496,
+    "ast_hash": "3fc7e26826f279d3dffad05ac95252ae",
+    "semantic_hash": ""
+  },
+  "assets/FotoFacile.iconset/icon_16x16@2x.png": {
+    "mtime": 1790605010.614722,
+    "seen": 1790605294.851497,
+    "ast_hash": "3fc7e26826f279d3dffad05ac95252ae",
+    "semantic_hash": ""
+  },
+  "assets/FotoFacile.iconset/icon_256x256.png": {
+    "mtime": 1790605010.6269236,
+    "seen": 1790605294.851497,
+    "ast_hash": "daddbefa55d4b04246e8b9ec132fa566",
+    "semantic_hash": ""
+  },
+  "assets/FotoFacile.iconset/icon_256x256@2x.png": {
+    "mtime": 1790605010.6332073,
+    "seen": 1790605294.851497,
+    "ast_hash": "daddbefa55d4b04246e8b9ec132fa566",
+    "semantic_hash": ""
+  },
+  "assets/FotoFacile.iconset/icon_32x32.png": {
+    "mtime": 1790605010.6149263,
+    "seen": 1790605294.851498,
+    "ast_hash": "4c80b191396eea8f212f03c9cf84cd51",
+    "semantic_hash": ""
+  },
+  "assets/FotoFacile.iconset/icon_32x32@2x.png": {
+    "mtime": 1790605010.6150978,
+    "seen": 1790605294.851498,
+    "ast_hash": "4c80b191396eea8f212f03c9cf84cd51",
+    "semantic_hash": ""
+  },
+  "assets/FotoFacile.iconset/icon_512x512.png": {
+    "mtime": 1790605010.6563652,
+    "seen": 1790605294.851499,
+    "ast_hash": "3981f2504fc807170ee696855c429dde",
+    "semantic_hash": ""
+  },
+  "assets/FotoFacile.iconset/icon_512x512@2x.png": {
+    "mtime": 1790605010.6786578,
+    "seen": 1790605294.851499,
+    "ast_hash": "3981f2504fc807170ee696855c429dde",
+    "semantic_hash": ""
+  },
+  "assets/FotoFacile.iconset/icon_64x64.png": {
+    "mtime": 1790605010.6157095,
+    "seen": 1790605294.851499,
+    "ast_hash": "778f796c946b7dfa2e8d3d2dc449ccc2",
+    "semantic_hash": ""
+  },
+  "assets/FotoFacile.iconset/icon_64x64@2x.png": {
+    "mtime": 1790605010.6162732,
+    "seen": 1790605294.8515,
+    "ast_hash": "778f796c946b7dfa2e8d3d2dc449ccc2",
+    "semantic_hash": ""
+  },
+  "assets/fotofacile-256.png": {
+    "mtime": 1790605010.6143346,
+    "seen": 1790605294.8515,
+    "ast_hash": "ab7493be7da47f60e536ca6af62e2926",
+    "semantic_hash": ""
+  },
+  "assets/fotofacile.png": {
+    "mtime": 1790605010.6121166,
+    "seen": 1790605294.851501,
+    "ast_hash": "3981f2504fc807170ee696855c429dde",
+    "semantic_hash": ""
   }
 }

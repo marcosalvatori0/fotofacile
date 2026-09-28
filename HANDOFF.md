@@ -39,7 +39,9 @@ con una procedura guidata in italiano, senza gestore file e senza gergo tecnico.
 5. **Verificare la GUI lanciando processi in background dal tool**: su macOS un processo in background **non accede al window server** e `tkinter.Tk()` si blocca. Nemmeno `open`/`osascript` funzionano in modo affidabile da qui. **Cosa funziona**: `launchctl asuser $(id -u) <python> <script>` (con `PYTHONPATH` esplicito) — con questo la finestra si apre davvero.
 6. **`os.path.normcase` per confrontare le maiuscole**: su macOS/POSIX è un no-op → i confronti case-insensitive non funzionavano. **Soluzione**: `str.casefold()` esplicito in `core/planner.py`.
 7. **`USERPROFILE` impostato nei test su macOS**: `core/osutil.py` lo preferisce a `HOME` (giusto per Windows) → i test sul resoconto finivano nella cartella di sessione. **Soluzione**: la fixture di sessione imposta `USERPROFILE` solo su Windows.
-8. **`explorer` su Windows esce con codice 1** anche quando la cartella si apre: giudicare dal codice di uscita dava un falso errore. Ora su Windows non si controlla il codice; su macOS/Linux l'apertura è fire-and-forget con `Popen`.
+8. **Tema `aqua`/`vista` + modalità scura = finestra illeggibile.** I temi nativi di macOS e Windows **ignorano** i colori impostati via stile (sfondo dei `TLabel` compreso): con il sistema in modalità scura il testo restava scuro su fondo scuro e l'app sembrava vuota/non aperta. **Soluzione**: tema `clam` + tavolozza chiara/scura rilevata dal sistema (`theme.sistema_scuro`), con test di contrasto WCAG ≥ 7.
+9. **Pagine figlie della finestra invece che del contenitore.** `ConnectPage(self)` + `page.grid(row=0, ...)` metteva le pagine nella stessa riga dell'intestazione, **coprendo l'indicatore dei passi** e lasciando un buco centrale nel layout. **Soluzione**: le pagine si costruiscono con `super().__init__(parent.container)` (vedi `App.register_page`). Se aggiungi una pagina, rispetta questa regola.
+10. **`explorer` su Windows esce con codice 1** anche quando la cartella si apre: giudicare dal codice di uscita dava un falso errore. Ora su Windows non si controlla il codice; su macOS/Linux l'apertura è fire-and-forget con `Popen`.
 
 ## Key Decisions
 
@@ -75,6 +77,9 @@ con una procedura guidata in italiano, senza gestore file e senza gergo tecnico.
 | `fotofacile/ui/page_*.py` | Le 4 schermate; `page_connect.connect_now()` è il rilevamento del telefono |
 | `tests/conftest.py` | Finestra condivisa + `azzera()`: capire questo file evita crash e test fragili |
 | `tests/pilota_app.py` | Collaudo end-to-end dell'app vera (usa variabili `FF_DEST`, `FF_ESITO`) |
+| `fotofacile/ui/theme.py` | Tavolozze chiara/scura, `sistema_scuro()`, `contrasto()` (WCAG) e stile `clam` |
+| `Avvia FotoFacile.command` | Avvio con doppio clic dalla cartella del progetto (generato dalla build) |
+| `~/.fotofacile/avvio.log` | Registro di avvio: dice sempre perché il programma non si è aperto |
 | `scripts/build_app.py`, `scripts/make_icon.py` | Build multipiattaforma e icona senza dipendenze |
 | `docs/superpowers/specs/2026-09-28-fotofacile-design.md` | Specifica + §10-bis con le correzioni della revisione |
 | `graphify-out/wiki/index.md` | Punto d'ingresso del grafo della conoscenza |
@@ -122,6 +127,17 @@ class App(tk.Tk):
 
 Stato condiviso fra le pagine: `app.device`, `app.media_files`, `app.options`, `app.results`,
 `app.cancel_event`, `app.remote` (`AdbAPassi` | `AdbDemoAPassi` | `None`), `app.history()`.
+
+## Verificare la grafica di nascosto (trucco utile)
+
+Un processo lanciato da un tool di automazione **non ha accesso al window server**: `tkinter.Tk()`
+si blocca o va in crash (`SIGTRAP` in `showRootWindow`). Per vedere/verificare davvero la finestra:
+
+```bash
+launchctl asuser $(id -u) env PYTHONPATH="$PWD" "$PWD/.venv/bin/python" /tmp/script.py
+screencapture -x /tmp/schermo.png     # poi guardala: serve a controllare i colori
+```
+Le schermate sono state decisive: hanno mostrato il tema illeggibile e l'indicatore coperto.
 
 ## Resume Instructions
 
