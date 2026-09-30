@@ -207,7 +207,7 @@ class TrasportoAiutante:
                 leggi_output=True,
             )
             processo.esito()
-            return leggi_dispositivi(percorso.read_text(errors="replace"))
+            return leggi_dispositivi(percorso.read_text(encoding="utf-8", errors="replace"))
         except FotoFacileError:
             raise
         finally:
@@ -236,7 +236,7 @@ class TrasportoAiutante:
                 annulla=annulla,
             )
             processo.esito()
-            return leggi_elenco(percorso.read_text(errors="replace"))
+            return leggi_elenco(percorso.read_text(encoding="utf-8", errors="replace"))
         finally:
             percorso.unlink(missing_ok=True)
 

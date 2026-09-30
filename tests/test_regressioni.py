@@ -842,3 +842,64 @@ def test_d15_con_un_solo_telefono_si_usa_quello(monkeypatch):
     monkeypatch.setattr(ptp_mac, "trova_telefoni", lambda: [_TelefonoMacFinto("B")])
     monkeypatch.setattr(ptp_mac, "apri_sessione", lambda telefono: None)
     assert ptp_mac.seriale(ptp_mac._apri_telefono("A")) == "B"
+
+
+# ── D16 ────────────────────────────────────────────────────────────────────
+# Prima: l'elenco delle foto (JSON UTF-8 dell'aiutante, output UTF-8 di adb) veniva riletto
+# con la codifica di sistema. Su Windows è cp1252: «Città 😀.jpg» diventava «CittÃ ðŸ˜€.jpg»,
+# la copia chiedeva al telefono un file che non esiste e ogni foto con accenti o emoji nel
+# nome falliva. Su questo Mac la codifica di sistema è sempre UTF-8: la si simula.
+NOME_STRANO = "Città 😀 l'«estate».jpg"
+
+
+@pytest.fixture
+def codifica_di_windows(monkeypatch):
+    """Rilegge i file di testo come farebbe Windows quando la codifica non è indicata."""
+    originale = Path.read_text
+
+    def come_windows(self, encoding=None, errors=None, newline=None):
+        return originale(self, encoding=encoding or "cp1252", errors=errors, newline=newline)
+
+    monkeypatch.setattr(Path, "read_text", come_windows)
+
+
+def test_d16_l_elenco_del_collegamento_diretto_conserva_accenti_ed_emoji(
+    tmp_path, codifica_di_windows
+):
+    from fotofacile.core.trasporto_aiutante import TrasportoAiutante
+
+    riga = json.dumps({"percorso": f"/DCIM/{NOME_STRANO}", "dimensione": 3, "data": 1, "genere": "photo"}, ensure_ascii=False)
+    (tmp_path / "elenco.json").write_bytes((riga + "\n").encode("utf-8"))
+    aiutante = script(tmp_path, "aiutante", f"cat '{tmp_path / 'elenco.json'}'\n")
+
+    class AiutanteFinto(TrasportoAiutante):
+        def base(self) -> list[str]:
+            return [aiutante]
+
+    trovati = esegui_fino_alla_fine(AiutanteFinto(intervallo=0.0).cerca_media("S1"))
+    assert [file.remote_path for file in trovati] == [f"/DCIM/{NOME_STRANO}"]
+
+
+def test_d16_la_ricerca_con_adb_conserva_accenti_ed_emoji(tmp_path, codifica_di_windows):
+    from fotofacile.core.adb_passi import AdbAPassi
+
+    (tmp_path / "elenco.txt").write_bytes(f"3|1|/sdcard/DCIM/{NOME_STRANO}\n".encode("utf-8"))
+    adb = script(tmp_path, "adb", f"cat '{tmp_path / 'elenco.txt'}'\n")
+    passi = AdbAPassi(adb, intervallo=0.0, cartella_lavoro=tmp_path / "lavoro")
+    trovati = esegui_fino_alla_fine(passi.cerca_media("S1", "comando", ripiega=False))
+    assert [file.remote_path for file in trovati] == [f"/sdcard/DCIM/{NOME_STRANO}"]
+
+
+@pytest.mark.parametrize("modulo", ["ptp_mac", "mtp_linux"])
+def test_d16_gli_aiutanti_scrivono_righe_leggibili_con_ogni_codifica(modulo, capsys):
+    """Gli aiutanti Python scrivono JSON solo ASCII: la lettura in UTF-8 non dipende dalla
+    codifica di sistema del processo aiutante."""
+    import importlib
+
+    from fotofacile.core.trasporto_aiutante import leggi_elenco
+
+    aiutante = importlib.import_module(f"fotofacile.aiutanti.{modulo}")
+    aiutante._stampa_riga({"percorso": f"/DCIM/{NOME_STRANO}", "dimensione": 3, "data": 1, "genere": "photo"})
+    uscita = capsys.readouterr().out
+    assert uscita.isascii()
+    assert [file.remote_path for file in leggi_elenco(uscita)] == [f"/DCIM/{NOME_STRANO}"]

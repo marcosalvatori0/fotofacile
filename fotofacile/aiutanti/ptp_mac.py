@@ -391,7 +391,9 @@ def _leggi_scaricando(file, scrivi: Callable[[bytes], None]) -> int:
 
 
 def _stampa_riga(dati: dict) -> None:
-    sys.stdout.write(json.dumps(dati, ensure_ascii=False) + "\n")
+    # Solo ASCII («\u00e0» invece di «à»): la riga si legge uguale qualunque sia la
+    # codifica di sistema di questo processo.
+    sys.stdout.write(json.dumps(dati) + "\n")
     sys.stdout.flush()
 
 

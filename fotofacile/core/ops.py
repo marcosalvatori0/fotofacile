@@ -214,7 +214,10 @@ class ProcessoEsterno:
         if not self.leggi_output or self._file_output is None:
             return ""
         try:
-            return self._file_output.read_text(errors="replace")
+            # L'output dei comandi è UTF-8 (adb riporta i nomi dei file come li scrive
+            # Android, l'aiutante di Windows scrive JSON UTF-8): con la codifica di sistema,
+            # su Windows (cp1252) accenti ed emoji dei nomi diventavano illeggibili.
+            return self._file_output.read_text(encoding="utf-8", errors="replace")
         except OSError:  # pragma: no cover - difensivo
             return ""
 
