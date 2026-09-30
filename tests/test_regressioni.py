@@ -1421,3 +1421,16 @@ def test_d24_con_la_rete_lenta_ogni_passo_prende_solo_quello_che_e_arrivato(tmp_
     )
     assert destinazione.read_bytes() == b"x" * 3000
     assert len(passi) == 3, "un passo (e un ritorno alla finestra) per ogni pezzo arrivato"
+
+
+# ── D25 ────────────────────────────────────────────────────────────────────
+# Prima: il singolare valeva solo per la prima unità. Il tempo restante e la «Durata» del
+# resoconto dicevano «1 minuto e 1 secondi» e «1 ora e 1 minuti».
+def test_d25_un_secondo_e_un_minuto_restano_al_singolare():
+    from fotofacile.core.format import format_duration, format_eta
+
+    assert format_duration(61) == "1 minuto e 1 secondo"
+    assert format_duration(3660) == "1 ora e 1 minuto"
+    assert format_eta(121) == "circa 2 minuti e 1 secondo"
+    assert format_duration(7260) == "2 ore e 1 minuto"
+    assert format_duration(62) == "1 minuto e 2 secondi"  # guardia: il plurale resta

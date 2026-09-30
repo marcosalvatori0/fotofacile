@@ -32,10 +32,12 @@ def format_duration(seconds: float) -> str:
     minuti, sec = divmod(secondi, 60)
     if minuti < 60:
         testo = f"{minuti} minuti" if minuti != 1 else "1 minuto"
-        return f"{testo} e {sec} secondi" if sec else testo
+        coda = f"{sec} secondi" if sec != 1 else "1 secondo"  # D25: anche qui il singolare
+        return f"{testo} e {coda}" if sec else testo
     ore, minuti = divmod(minuti, 60)
     testo = f"{ore} ore" if ore != 1 else "1 ora"
-    return f"{testo} e {minuti} minuti" if minuti else testo
+    coda = f"{minuti} minuti" if minuti != 1 else "1 minuto"
+    return f"{testo} e {coda}" if minuti else testo
 
 
 def format_eta(seconds: float | None) -> str:
