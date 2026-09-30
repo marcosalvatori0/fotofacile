@@ -482,3 +482,261 @@ cartelle delle foto e si possono lasciare al filtro di pagina.
   cancellazione se il completamento non riporta un errore, anche quando scadono i 15 s senza
   risposta. Una cancellazione non avvenuta verrebbe contata come fatta: il file resta sul
   telefono (direzione sicura, nessuna foto persa) ma il riepilogo sarebbe sbagliato.
+
+---
+
+## G4 — Download componente
+
+File rivisti: `fotofacile/core/installer.py`, `fotofacile/core/adb.py`, `fotofacile/core/devices.py`,
+con quello che scarica davvero il componente per la finestra (`core/ops.py:ScaricatoreAPassi`) e
+chi lo avvia (`ui/page_connect.py:install_component`, `ui/app.py:run_task`). Per il sospetto
+ereditato dal G1, anche `core/transfer.py:download_file_stream` (solo quel punto). Due
+revisioni (lettura diretta + revisore `caveman:cavecrew-reviewer`); tenuti solo i difetti
+confermati leggendo il codice e riprodotti con un test. Nessun test fa richieste di rete: le
+risposte anomale sono simulate; il comportamento vero di `urllib` è stato misurato a parte con
+un piccolo server su `127.0.0.1` (risposta troncata, risposta non HTTP, rete lenta).
+
+Nota su come si arriva agli errori: `App.run_task` chiama `on_error` **solo** per i
+`FotoFacileError` (`app.py:298-305`); qualunque altra eccezione diventa «Qualcosa non ha
+funzionato» (`:306-315`) e `_componente_fallito` (`page_connect.py:398-402`) non viene chiamato,
+quindi il pulsante «Installa componente mancante», disattivato all'avvio del download
+(`:381`), **resta disattivato**. Per questo D22 e D23 non sono solo messaggi brutti.
+
+### Zip-slip: l'estrazione rifiuta i percorsi con `..` o assoluti?
+
+**ok** — per costruzione non si può uscire dalla cartella di appoggio. `_scompatta`
+(`installer.py:190-206`) **appiattisce** ogni voce: prende solo l'ultimo pezzo del nome
+(`Path(membro).name`, `:197`) e salta i nomi vuoti o che cominciano con «.» (`:198-199`, quindi
+anche `..`). Verificato con un archivio costruito apposta, estratto con `_scompatta`: `../../fuori1`,
+`/tmp/…-assoluto`, `C:/Windows/fuori4` finiscono **dentro** la cartella come `fuori1`,
+`…-assoluto`, `fuori4`; `..` e `platform-tools/..` saltati; nessun file fuori, nessun file in
+`/tmp`. Con `PureWindowsPath` (come su Windows) anche `a\..\..\fuori3`, `\\server\share\x`, `C:`,
+`C:..` si riducono a un nome semplice o vengono saltati; su macOS/Linux la barra rovesciata è un
+carattere normale e `a\..\..\fuori3` resta un **nome** (innocuo) dentro la cartella.
+**Link simbolici:** `zipfile` non crea mai link; una voce marcata come link diventa un file
+normale che contiene il testo del bersaglio (verificato: `collegamento` → file con `/etc/passwd`
+dentro, `is_symlink()` falso). La cartella di appoggio è nuova (`TemporaryDirectory`, `:154`),
+quindi non ci sono link preesistenti da seguire.
+
+- *Da valutare (bassa, solo con un archivio manomesso):* su Windows un nome come `adb.exe:x`
+  scriverebbe un flusso alternativo NTFS **dentro** la cartella, e i nomi di dispositivo
+  (`CON`, `AUX.txt`) sui Windows più vecchi aprirebbero il dispositivo invece di un file. Nessuna
+  uscita dalla cartella; l'archivio vero arriva da `dl.google.com` in HTTPS e con l'impronta del
+  catalogo. Nessun limite alla dimensione estratta (una «bomba zip» riempirebbe il disco): stesso
+  presupposto.
+- *Sospetto non confermato (Linux/macOS, serve il pacchetto vero):* l'appiattimento porta
+  in cima anche `lib64/…` (se il pacchetto la contiene). Se `adb` avesse bisogno di trovarla in
+  `lib64/`, `_verifica_eseguibile` (`:209-227`) lo scoprirebbe e l'installazione fallirebbe con
+  «Il componente scaricato non funziona su questo computer» senza toccare quella vecchia. Non
+  verificabile senza scaricare il pacchetto.
+
+### L'impronta è verificata **prima** di estrarre?
+
+**ok**, con due limiti da valutare. L'impronta viene controllata dal `validatore`, che gira sul
+file `.scarico` **prima** che prenda il suo nome (`ops.py:344-346`; `installer.py:278-280` per la
+versione non a passi); l'estrazione (`installer.py:399`) avviene solo dopo. `controlla_archivio`
+(`:295-331`) verifica in ordine dimensione minima (1 MB, `:309`), impronta (`:314-326`) e
+struttura zip (`:327`). Un'impronta sbagliata → «non corrisponde a quello ufficiale», il file
+viene tolto (`finally` di `scarica`) e il pacchetto non esiste mai. Test esistenti:
+`test_archivio_manomesso_viene_rifiutato`, `test_archivio_con_impronta_giusta_viene_accettato`.
+
+- *Precisazione:* non è SHA-256. Il catalogo di Google pubblica **SHA-1** (40 cifre); l'algoritmo
+  si sceglie dalla lunghezza (`ALGORITMI_PER_LUNGHEZZA`, `:40`), quindi uno SHA-256 verrebbe
+  controllato come tale se il catalogo lo pubblicasse.
+- *Da valutare:* senza catalogo (rete lenta oltre 6 s, catalogo illeggibile) si scarica
+  l'indirizzo «latest» **senza impronta** (`risolvi_sorgente`, `:363-373`, scelta documentata):
+  restano HTTPS, dimensione minima, struttura zip e la prova `adb version`. Un'impronta di
+  lunghezza sconosciuta viene ignorata invece di rifiutare il file (`:317-320`).
+
+### Rete assente o lenta: c'è un timeout e un messaggio?
+
+**ok** per rete assente e server in errore; **difetti D22 e D24** per risposte anomale e rete
+lenta.
+
+- Rete assente, nome del server non risolto, connessione rifiutata, HTTP non-200: `urlopen`
+  solleva `URLError`/`HTTPError`, che sono `OSError` → «Non sono riuscito a scaricare il
+  componente di collegamento.» + «Controlla la connessione a internet e riprova.»
+  (`ops.py:350-355`). Test esistente: `test_download_senza_rete_spiega_cosa_fare`.
+- Timeout: 60 s per ogni operazione del socket nel download (`ops.py:295`), 6 s per il catalogo
+  (`installer.py:46`), 30 s per la prova di `adb` (`:215`). Lo scadere è un `TimeoutError`
+  (`OSError`) → stesso messaggio.
+- Reindirizzamenti: `urllib` li segue da solo (al massimo 10; un ciclo diventa `HTTPError`,
+  quindi il messaggio sopra). *Da valutare:* accetta anche il passaggio da `https` a `http`; con
+  l'impronta del catalogo un file alterato viene comunque rifiutato, senza catalogo no.
+- Download interrotto: il file `.scarico` viene tolto in ogni uscita, compresi annullamento e
+  `GeneratorExit` (`ops.py:356-363`), e `installa_a_passi` toglie anche il pacchetto
+  (`installer.py:400-403`). Una risposta **troncata** (meno byte del dichiarato) viene
+  scartata dal controllo di dimensione o dalla struttura zip. Test:
+  `test_scaricatore_abbandonato_non_lascia_file_a_meta` e i nuovi test D22/D23.
+- **difetto D22 (media)** — corretto. `http.client` segnala una risposta interrotta a metà di un
+  trasferimento a pezzi (`IncompleteRead`) o una risposta non HTTP, per esempio di un proxy o di
+  una rete con pagina di accesso (`BadStatusLine`), con eccezioni che **non** sono `OSError`
+  (verificato con `urlopen` e un server locale). Uscivano grezze dal download e dal catalogo:
+  «Qualcosa non ha funzionato» e pulsante «Installa» disattivato. Ora `ops.py:350-351`,
+  `installer.py:88` e `:284` le trattano come gli errori di rete (il catalogo ripiega su
+  «latest» come per gli altri guasti). Test:
+  `test_d22_una_risposta_di_rete_anomala_da_un_errore_comprensibile[troncata|non_http]`.
+- **difetto D24 (bassa)** — corretto. Ogni passo del download chiedeva `read(256 KB)`: su una
+  rete lenta quella chiamata **aspetta** tutti i 256 KB. Misurato con un server locale che manda
+  1 KB ogni 50 ms: `read(256 KB)` è tornata dopo **2,1 s**, `read1` subito. La finestra restava
+  ferma per secondi a ogni passo (a 20 KB/s circa 13 s) e «Annulla» non rispondeva. Ora si usa
+  `read1` (`ops.py:322-324`, `:333`): con lo stesso server il passo più lungo dura 55 ms. Test:
+  `test_d24_con_la_rete_lenta_ogni_passo_prende_solo_quello_che_e_arrivato` (contratto: la
+  risposta finta fallisce se le si chiede `read`).
+- *Da valutare:* restano bloccanti, per scelta (niente thread), l'apertura della connessione
+  (fino a 60 s, e la risoluzione del nome non ha limite di tempo) e la lettura del catalogo
+  (6 s per operazione, documentato in `installer.py:43-45`).
+
+### Estrazione atomica e guai del disco
+
+**ok** l'atomicità, **difetto D23** per i messaggi. `_estrai_e_sostituisci`
+(`installer.py:151-187`) estrae in una cartella di appoggio accanto a quella finale (stesso
+disco, quindi `replace` è un rinomina), prova `adb version` (`:166-169`), sposta la vecchia in
+`platform-tools.precedente` (`:178`), mette la nuova al suo posto (`:180`) e rimette la vecchia se
+questo fallisce (`:181-185`). Se il programma viene ucciso fra i due spostamenti, la volta dopo
+la copia di ripiego viene rimessa a posto prima di cancellarla (`:171-175`); nel frattempo
+`adb` non si trova e il pulsante «Installa» ricompare.
+
+- **difetto D23 (media)** — corretto. I guai del **disco** non erano detti come tali: se la
+  cartella `.fotofacile` non si poteva creare (un file con lo stesso nome, cartella personale
+  protetta: `mkdir` fuori da ogni `try` in `ScaricatoreAPassi.scarica`) o il disco si riempiva
+  durante l'estrazione (`_scompatta`/`replace` non protetti) usciva un `OSError` grezzo:
+  «Qualcosa non ha funzionato» e pulsante disattivato. Se il disco si riempiva durante il
+  download il messaggio diceva di controllare la connessione a internet. Ora `ops.py:275-281`
+  (`_sul_disco`, usato in `:316`, `:325`, `:336`, `:342`) ed `extract_component`
+  (`installer.py:144-148`) usano `errors.errore_disco_componente` (`errors.py:58-70`): «Non c'è
+  abbastanza spazio sul disco per installare il componente…» oppure «Non riesco a salvare il
+  componente… nella cartella …». Test: `test_d23_cartella_dei_dati_impossibile_da_creare`,
+  `test_d23_disco_pieno_durante_l_installazione_del_componente[download|estrazione]` (tutti
+  rossi prima; controllano anche che non restino pacchetto, `.scarico` o cartelle di appoggio).
+- *Da valutare:* `download_file` e `install_component` (`installer.py:240-292`, `:334-360`)
+  sono usati **solo dai test**: la finestra usa `installa_a_passi`. Hanno ricevuto la correzione
+  D22 (una riga) ma non D23 (il loro `mkdir` è ancora fuori dal `try`, `:257`, `:348`).
+  Rimuoverli o allinearli è una scelta di pulizia.
+- *Sospetto non confermato (Windows):* reinstallare mentre il server di `adb` del componente è
+  acceso: rinominare una cartella che contiene un eseguibile in uso potrebbe fallire con
+  «accesso negato» (`:178`). Dopo D23 sarebbe un messaggio comprensibile, ma la situazione non si
+  presenta dall'interfaccia (il pulsante compare solo se `adb` manca). Non verificabile qui.
+- *Da valutare:* se il programma viene ucciso durante l'estrazione resta una cartella
+  `fotofacile-estrai-*` in `.fotofacile` (nessuno la toglie dopo).
+
+### Sospetto ereditato dal G1: `download_file_stream`
+
+- **difetto D21 (bassa)** — corretto. `download_file_stream` creava la cartella di destinazione
+  **fuori** dal `try` (stessa famiglia di D11): un `OSError` grezzo attraversava `transfer` e
+  fermava l'intera copia. Lo usa `CopiatoreInterno`, cioè `transfer()` (riga di comando e test);
+  la finestra usa gli altri copiatori, già corretti in D11. Ora la creazione sta nel `try`
+  (`transfer.py:113`) e l'errore passa da `traduci_errore_file`: il file finisce fra i «non
+  copiati» con il suo nome. Test: `test_d21_la_copia_interna_traduce_la_cartella_impossibile_da_creare`.
+
+### `adb.py` e `devices.py`
+
+**ok**, con note.
+
+- `parse_devices` (`devices.py:49-75`) provato con un'uscita reale e strana di `adb devices -l`:
+  righe `* daemon …` e l'intestazione saltate, `no permissions (…); see [http://…]` riconosciuto
+  come «no permissions», dispositivi via rete (`adb-XYZ._adb-tls-connect._tcp.`, `192.168.1.5:5555`)
+  letti con il loro stato. Gli stati sconosciuti (`authorizing`, `connecting`, `recovery`…)
+  ricevono «Il telefono non è pronto.» (`page_connect.py:312-314`). I messaggi del server di adb
+  vanno su `stderr`, che `parse_devices` non legge.
+- `RealAdbBackend` (`adb.py:95-204`) nella finestra serve solo per `doctor` (`cli.py:77-83`, dentro
+  un `except Exception`); il lavoro vero passa da `AdbAPassi`. *Da valutare:* `_run` legge con
+  `text=True` (codifica di sistema, come prima di D16) e intercetta solo `FileNotFoundError`;
+  `stream_file` non legge `stderr`. Oggi non toccano la persona.
+- *Controllato (dal secondo revisore), non è un difetto:* in `stream_file` il `Popen`
+  (`adb.py:176`) sta fuori dal `try`, ma `stream_file` è un generatore: il `Popen` parte al primo
+  `next`, che in `download_file_stream` è dentro il `try` (`transfer.py:114-121`), quindi un `adb`
+  sparito diventa un `OSError` tradotto da `traduci_errore_file`, non un errore grezzo (il testo
+  parla del cavo, non del componente: solo riga di comando). L'`assert` di `:183` non può
+  fallire con `stdout=subprocess.PIPE`.
+- `find_adb` (`adb.py:56-92`) cerca prima il componente scaricato in `.fotofacile`, poi i percorsi
+  noti e il `PATH`: coerente con `component_dir`.
+
+---
+
+## G5 — Dati e resoconti
+
+File rivisti: `fotofacile/core/report.py`, `format.py`, `demo.py`, `scanner.py`, con chi li usa:
+`ui/page_transfer.py` (avanzamento, resoconto), `ui/page_select.py` (cartelle, date),
+`ui/page_options.py`, `core/planner.py:build_plan` (per le conseguenze delle maiuscole). Due
+revisioni (lettura diretta + revisore `caveman:cavecrew-reviewer`); ogni caso limite è stato
+provato chiamando le funzioni vere.
+
+### `format_size` / `format_eta` con 0, negativi, `None`, valori enormi?
+
+**ok** per i valori che arrivano davvero, con il difetto **D25** corretto nel testo.
+
+- `format_size` (`format.py:10-19`): 0 → «0 B»; negativi → «0 B» (`max(…, 0)`, `:12`); 10²⁰ →
+  «90949470,2 TB» (nessun errore, l'ultima unità assorbe tutto). `None` solleverebbe `TypeError`,
+  ma nessun chiamante lo passa: le dimensioni sono sempre `int` (`scanner.py:103`,
+  `trasporto_aiutante.py:381`), i totali sono somme, e lo spazio libero `None` viene controllato
+  prima (`page_options.py:155-157`). *Da valutare (cosmetico):* 1 048 575 byte diventano
+  «1024,0 KB» invece di «1,0 MB» (l'unità si sceglie prima di arrotondare).
+- `format_eta` (`:43-48`): `None` → «calcolo in corso…»; 0, negativi e meno di un secondo →
+  «meno di un secondo»; 10⁹ s → «circa 277777 ore e 46 minuti». Infinito o NaN solleverebbero
+  (`int(round(…))`, `:29`), ma la stima è `restanti / velocità` con velocità > 0 e tempo trascorso
+  almeno 1 ms (`transfer.py:218-223`): sempre finita. `format_speed` (`:22-25`) mostra «—» per 0 e
+  negativi.
+- **difetto D25 (bassa)** — corretto. Il singolare valeva solo per la prima unità: il tempo
+  restante e la «Durata» del resoconto dicevano «1 minuto e 1 secondi» e «1 ora e 1 minuti».
+  Ora `format.py:35` e `:39`. Test: `test_d25_un_secondo_e_un_minuto_restano_al_singolare`.
+- *Sospetto non confermato (Windows):* `parse_date` (`:55-65`) intercetta solo `ValueError`;
+  su Windows `datetime(…).timestamp()` per date molto vecchie potrebbe sollevare `OSError`
+  (la data minima si scrive a mano in `page_select.py:220`). Non riproducibile su questo Mac.
+  `format_date` (`:51-52`) non è usata da nessuno.
+
+### `save_report` in una cartella non scrivibile?
+
+**ok**. `save_report` (`report.py:71-86`) prova la cartella delle foto, poi il Desktop **solo se
+esiste già** (`_cartelle_di_riserva`, `:56-68`), poi `.fotofacile`; ogni tentativo è dentro il
+`try` (compreso `mkdir`, `:76-82`). Provato: cartella delle foto in sola lettura → il resoconto
+finisce in `.fotofacile`; tutto bloccato (anche la cartella personale) → `FotoFacileError`
+«Non sono riuscito a salvare il resoconto.» con il suggerimento di copiare il testo da
+«Dettagli»; la pagina lo mostra come avviso (`page_transfer.py:239-255`). Test esistenti:
+`test_salvataggio_resoconto_su_cartella_non_scrivilibile_usa_il_desktop`,
+`test_resoconto_non_crea_il_desktop_se_non_esiste`.
+
+- *Da valutare (bassa):* se il disco si riempie **mentre** scrive, nella cartella resta un
+  resoconto troncato e quello completo va nella cartella di riserva; due resoconti salvati nello
+  stesso secondo si sovrascrivono (il nome ha la precisione del secondo).
+- `build_report` (`:18-53`): con telefono sconosciuto la pagina passa un `DeviceInfo` di ripiego
+  (`page_transfer.py:205-211`); nessun campo può mancare. **ok**.
+
+### `group_folders` con percorsi identici a meno delle maiuscole?
+
+**ok** in `group_folders`; **da valutare** una conseguenza latente nel piano.
+
+- `group_folders` (`scanner.py:155-170`) raggruppa per percorso **esatto** (`file.parent`): due
+  cartelle `DCIM/Camera` e `DCIM/camera` restano due righe distinte, ognuna con i suoi file e la
+  sua etichetta; la scelta in `page_select.py:218-228` confronta lo stesso percorso esatto, quindi
+  spuntarne una non prende i file dell'altra. Provato.
+- *Da valutare (latente, fuori gruppo: `planner.py:246-260`):* con «mantieni le cartelle» e un
+  disco che non distingue le maiuscole (macOS, Windows), `_Esistenza` confronta il nome del file
+  senza maiuscole ma usa come chiave il **percorso della cartella** così com'è. Provato:
+  `DCIM/Camera/IMG_1.jpg` e `DCIM/camera/IMG_1.jpg` (foto diverse) ricevono due destinazioni
+  che sul disco sono **lo stesso file** (`out/DCIM/Camera/IMG_1.jpg`, `out/DCIM/camera/IMG_1.jpg`):
+  la seconda copia sovrascriverebbe la prima, e con «cancella dal telefono» la prima foto
+  andrebbe persa. In copia piatta invece il secondo diventa `IMG_1 (1).jpg`, come deve. Non
+  raggiungibile con un telefono vero: la memoria interna di Android e le schede SD (FAT/exFAT)
+  non distinguono le maiuscole, quindi le due cartelle non possono esistere insieme. Non
+  corretto: da sistemare solo se un giorno arrivano sorgenti che le distinguono.
+
+### Altri controlli: `parse_stat_stream` con righe strane, `demo.py`
+
+- **difetto D26 (bassa)** — corretto. `parse_stat_stream` divideva l'elenco con `splitlines()`,
+  che taglia anche su caratteri che possono stare nel nome di un file (U+2028, U+0085, `\x1c`…),
+  mentre il comando sul telefono produce una riga per file divisa solo da «\n» (`read -r`,
+  `scanner.py:127`). Il file `a.jpg<U+2028>b.jpg` spariva e al suo posto compariva `a.jpg`: un
+  file diverso (se esiste) con la dimensione sbagliata, che la verifica della dimensione poi
+  scartava. Ora `scanner.py:92-94` divide solo su «\n»; le righe `\r\n` dei vecchi telefoni si
+  leggono come prima (`strip`, `:95`). Test: `test_d26_nomi_con_separatori_unicode_restano_un_file_solo`.
+- Le altre righe strane vengono saltate senza fermare la ricerca (`:96-110`): senza «|», con due
+  campi soli, con dimensione o data non numeriche, con estensione non multimediale; un «|» nel
+  nome resta (si separano solo i primi due). Provato anche: `1_0|…` viene letto come 10 e
+  `-3|-9|…` come dimensione e data negative (Python accetta `_` e il segno in `int`): `stat` non
+  produce mai queste forme, e una dimensione sbagliata viene comunque fermata dalla verifica dopo
+  la copia (`transfer.py:252-260`). Gli spazi in fondo al nome: vedi la nota del G2.
+- `demo.py` **ok**: nomi difficili (accenti, emoji, apostrofo, `#`, `&`) per provare il resto del
+  programma; contenuto deterministico dal percorso (`:90-98`); `file_count` negativo → nessun
+  file (`:36`); un percorso sconosciuto dà un `AdbError` comprensibile (`:84-89`, `:101-105`).
+  La data dei file dipende dall'ora di avvio (`:52`): i test non ne dipendono.
