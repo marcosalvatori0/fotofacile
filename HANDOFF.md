@@ -88,8 +88,11 @@ il programma. I file arrivano **direttamente nella cartella scelta**.
 
 ## Not Yet Done — serve Marco
 
-- [ ] **(a) D5 — pubblicare e ottenere il `.exe`**: fare push del branch `revisione-v0.2`, tag (es. `v0.2.0`) e Release, oppure
-  lanciare la pipeline a mano (`workflow_dispatch`). **Nulla è stato pubblicato: serve la conferma esplicita di Marco.**
+- [~] **(a) D5 — pubblicare e ottenere il `.exe`**: **FATTO a metà il 2026-09-30** con l'ok di Marco: push del branch `revisione-v0.2`
+  e pipeline lanciata a mano (`workflow_dispatch`, run 36721726035, **verde**: installa in silenzio, avvia `--selftest`, `doctor`,
+  disinstalla). Il primo giro era fallito per un errore di sintassi PowerShell (`"$exe:"` → `"${exe}:"`), già corretto. Artefatto:
+  `FotoFacile-Setup-0.2.0.exe` (SHA-256 `dfb8d2ff…ac3fa22`), copiato sulla Scrivania di Marco. **Restano da fare, con la conferma
+  di Marco:** tag `v0.2.0` + Release pubblica e unione di `revisione-v0.2` in `main`.
   La **prima esecuzione probabilmente richiederà piccole correzioni**; rischi non verificati (dal report D4, nessun Windows,
   Inno Setup né PowerShell disponibili qui):
   1. I due `.ps1` (`verifica-eseguibile.ps1`, `prova-installazione.ps1`) non sono mai stati eseguiti: possibili errori di sintassi o logica.
