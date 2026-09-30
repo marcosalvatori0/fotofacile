@@ -6,7 +6,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Callable, Mapping, Sequence
 
 from . import __version__
 from .core.adb import find_adb
@@ -83,6 +83,38 @@ def _stampa(testo: str) -> None:
         print(testo.encode(codifica, "replace").decode(codifica))
 
 
+def emetti(
+    testo: str,
+    nome_file: str = "diagnosi.txt",
+    env: Mapping[str, str] | None = None,
+    apri: Callable[[Path], object] | None = None,
+) -> Path | None:
+    """Mostra un rapporto: sul terminale se c'è, altrimenti in un file che si apre da solo.
+
+    Il programma installato su Windows non ha finestra nera (``sys.stdout`` è ``None``):
+    senza questo, «FotoFacile - Diagnosi» dal menu Start non farebbe vedere niente.
+    Restituisce il file scritto, oppure ``None`` (stampato sul terminale, o scrittura
+    impossibile). ``apri`` è il modo di aprire il file (di norma il Blocco note su Windows).
+    """
+    if sys.stdout is not None:
+        _stampa(testo)
+        return None
+    percorso = app_dir(dict(env) if env is not None else None) / nome_file
+    try:
+        percorso.parent.mkdir(parents=True, exist_ok=True)
+        percorso.write_text(testo, encoding="utf-8")
+    except OSError:
+        return None
+    if apri is None and sys.platform == "win32":  # pragma: no cover - solo su Windows
+        apri = os.startfile  # type: ignore[attr-defined]
+    if apri is not None:
+        try:
+            apri(percorso)
+        except OSError:  # pragma: no cover - meglio nessun Blocco note che un errore
+            pass
+    return percorso
+
+
 def doctor(env: Mapping[str, str] | None = None) -> int:
     """Stampa una diagnosi completa dello stato del computer e del collegamento."""
     ambiente = dict(env if env is not None else os.environ)
@@ -115,7 +147,7 @@ def doctor(env: Mapping[str, str] | None = None) -> int:
         versione_tk = "non disponibile"
     from .core.conversione import pillow_disponibile
 
-    _stampa(
+    emetti(
         build_doctor_report(
             adb_path=percorso_adb,
             adb_version=versione,
@@ -127,7 +159,8 @@ def doctor(env: Mapping[str, str] | None = None) -> int:
             writing_ok=scrittura,
             modi=elenco_modi(ambiente),
             conversione_webp=pillow_disponibile(),
-        )
+        ),
+        env=ambiente,
     )
     return 0
 
@@ -175,7 +208,8 @@ def selftest() -> int:
         applicazione.destroy()
     except Exception as errore:  # qualunque problema va riportato, non nascosto
         dati = {"ok": False, "motivo": f"{type(errore).__name__}: {errore}"}
-    _stampa(json.dumps(dati, ensure_ascii=False))
+    # Senza terminale l'esito va in «selftest.txt» (lo legge la CI); niente Blocco note.
+    emetti(json.dumps(dati, ensure_ascii=False), "selftest.txt", apri=lambda _percorso: None)
     return 0 if dati["ok"] else 1
 
 

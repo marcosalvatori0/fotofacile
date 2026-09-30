@@ -301,3 +301,91 @@ def test_la_diagnosi_riferisce_la_conversione_webp():
                 devices=[], app_folder="/x", writing_ok=True)
     assert "Conversione WebP: disponibile" in build_doctor_report(**base, conversione_webp=True)
     assert "Conversione WebP: non disponibile" in build_doctor_report(**base, conversione_webp=False)
+
+
+def test_emetti_stampa_quando_c_e_un_terminale(capsys, tmp_path):
+    from fotofacile.cli import emetti
+
+    assert emetti("ciao", env={"HOME": str(tmp_path), "USERPROFILE": str(tmp_path)}) is None
+    assert "ciao" in capsys.readouterr().out
+
+
+def test_emetti_scrive_un_file_senza_terminale(monkeypatch, tmp_path):
+    import sys
+
+    from fotofacile.cli import emetti
+
+    monkeypatch.setattr(sys, "stdout", None)
+    aperti = []
+    percorso = emetti(
+        "rapporto",
+        env={"HOME": str(tmp_path), "USERPROFILE": str(tmp_path)},
+        apri=lambda p: aperti.append(p),
+    )
+    assert percorso is not None and percorso.read_text(encoding="utf-8") == "rapporto"
+    assert percorso == tmp_path / ".fotofacile" / "diagnosi.txt"
+    assert aperti == [percorso]
+
+
+def test_emetti_senza_terminale_usa_il_nome_file_richiesto(monkeypatch, tmp_path):
+    import sys
+
+    from fotofacile.cli import emetti
+
+    monkeypatch.setattr(sys, "stdout", None)
+    percorso = emetti(
+        "x", "selftest.txt", env={"HOME": str(tmp_path), "USERPROFILE": str(tmp_path)},
+        apri=lambda _p: None,
+    )
+    assert percorso == tmp_path / ".fotofacile" / "selftest.txt"
+
+
+def test_doctor_dal_programma_senza_finestra_nera_scrive_e_apre_il_rapporto(monkeypatch, tmp_path):
+    """«FotoFacile.exe doctor» (collegamento del menu Start) deve arrivare a doctor(), non alla GUI."""
+    import sys
+
+    from fotofacile import cli
+
+    monkeypatch.setattr(sys, "stdout", None)
+    aperti = []
+    monkeypatch.setattr(cli.os, "startfile", lambda p: aperti.append(p), raising=False)
+    monkeypatch.setattr(cli.sys, "platform", "win32")
+    monkeypatch.setattr(cli, "start_gui", lambda **_k: pytest.fail("non deve aprire la finestra"))
+    ambiente = {"HOME": str(tmp_path), "USERPROFILE": str(tmp_path), "PATH": ""}
+    assert cli.main(["doctor"], env=ambiente) == 0
+    rapporto = tmp_path / ".fotofacile" / "diagnosi.txt"
+    assert "FotoFacile" in rapporto.read_text(encoding="utf-8")
+    assert aperti == [rapporto]
+
+
+def test_autocollaudo_senza_terminale_scrive_selftest_txt_anche_se_ok(monkeypatch, tmp_path):
+    """La CI legge selftest.txt: l'esito va scritto anche quando l'autocollaudo riesce."""
+    import sys
+
+    from fotofacile import cli
+
+    class AppFinta:
+        def __init__(self, **_kwargs):
+            self.pages = {"connect": 1}
+            self.current_page = "connect"
+
+        def withdraw(self):
+            pass
+
+        def update(self):
+            pass
+
+        def destroy(self):
+            pass
+
+        def stop_all_polling(self):
+            pass
+
+    monkeypatch.setattr("fotofacile.ui.app.App", AppFinta, raising=False)
+    monkeypatch.setattr(sys, "stdout", None)
+    monkeypatch.setattr(cli.sys, "platform", "win32")
+    aperti = []
+    monkeypatch.setattr(cli.os, "startfile", lambda p: aperti.append(p), raising=False)
+    assert cli.main(["--selftest"], env={}) == 0
+    assert '"ok": true' in (tmp_path / ".fotofacile" / "selftest.txt").read_text(encoding="utf-8")
+    assert aperti == []
