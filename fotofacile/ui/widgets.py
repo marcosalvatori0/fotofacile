@@ -98,7 +98,8 @@ class LogPane(ttk.Frame):
 
     def __init__(self, parent: tk.Misc, height: int = 8) -> None:
         super().__init__(parent)
-        self.text = tk.Text(self, height=height, wrap="word", state="disabled", font=font(14))
+        self.text = tk.Text(self, height=height, wrap="word", state="disabled")
+        self.aggiorna_font()
         tema_testo(self.text)  # senza questo, in modalità scura il testo resta nero su nero
         self.text.grid(row=0, column=0, sticky="nsew")
         barra = ttk.Scrollbar(self, orient="vertical", command=self.text.yview)
@@ -106,6 +107,10 @@ class LogPane(ttk.Frame):
         self.text.configure(yscrollcommand=barra.set)
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
+
+    def aggiorna_font(self) -> None:
+        """Riapplica il carattere: da chiamare quando cambia la dimensione del testo."""
+        self.text.configure(font=font(14))
 
     def append(self, testo: str) -> None:
         self.text.configure(state="normal")
@@ -133,11 +138,17 @@ class Banner(ttk.Frame):
         self.hint_text = ""
         self.kind = "info"
         self.visible = False
-        self._messaggio = TestoAdattivo(self, text="", font=font(18, bold=True))
-        self._suggerimento = TestoAdattivo(self, text="", font=font(14))
+        self._messaggio = TestoAdattivo(self, text="")
+        self._suggerimento = TestoAdattivo(self, text="")
+        self.aggiorna_font()
         self._messaggio.grid(row=0, column=0, sticky="ew")
         self._suggerimento.grid(row=1, column=0, sticky="ew")
         self.columnconfigure(0, weight=1)
+
+    def aggiorna_font(self) -> None:
+        """Riapplica i caratteri: da chiamare quando cambia la dimensione del testo."""
+        self._messaggio.configure(font=font(18, bold=True))
+        self._suggerimento.configure(font=font(14))
 
     def show(self, message: str, hint: str = "", kind: str = "info") -> None:
         self.message_text, self.hint_text, self.kind = message, hint, kind

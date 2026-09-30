@@ -86,21 +86,63 @@ def test_i_dettagli_restano_chiusi_finche_l_utente_non_li_apre(app):
     assert app.dettagli_visibili is False
 
 
+def _scala_a(app, valore: float) -> None:
+    """Porta la finestra condivisa alla scala voluta passando da `cambia_scala`."""
+    from fotofacile.ui import theme
+
+    for _ in range(len(theme.SCALE_AMMESSE)):
+        if theme.scala_attuale() == valore:
+            return
+        app.cambia_scala(1 if theme.scala_attuale() < valore else -1)
+
+
+def _punti(widget) -> int:
+    """Dimensione in punti del carattere di un widget, comunque Tk la restituisca."""
+    from tkinter import font as tkfont
+
+    return int(tkfont.Font(root=widget, font=widget.cget("font")).cget("size"))
+
+
 def test_cambia_scala_ingrandisce_salva_e_rispetta_i_limiti(app, casa_temporanea):
     from fotofacile.core.impostazioni import Impostazioni
     from fotofacile.ui import theme
 
     try:
-        app.cambia_scala(-1)
-        app.cambia_scala(-1)
-        app.cambia_scala(-1)
+        _scala_a(app, 1.5)
+        assert app.cambia_scala(-1) is True
+        assert theme.scala_attuale() == 1.25
+        assert app.cambia_scala(-1) is True
         assert theme.scala_attuale() == 1.0
         assert app.cambia_scala(-1) is False  # già al minimo
         assert app.cambia_scala(+1) is True
         assert theme.scala_attuale() == 1.25
         assert Impostazioni.carica().scala_testo == 1.25  # è stato salvato
     finally:
-        theme.imposta_scala(1.0)
+        _scala_a(app, 1.0)  # niente stili o pagine «grandi» che passano al test dopo
+
+
+def test_cambia_scala_aggiorna_anche_i_caratteri_della_finestra(app, casa_temporanea):
+    """Registro, banner e barra dei passi vivono nella finestra e non vengono ricostruiti."""
+    from fotofacile.ui import theme
+
+    try:
+        _scala_a(app, 1.0)
+        prima = (
+            _punti(app.log_pane.text),
+            _punti(app.banner._messaggio),
+            _punti(app.banner._suggerimento),
+        )
+        assert app.cambia_scala(+1) is True
+        dopo = (
+            _punti(app.log_pane.text),
+            _punti(app.banner._messaggio),
+            _punti(app.banner._suggerimento),
+        )
+        assert all(d > p for d, p in zip(dopo, prima)), (prima, dopo)
+        for etichetta in app.step_indicator._etichette:
+            assert _punti(etichetta) == theme.font(14)[1]
+    finally:
+        _scala_a(app, 1.0)
 
 
 @pytest.fixture

@@ -117,7 +117,7 @@ class App(tk.Tk):
 
     def _dimensiona_finestra(self) -> None:
         """Dimensione iniziale proporzionata al testo, ma mai più grande dello schermo."""
-        scala = scala_attuale() if hasattr(self, "_scala_iniziale") else 1.0
+        scala = scala_attuale()
         larghezza = min(int(1000 * max(scala, 1.0)), self.winfo_screenwidth() - 60)
         altezza = min(int(760 * max(scala, 1.0)), self.winfo_screenheight() - 100)
         self.geometry(f"{larghezza}x{altezza}")
@@ -302,6 +302,11 @@ class App(tk.Tk):
         imposta_scala(SCALE_AMMESSE[nuovo])
         Impostazioni(scala_testo=SCALE_AMMESSE[nuovo]).salva()
         apply_theme(self, scala=SCALE_AMMESSE[nuovo])
+        # Registro e banner appartengono alla finestra e non vengono ricostruiti: i loro
+        # caratteri (fissati alla creazione) vanno riapplicati a mano.
+        self.log_pane.aggiorna_font()
+        self.banner.aggiorna_font()
+        self.step_indicator.set_step(self.step_indicator.current)
         self._dimensiona_finestra()
         self.ricostruisci_pagine()
         return True
