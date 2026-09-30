@@ -56,6 +56,13 @@ class History:
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # Un'altra copia del programma può aver scritto nel frattempo: si riparte da ciò che
+        # c'è su disco e si sovrappongono le voci di questa sessione (vincono le più recenti).
+        su_disco = History(self.path)
+        su_disco.load()
+        for seriale, voci in self._dati.items():
+            su_disco._dati.setdefault(seriale, {}).update(voci)
+        self._dati = su_disco._dati
         temporaneo = self.path.with_name(self.path.name + ".tmp")
         contenuto = {"version": VERSIONE, "devices": self._dati}
         temporaneo.write_text(json.dumps(contenuto, ensure_ascii=False, indent=1), encoding="utf-8")

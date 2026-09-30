@@ -83,3 +83,18 @@ def test_percorso_predefinito_sotto_la_cartella_utente(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("USERPROFILE", raising=False)
     assert default_path() == tmp_path / ".fotofacile" / "history.json"
+
+
+def test_due_istanze_non_si_cancellano_le_voci(tmp_path):
+    percorso = tmp_path / "h.json"
+    prima, seconda = History(percorso), History(percorso)
+    prima.load()
+    seconda.load()
+    prima.record("S1", "DCIM/a.jpg", 1, 1, "/x/a.jpg")
+    seconda.record("S1", "DCIM/b.jpg", 2, 2, "/x/b.jpg")
+    prima.save()
+    seconda.save()  # prima: cancellava la voce di `prima`
+    finale = History(percorso)
+    finale.load()
+    assert finale.contains("S1", "DCIM/a.jpg", 1, 1)
+    assert finale.contains("S1", "DCIM/b.jpg", 2, 2)
