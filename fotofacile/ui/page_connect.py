@@ -15,7 +15,8 @@ from tkinter import ttk
 
 from ..core.devices import STATE_MESSAGE
 from ..core.installer import installa_a_passi
-from .theme import COLORI, font, tema_finestra, tema_testo
+from .theme import COLORI, font, scala_attuale, tema_finestra, tema_testo
+from .widgets import Banner, TestoAdattivo
 
 PASSI_SAMSUNG = [
     "Apri «Impostazioni».",
@@ -140,77 +141,92 @@ class ConnectPage(ttk.Frame):
         self._finestra_aiuto: tk.Toplevel | None = None
         self._ultimo_stato = ("", 0, 0)
 
+        self.SOGLIA_AIUTO = 3  # controlli consecutivi senza telefono prima di mostrare l'aiuto grande
+        self._senza_telefono = 0
+
         ttk.Label(self, text="Collega il telefono al computer", style="Titolo.TLabel").grid(
-            row=0, column=0, sticky="w", pady=(4, 2)
+            row=0, column=0, sticky="w", pady=(4, 8)
         )
-        ttk.Label(
-            self,
-            text=(
-                "Usa il cavo USB e tieni lo schermo del telefono sbloccato. "
-                "Non devi attivare nessuna impostazione: il programma trova da s\u00e9 il modo di leggere le foto."
-            ),
-            style="Sottotitolo.TLabel",
-            wraplength=860,
-            justify="left",
-        ).grid(row=1, column=0, sticky="w", pady=(0, 10))
+        passi = ttk.Frame(self)
+        passi.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        passi.columnconfigure(0, weight=1)
+        for indice, testo in enumerate(
+            (
+                "Collega il telefono al computer con il cavo USB.",
+                "Accendi e sblocca lo schermo del telefono.",
+                "Se il telefono lo chiede, tocca «Consenti» e scegli «Trasferimento file».",
+            )
+        ):
+            TestoAdattivo(passi, text=f"{indice + 1}.  {testo}", font=font(17)).grid(
+                row=indice, column=0, sticky="ew", pady=4
+            )
 
-        self.indicatore = ttk.Label(self, text="", font=font(16, bold=True), wraplength=880, justify="left")
-        self.indicatore.grid(row=2, column=0, sticky="w", pady=(6, 2))
-        self.dettaglio = ttk.Label(
-            self, text="", style="Tenue.TLabel", font=font(12), wraplength=880, justify="left"
-        )
-        self.dettaglio.grid(row=3, column=0, sticky="w")
+        self.indicatore = TestoAdattivo(self, text="", font=font(20, bold=True))
+        self.indicatore.grid(row=2, column=0, sticky="ew", pady=(10, 2))
+        self.dettaglio = TestoAdattivo(self, text="", style="Tenue.TLabel", font=font(15))
+        self.dettaglio.grid(row=3, column=0, sticky="ew")
 
-        pulsanti = ttk.Frame(self)
-        pulsanti.grid(row=4, column=0, sticky="w", pady=14)
-        self.bottone_aiuto = ttk.Button(
-            pulsanti,
-            text="Il telefono non viene riconosciuto?",
-            style="Secondary.TButton",
-            command=self.show_help,
+        # Compare solo dopo qualche controllo a vuoto: prima sarebbe rumore.
+        self.aiuto_evidente = ttk.Button(
+            self, text="Il telefono non viene riconosciuto? Ti aiuto io", style="Big.TButton", command=self.show_help
         )
-        self.bottone_aiuto.grid(row=0, column=0, padx=(0, 8))
-        self.bottone_installa = ttk.Button(
-            pulsanti,
-            text="Installa componente mancante",
-            style="Secondary.TButton",
-            command=self.install_component,
-        )
-        self.bottone_installa.grid(row=0, column=1, padx=8)
-        self.bottone_ricarica = ttk.Button(
-            pulsanti, text="Riprova il collegamento", style="Secondary.TButton", command=self.restart_connection
-        )
-        self.bottone_ricarica.grid(row=0, column=2, padx=8)
+        self.aiuto_evidente.grid(row=4, column=0, sticky="w", pady=(14, 0))
+        self.aiuto_evidente.grid_remove()
 
         navigazione = ttk.Frame(self)
-        navigazione.grid(row=5, column=0, sticky="ew", pady=(6, 0))
+        navigazione.grid(row=5, column=0, sticky="ew", pady=(18, 0))
         self.bottone_avanti = ttk.Button(navigazione, text="Avanti  →", style="Big.TButton", command=self._avanti)
         self.bottone_avanti.grid(row=0, column=1, sticky="e")
         navigazione.columnconfigure(1, weight=1)
 
-        ttk.Button(
-            self,
-            text="Prova il programma senza telefono (demo)",
-            style="Secondary.TButton",
-            command=self.enable_demo,
-        ).grid(row=6, column=0, sticky="w", pady=(22, 0))
-        ttk.Label(
-            self,
-            text="Nella modalità demo viene usato un telefono finto: serve solo per vedere come funziona.",
-            style="Tenue.TLabel",
-            font=font(11),
-        ).grid(row=7, column=0, sticky="w")
+        # ─ cose secondarie, piccole e in fondo ─
+        altro = ttk.Frame(self)
+        altro.grid(row=6, column=0, sticky="ew", pady=(26, 0))
+        self.bottone_aiuto = ttk.Button(altro, text="Serve aiuto?", style="Link.TButton", command=self.show_help)
+        self.bottone_aiuto.grid(row=0, column=0, padx=(0, 10))
+        self.bottone_ricarica = ttk.Button(altro, text="Riprova", style="Link.TButton", command=self.restart_connection)
+        self.bottone_ricarica.grid(row=0, column=1, padx=10)
+        self.bottone_installa = ttk.Button(
+            altro, text="Installa componente mancante", style="Link.TButton", command=self.install_component
+        )
+        self.bottone_installa.grid(row=0, column=2, padx=10)
+        ttk.Button(altro, text="Prova senza telefono", style="Link.TButton", command=self.enable_demo).grid(
+            row=0, column=3, padx=10
+        )
+        ttk.Label(altro, text="Testo:", style="Tenue.TLabel").grid(row=0, column=4, padx=(30, 4))
+        self.bottone_testo_meno = ttk.Button(
+            altro, text="A−", style="Secondary.TButton", width=3, command=lambda: self.app.cambia_scala(-1)
+        )
+        self.bottone_testo_meno.grid(row=0, column=5)
+        self.bottone_testo_piu = ttk.Button(
+            altro, text="A+", style="Secondary.TButton", width=3, command=lambda: self.app.cambia_scala(1)
+        )
+        self.bottone_testo_piu.grid(row=0, column=6, padx=(4, 0))
 
         self.columnconfigure(0, weight=1)
         self._aggiorna_bottone_installa()
-        self.set_message("Collega il telefono con il cavo e sbloccalo.")
+        self._messaggio_iniziale()
         self.bottone_avanti.state(["disabled"])
 
     # ── messaggi ──────────────────────────────────────────────────────────
     def set_message(self, testo: str, tono: str = "info") -> None:
         self.message = testo
         colori = {"info": COLORI["testo"], "successo": COLORI["successo"], "avviso": COLORI["avviso"]}
-        self.indicatore.configure(text=testo, foreground=colori.get(tono, COLORI["testo"]))
+        # Il colore da solo non basta a chi vede male i colori: davanti c'è anche un simbolo.
+        simbolo = Banner.SIMBOLI[tono] if tono in ("successo", "avviso") else ""
+        self.indicatore.configure(
+            text=f"{simbolo}  {testo}" if simbolo else testo, foreground=colori.get(tono, COLORI["testo"])
+        )
+
+    def _messaggio_iniziale(self) -> None:
+        self.set_message("Collega il telefono con il cavo e sbloccalo.")
+        self.dettaglio.configure(text="")
+
+    def _conta_senza_telefono(self) -> None:
+        """Un altro controllo a vuoto: dopo qualche tentativo compare l'aiuto grande."""
+        self._senza_telefono += 1
+        if self._senza_telefono >= self.SOGLIA_AIUTO:
+            self.aiuto_evidente.grid()
 
     def _aggiorna_bottone_installa(self) -> None:
         # Il pulsante compare solo quando **nessun** collegamento è disponibile: con il
@@ -220,6 +236,11 @@ class ConnectPage(ttk.Frame):
 
     # ── ciclo di vita e sondaggio ─────────────────────────────────────────
     def on_show(self) -> None:
+        # Tornando a questo passo non deve restare l'avviso dell'ultima volta: si riparte pulito.
+        self._senza_telefono = 0
+        self.aiuto_evidente.grid_remove()
+        self._messaggio_iniziale()
+        self.bottone_avanti.state(["disabled"])
         self.start_polling()
 
     def start_polling(self) -> None:
@@ -279,8 +300,9 @@ class ConnectPage(ttk.Frame):
             self._aggiorna_bottone_installa()
             self.check_now()
             return
+        self._conta_senza_telefono()
         self.set_message(errore.message, tono="avviso")
-        self.dettaglio.configure(text=errore.hint or "Premi «Riprova il collegamento» e riprova.")
+        self.dettaglio.configure(text=errore.hint or "Premi «Riprova» e riprova.")
 
     def _dispositivi_ricevuti(self, dispositivi) -> None:
         pronti = [dispositivo for dispositivo in dispositivi if dispositivo.is_ready]
@@ -295,10 +317,13 @@ class ConnectPage(ttk.Frame):
             self.dettaglio.configure(text="Premi «Avanti» per scegliere quali foto copiare.")
             self._ultimo_stato = ("device", len(pronti), 0)
             self.bottone_avanti.state(["!disabled"])
+            self._senza_telefono = 0
+            self.aiuto_evidente.grid_remove()
             self.stop_polling()
             return
         self.app.device = None
         self.bottone_avanti.state(["disabled"])
+        self._conta_senza_telefono()
         if not dispositivi:
             self.set_message("Non vedo ancora nessun telefono.")
             self.dettaglio.configure(
@@ -320,8 +345,13 @@ class ConnectPage(ttk.Frame):
             self._ultimo_stato = firma
 
     # ── azioni ────────────────────────────────────────────────────────────
+    def azione_principale(self) -> None:
+        """Tasto Invio: come «Avanti»."""
+        self._avanti()
+
     def _avanti(self) -> None:
-        if self.app.device is None:
+        # Il tasto Invio non guarda lo stato dei pulsanti: «Avanti» spento vale come telefono assente.
+        if self.app.device is None or not self.bottone_avanti.instate(["!disabled"]):
             self.set_message("Prima collega il telefono e sblocca lo schermo.", tono="avviso")
             return
         self.stop_polling()
@@ -343,12 +373,12 @@ class ConnectPage(ttk.Frame):
         finestra = tk.Toplevel(self)
         self._finestra_aiuto = finestra
         finestra.title("Il telefono non viene riconosciuto")
-        finestra.geometry("700x580")
+        finestra.geometry(f"{round(760 * scala_attuale())}x{round(640 * scala_attuale())}")
         finestra.transient(self.winfo_toplevel())
         tema_finestra(finestra)
         marca = tk.StringVar(value="Samsung")
 
-        testo = tk.Text(finestra, wrap="word", font=font(12), height=16)
+        testo = tk.Text(finestra, wrap="word", font=font(15), height=16)
         tema_testo(testo)
         testo.grid(row=0, column=0, sticky="nsew", padx=14, pady=(12, 6))
 
@@ -362,8 +392,8 @@ class ConnectPage(ttk.Frame):
         ttk.Button(
             finestra, text="Cosa provare adesso", style="Secondary.TButton", command=lambda: mostra(False)
         ).grid(row=1, column=0, sticky="w", padx=14, pady=(0, 6))
-        ttk.Label(finestra, text="Oppure, come ultima possibilità, attiva il Debug USB:").grid(
-            row=2, column=0, sticky="w", padx=14
+        TestoAdattivo(finestra, text="Oppure, come ultima possibilità, attiva il Debug USB:").grid(
+            row=2, column=0, sticky="ew", padx=14
         )
         selettore = ttk.Combobox(finestra, textvariable=marca, values=list(BRANDS_ORDINE), state="readonly")
         selettore.grid(row=3, column=0, sticky="ew", padx=14, pady=(2, 8))

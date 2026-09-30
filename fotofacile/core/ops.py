@@ -186,7 +186,7 @@ class ProcessoEsterno:
                     raise FotoFacileError(
                         self.umano or "Il telefono non ha risposto in tempo.",
                         hint=self.hint
-                        or "Controlla il cavo e riprova; se serve, premi «Riprova il collegamento».",
+                        or "Controlla il cavo e riprova; se serve, premi «Riprova».",
                     )
                 yield INTERVALLO_PRECEDENTE
             # Il risultato si legge **prima** della pulizia finale: dopo, il file degli

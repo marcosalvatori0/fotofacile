@@ -143,6 +143,7 @@ def test_avanti_funziona_solo_con_telefono_pronto(app):
     pagina._avanti()
     assert app.current_page == "connect"
     app.device = DeviceInfo(serial="DEMO12345", state="device", model="Pixel", product="d")
+    pagina.bottone_avanti.state(["!disabled"])
     pagina._avanti()
     assert app.current_page == "select"
     assert pagina._polling is False
@@ -154,3 +155,123 @@ def test_sondaggio_attivo_al_primo_ingresso(app):
     pagina.on_show()
     assert pagina._polling is True
     pagina.stop_polling()
+
+
+# ── Passo 1 semplificato (C6) ─────────────────────────────────────────────
+def _testi_della_pagina(pagina) -> str:
+    testi = []
+    for widget in pagina.winfo_children():
+        if hasattr(widget, "cget") and "text" in widget.keys():
+            testi.append(str(widget.cget("text")))
+        for figlio in widget.winfo_children():
+            if "text" in figlio.keys():
+                testi.append(str(figlio.cget("text")))
+    return " ".join(testi)
+
+
+def test_le_tre_istruzioni_sono_sempre_visibili(app):
+    testo = _testi_della_pagina(app.pages["connect"])
+    assert "cavo USB" in testo and "sblocca" in testo.lower() and "Trasferimento file" in testo
+
+
+def test_l_aiuto_grande_compare_solo_dopo_qualche_tentativo(app):
+    pagina = app.pages["connect"]
+    assert pagina._senza_telefono == 0
+    for _ in range(pagina.SOGLIA_AIUTO - 1):
+        pagina._dispositivi_ricevuti([])
+    assert not pagina.aiuto_evidente.winfo_ismapped() and not pagina.aiuto_evidente.grid_info()
+    pagina._dispositivi_ricevuti([])
+    assert pagina.aiuto_evidente.grid_info()  # ora è visibile
+
+
+def test_telefono_non_pronto_conta_come_senza_telefono(app):
+    pagina = app.pages["connect"]
+    non_pronto = DeviceInfo(serial="S1", state="unauthorized", model="Pixel", product="")
+    for _ in range(pagina.SOGLIA_AIUTO):
+        pagina._dispositivi_ricevuti([non_pronto])
+    assert pagina.aiuto_evidente.grid_info()
+
+
+def test_un_controllo_fallito_conta_come_senza_telefono(app, monkeypatch):
+    from fotofacile.core.errors import FotoFacileError
+
+    pagina = app.pages["connect"]
+    monkeypatch.setattr(app, "cambia_collegamento", lambda: False)
+    for _ in range(pagina.SOGLIA_AIUTO):
+        pagina._controllo_fallito(FotoFacileError("Errore", hint="Prova il cavo."))
+    assert pagina.aiuto_evidente.grid_info()
+
+
+def test_trovato_il_telefono_l_aiuto_sparisce(app):
+    pagina = app.pages["connect"]
+    for _ in range(pagina.SOGLIA_AIUTO):
+        pagina._dispositivi_ricevuti([])
+    pagina._dispositivi_ricevuti([DeviceInfo(serial="S1", state="device", model="Pixel", product="")])
+    assert pagina._senza_telefono == 0
+    assert not pagina.aiuto_evidente.grid_info()
+
+
+def test_i_pulsanti_del_testo_cambiano_la_scala(app, monkeypatch):
+    chiamate = []
+    monkeypatch.setattr(app, "cambia_scala", lambda d: chiamate.append(d) or True)
+    pagina = app.pages["connect"]
+    pagina.bottone_testo_piu.invoke()
+    pagina.bottone_testo_meno.invoke()
+    assert chiamate == [1, -1]
+
+
+def test_invio_su_questo_passo_va_avanti_solo_col_telefono_pronto(app):
+    pagina = app.pages["connect"]
+    app.device = None
+    pagina.azione_principale()
+    assert app.current_page == "connect"
+
+
+def test_invio_con_avanti_disabilitato_non_avanza(app):
+    """Il tasto Invio non deve scavalcare il pulsante «Avanti» spento."""
+    pagina = app.pages["connect"]
+    app.device = DeviceInfo(serial="S1", state="device", model="Pixel", product="")
+    pagina.bottone_avanti.state(["disabled"])
+    pagina.azione_principale()
+    assert app.current_page == "connect"
+    pagina.bottone_avanti.state(["!disabled"])
+    pagina.azione_principale()
+    assert app.current_page == "select"
+
+
+def test_i_messaggi_di_ricerca_non_restano_al_ritorno(app):
+    """Tornando al passo 1 non deve restare l'avviso di prima."""
+    pagina = app.pages["connect"]
+    for _ in range(pagina.SOGLIA_AIUTO):
+        pagina._dispositivi_ricevuti([])
+    assert pagina.aiuto_evidente.grid_info() and "Non vedo" in pagina.message
+    app.go_to("select")
+    app.go_to("connect")
+    app.stop_all_polling()
+    assert pagina._senza_telefono == 0
+    assert not pagina.aiuto_evidente.grid_info()
+    assert "Non vedo" not in pagina.message
+    assert pagina.dettaglio.cget("text") == ""
+
+
+def test_il_messaggio_ha_un_simbolo_oltre_al_colore(app):
+    pagina = app.pages["connect"]
+    pagina.set_message("Tutto bene", tono="successo")
+    assert pagina.indicatore.cget("text").startswith("✔")
+    pagina.set_message("Attenzione", tono="avviso")
+    assert pagina.indicatore.cget("text").startswith("⚠")
+    pagina.set_message("Solo info")
+    assert pagina.indicatore.cget("text") == "Solo info"
+    assert pagina.message == "Solo info"
+
+
+@pytest.mark.parametrize("scala", [1.0, 1.5])
+def test_la_pagina_si_costruisce_a_ogni_scala(app, scala):
+    from fotofacile.ui import theme
+
+    theme.imposta_scala(scala)
+    app.ricostruisci_pagine()
+    app.stop_all_polling()
+    pagina = app.pages["connect"]
+    pagina.update_idletasks()
+    assert pagina.bottone_testo_piu.winfo_exists()

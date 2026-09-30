@@ -185,7 +185,7 @@ class AdbAPassi:
             ["devices", "-l"],
             timeout=30.0,
             umano="Non riesco a sentire il telefono.",
-            hint="Controlla il cavo e riprova; se serve, premi «Riprova il collegamento».",
+            hint="Controlla il cavo e riprova; se serve, premi «Riprova».",
         )
         try:
             esito = yield from processo.aspetta()
