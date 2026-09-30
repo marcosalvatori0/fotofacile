@@ -340,6 +340,24 @@ def esegui_aiutante(argomenti: Sequence[str]) -> int:
         return 2
 
 
+def comando_formati(cartella: str | None) -> int:
+    """Mostra, per ogni estensione, quali formati veri contiene (serve a capire il WebP)."""
+    from .core.formati import analizza_cartella
+
+    if not cartella or not Path(cartella).is_dir():
+        _stampa("Indica una cartella esistente:  fotofacile formati <cartella>")
+        return 2
+    risultato = analizza_cartella(Path(cartella))
+    if not risultato:
+        _stampa("La cartella non contiene file.")
+        return 0
+    _stampa(f"Formati trovati in {cartella}:")
+    for estensione, per_formato in sorted(risultato.items()):
+        dettaglio = ", ".join(f"{quanti} {formato}" for formato, quanti in sorted(per_formato.items()))
+        _stampa(f"  .{estensione}: {dettaglio}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="fotofacile",
@@ -364,9 +382,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "comando",
         nargs="?",
-        choices=["doctor"],
-        help="«doctor» mostra la diagnosi del sistema e del collegamento",
+        choices=["doctor", "formati"],
+        help="«doctor» mostra la diagnosi del sistema e del collegamento; "
+        "«formati <cartella>» mostra i formati veri dei file di una cartella",
     )
+    parser.add_argument("cartella", nargs="?", help="con «formati»: la cartella da analizzare")
     return parser
 
 
@@ -381,6 +401,8 @@ def main(argv: Sequence[str] | None = None, env: Mapping[str, str] | None = None
         return prova_finestra_diretta()
     if argomenti_letti.comando == "doctor":
         return doctor(env)
+    if argomenti_letti.comando == "formati":
+        return comando_formati(argomenti_letti.cartella)
     if argomenti_letti.selftest:
         return selftest()
     return start_gui(demo=argomenti_letti.demo)

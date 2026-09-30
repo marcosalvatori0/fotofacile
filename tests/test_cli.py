@@ -273,3 +273,22 @@ def test_avvio_salta_la_prova_quando_il_contesto_e_grafico(monkeypatch, tmp_path
     monkeypatch.setenv("TERM_PROGRAM", "Apple_Terminal")
     assert cli.start_gui() == 0
     assert chiamate == {"prova": 0, "avvio": 1}
+
+
+def test_formati_cartella_inesistente_da_errore(tmp_path, capsys):
+    assert main(["formati", str(tmp_path / "non-esiste")], env={}) == 2
+    assert "Indica una cartella esistente" in capsys.readouterr().out
+    assert main(["formati"], env={}) == 2
+
+
+def test_formati_mostra_il_formato_vero(tmp_path, capsys):
+    cartella = tmp_path / "foto"
+    cartella.mkdir()
+    (cartella / "sticker.webp").write_bytes(b"RIFF\x10\0\0\0WEBPVP8 ")
+    assert main(["formati", str(cartella)], env={}) == 0
+    assert ".webp: 1 webp" in capsys.readouterr().out
+
+
+def test_formati_cartella_vuota(tmp_path, capsys):
+    assert main(["formati", str(tmp_path)], env={}) == 0
+    assert "non contiene file" in capsys.readouterr().out
