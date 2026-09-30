@@ -66,6 +66,20 @@ def build_doctor_report(
     return "\n".join(righe) + "\n"
 
 
+def _stampa(testo: str) -> None:
+    """Stampa senza fermarsi sui caratteri che l'uscita non sa scrivere.
+
+    Su Windows, quando l'uscita è un file o un altro programma («doctor > diagnosi.txt», la
+    pipeline), Python scrive nella codifica del sistema (cp1252): caratteri come «─» non
+    esistono e `print` si fermava con UnicodeEncodeError. Qui diventano «?».
+    """
+    try:
+        print(testo)
+    except UnicodeEncodeError:
+        codifica = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(testo.encode(codifica, "replace").decode(codifica))
+
+
 def doctor(env: Mapping[str, str] | None = None) -> int:
     """Stampa una diagnosi completa dello stato del computer e del collegamento."""
     ambiente = dict(env if env is not None else os.environ)
@@ -96,7 +110,7 @@ def doctor(env: Mapping[str, str] | None = None) -> int:
         versione_tk = str(tkinter.TkVersion)
     except Exception:  # pragma: no cover - Tkinter assente
         versione_tk = "non disponibile"
-    print(
+    _stampa(
         build_doctor_report(
             adb_path=percorso_adb,
             adb_version=versione,
@@ -155,7 +169,7 @@ def selftest() -> int:
         applicazione.destroy()
     except Exception as errore:  # qualunque problema va riportato, non nascosto
         dati = {"ok": False, "motivo": f"{type(errore).__name__}: {errore}"}
-    print(json.dumps(dati, ensure_ascii=False))
+    _stampa(json.dumps(dati, ensure_ascii=False))
     return 0 if dati["ok"] else 1
 
 

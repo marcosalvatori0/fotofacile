@@ -1645,3 +1645,51 @@ def test_d30_durante_la_copia_la_domanda_resta(app, monkeypatch):
     app._chiusura()
     assert len(domande) == 1 and "copiando" in domande[0][1]
     assert chiusa == [] and app.task_in_corso, "rispondendo «No» la copia continua"
+
+
+# ── D31 ────────────────────────────────────────────────────────────────────
+# Prima: `doctor` e `--selftest` stampavano con `print`. Su Windows, quando l'uscita non è la
+# finestra dei comandi ma un file o un altro programma («py fotofacile.py doctor >
+# diagnosi.txt», la pipeline GitHub, `build_app.py --verify`), Python scrive nella codifica
+# del sistema (cp1252), che non ha la riga «──────» della diagnosi: `print` si fermava con
+# UnicodeEncodeError e la diagnosi non usciva affatto (codice 1 e un traceback).
+def _uscita_cp1252(monkeypatch):
+    import io
+    import sys
+
+    grezzo = io.BytesIO()
+    uscita = io.TextIOWrapper(grezzo, encoding="cp1252", newline="")  # come su Windows: «strict»
+    monkeypatch.setattr(sys, "stdout", uscita)
+    return grezzo, uscita
+
+
+def test_d31_la_diagnosi_esce_anche_in_un_file_con_la_codifica_di_windows(tmp_path, monkeypatch):
+    from fotofacile import cli
+
+    grezzo, uscita = _uscita_cp1252(monkeypatch)
+    esito = cli.main(["doctor"], env={"HOME": str(tmp_path), "USERPROFILE": str(tmp_path), "PATH": ""})
+    uscita.flush()
+    testo = grezzo.getvalue().decode("cp1252")
+    uscita.detach()
+    assert esito == 0
+    assert "FotoFacile — diagnosi" in testo  # «—» esiste in cp1252 e resta
+    assert "Sistema:" in testo and "Cartella dati:" in testo
+
+
+def test_d31_l_autocollaudo_esce_anche_con_la_codifica_di_windows(monkeypatch):
+    import json
+    import tkinter as tk
+
+    from fotofacile import cli
+
+    class AppRotta:
+        def __init__(self, **_kwargs):
+            raise tk.TclError("impossibile leggere C:\\Users\\Иван\\tcl ─ init.tcl")
+
+    monkeypatch.setattr("fotofacile.ui.app.App", AppRotta, raising=False)
+    grezzo, uscita = _uscita_cp1252(monkeypatch)
+    assert cli.main(["--selftest"], env={}) == 1
+    uscita.flush()
+    dati = json.loads(grezzo.getvalue().decode("cp1252"))
+    uscita.detach()
+    assert dati["ok"] is False and dati["motivo"].startswith("TclError: impossibile leggere")
