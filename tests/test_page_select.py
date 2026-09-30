@@ -192,3 +192,57 @@ def test_la_ricerca_riparte_anche_se_l_interruzione_era_rimasta_accesa(app):
         del app.run_task
     assert avviate, "la ricerca doveva partire"
     assert not app.cancel_event.is_set()
+
+
+def test_il_pulsante_toglie_la_selezione_e_usa_l_imperativo(app):
+    pagina = app.pages["select"]
+    testi = []
+
+    def cerca(widget):
+        for figlio in widget.winfo_children():
+            if figlio.winfo_class() == "TButton":
+                testi.append(str(figlio.cget("text")))
+            cerca(figlio)
+
+    cerca(pagina)
+    assert "Togli la selezione" in testi
+    assert "Toglie la selezione" not in testi
+
+
+def test_se_ci_sono_solo_miniature_e_sticker_il_messaggio_e_coerente(app):
+    """Il conteggio non deve promettere foto che l'elenco poi non mostra."""
+    file = [
+        _f("/sdcard/DCIM/.thumbnails/t.jpg"),
+        _f("/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Stickers/s.webp"),
+    ]
+    pagina = _con_file(app, file)
+    pagina._scansione_finita(file)
+    assert not pagina.folder_vars
+    assert "Trovate 2" not in app.banner.message_text
+    assert app.banner.message_text.startswith("Non ho trovato")
+    assert "miniature" in app.banner.hint_text.lower()
+
+
+def test_il_messaggio_conta_solo_le_foto_visibili(app):
+    file = [_f("/sdcard/DCIM/Camera/a.jpg"), _f("/sdcard/DCIM/.thumbnails/t.jpg")]
+    pagina = _con_file(app, file)
+    pagina._scansione_finita(file)
+    assert "Trovate 1 " in app.banner.message_text
+    pagina.mostra_rumore.set(True)
+    pagina._ridisegna()
+    assert "Trovate 2 " in app.banner.message_text
+
+
+def test_ricostruire_le_pagine_non_accumula_collegamenti_della_rotellina(app):
+    def collegamenti() -> int:
+        return sum(
+            len([r for r in str(app.tk.call("bind", "all", ev)).split("\n") if r.strip()])
+            for ev in ("<MouseWheel>", "<Button-4>", "<Button-5>")
+        )
+
+    app.ricostruisci_pagine()
+    prima = collegamenti()
+    for _ in range(3):
+        app.ricostruisci_pagine()
+    assert collegamenti() == prima
+    assert prima >= 3  # quelli della pagina attuale ci sono ancora

@@ -251,3 +251,20 @@ def test_se_il_lavoro_si_ferma_a_meta_una_nuova_copia_puo_partire(app, tmp_path,
     app._task = None  # per esempio un errore imprevisto: il flag non deve restare bloccato
     app.pages["transfer"].start_transfer()
     assert len(avviate) == 2
+
+
+def test_dopo_una_copia_interrotta_si_puo_tornare_indietro(app):
+    """Con «Interrompi» non si resta più con il solo «Chiudi»."""
+    from fotofacile.core.transfer import TransferResults
+
+    pagina = app.pages["transfer"]
+    pagina.show_summary(TransferResults(cancelled=True))
+    assert pagina.bottone_indietro.winfo_manager() == "grid"
+    app.go_to("transfer") if False else None
+    app.current_page = "transfer"
+    pagina.azione_indietro()
+    assert app.current_page == "options"
+    # una copia finita bene non ha il pulsante «Indietro»
+    pagina._riparti_da_capo()
+    pagina.show_summary(TransferResults())
+    assert pagina.bottone_indietro.winfo_manager() == ""

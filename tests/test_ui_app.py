@@ -349,3 +349,156 @@ def test_errore_nella_callback_non_ferma_il_programma(app):
             break
     assert app.banner.visible is True
     assert "grafica" in app.log_pane.get_text().lower() or "aggiornato" in app.banner.message_text.lower()
+
+
+# ── fix-wave C6–C9: tasto Invio, errori imprevisti, pulsanti sempre visibili ─────────────
+def _con_focus_su(app, monkeypatch, widget):
+    monkeypatch.setattr(app, "focus_get", lambda: widget)
+
+
+def test_invio_su_un_pulsante_preme_quel_pulsante_e_non_l_azione_principale(app, monkeypatch):
+    """ttk.Button non risponde a Invio (solo a Spazio): «Indietro» non deve far partire la copia."""
+    from tkinter import ttk
+
+    chiamate, premuto = [], []
+    app.go_to("connect")
+    app.pages["connect"].azione_principale = lambda: chiamate.append("principale")
+    pulsante = ttk.Button(app.container, text="prova", command=lambda: premuto.append(1))
+    _con_focus_su(app, monkeypatch, pulsante)
+    try:
+        assert app._tasto_invio() == "break"
+    finally:
+        pulsante.destroy()
+    assert premuto == [1]
+    assert chiamate == []
+
+
+def test_invio_su_un_pulsante_spento_non_fa_niente(app, monkeypatch):
+    from tkinter import ttk
+
+    chiamate, premuto = [], []
+    app.go_to("connect")
+    app.pages["connect"].azione_principale = lambda: chiamate.append("principale")
+    pulsante = ttk.Button(app.container, text="prova", command=lambda: premuto.append(1))
+    pulsante.state(["disabled"])
+    _con_focus_su(app, monkeypatch, pulsante)
+    try:
+        assert app._tasto_invio() == "break"
+    finally:
+        pulsante.destroy()
+    assert premuto == [] and chiamate == []
+
+
+def test_invio_su_una_casella_di_spunta_non_avvia_niente(app, monkeypatch):
+    """Sulle caselle si spunta con Spazio: Invio non deve far partire l'azione della pagina."""
+    from tkinter import ttk
+
+    chiamate = []
+    app.go_to("connect")
+    app.pages["connect"].azione_principale = lambda: chiamate.append("principale")
+    casella = ttk.Checkbutton(app.container, text="prova")
+    _con_focus_su(app, monkeypatch, casella)
+    try:
+        assert app._tasto_invio() == "break"
+    finally:
+        casella.destroy()
+    assert chiamate == []
+
+
+def test_invio_in_un_campo_di_testo_resta_l_azione_principale(app, monkeypatch):
+    from tkinter import ttk
+
+    chiamate = []
+    app.go_to("connect")
+    app.pages["connect"].azione_principale = lambda: chiamate.append("principale")
+    campo = ttk.Entry(app.container)
+    _con_focus_su(app, monkeypatch, campo)
+    try:
+        app._tasto_invio()
+    finally:
+        campo.destroy()
+    assert chiamate == ["principale"]
+
+
+def test_invio_vero_su_indietro_non_avvia_la_copia(app, focus):
+    """Prova con un evento vero: Tab su «← Indietro» del passo 3 e poi Invio."""
+    from fotofacile.core.devices import DeviceInfo
+
+    app.device = DeviceInfo(serial="S1", state="device", model="Prova", product="")
+    app.go_to("options")
+    opzioni = app.pages["options"]
+    partita = []
+    opzioni.go_next = lambda: partita.append("copia")
+    indietro = [w for w in opzioni.bottone_avanti.master.winfo_children() if w is not opzioni.bottone_avanti][0]
+    indietro.focus_force()
+    app.update()
+    indietro.event_generate("<Return>")
+    app.update()
+    assert partita == []
+    assert app.current_page == "select"  # ha premuto proprio «Indietro»
+
+
+def test_errore_imprevisto_avvisa_anche_la_pagina_che_aspetta_un_errore(app):
+    """Con `on_error` la pagina deve poter uscire dal «Sto cercando…»: niente vicolo cieco."""
+    visti = []
+
+    def lavoro():
+        yield 0.0
+        raise RuntimeError("errore inatteso")
+
+    app.run_task(lavoro(), on_error=visti.append)
+    assert attendi(app, lambda: bool(visti), passi=200)
+    assert isinstance(visti[0], FotoFacileError)
+    assert "funzionato" in visti[0].message.lower()
+    assert visti[0].hint
+    assert "errore inatteso" in app.log_pane.get_text()
+    assert app.task_in_corso is False
+
+
+def _pulsante_e_dentro_la_pagina(pagina, pulsante) -> bool:
+    fondo_pulsante = pulsante.winfo_rooty() + pulsante.winfo_height()
+    fondo_pagina = pagina.winfo_rooty() + pagina.winfo_height()
+    return fondo_pulsante <= fondo_pagina
+
+
+def test_i_pulsanti_principali_restano_visibili_col_testo_grande(app, focus, monkeypatch):
+    """Anche a 1,5× e con «Altre opzioni» aperte, il pulsante principale non finisce fuori."""
+    from pathlib import Path
+
+    from fotofacile.core.transfer import TransferResults
+    from fotofacile.ui import page_options
+
+    if app.winfo_screenheight() < 800:
+        pytest.skip("lo schermo di questo ambiente è troppo basso per misurare il layout")
+    monkeypatch.setattr(page_options.messagebox, "askyesno", lambda *a, **k: True)
+    try:
+        _scala_a(app, 1.5)
+        app.update_idletasks()
+        opzioni = app.pages["options"]
+        opzioni.mostra_altre(True)
+        opzioni.elimina_dopo_copia.set(True)
+        opzioni._eliminazione_cambiata()
+        trasferimento = app.pages["transfer"]
+        trasferimento.show_summary(
+            TransferResults(
+                copied=[Path("/x/a.jpg")] * 5,
+                bytes_copied=2048,
+                elapsed=3.0,
+                warnings=["Non sono riuscito a togliere a.jpg dal telefono: bloccato."],
+            )
+        )
+        app.update_idletasks()
+        controlli = {
+            "connect": app.pages["connect"].bottone_avanti,
+            "select": app.pages["select"].bottone_avanti,
+            "options": opzioni.bottone_avanti,
+            "transfer": trasferimento.bottone_apri,
+        }
+        fuori = {
+            nome: (p.winfo_rooty() + p.winfo_height(), app.pages[nome].winfo_rooty() + app.pages[nome].winfo_height())
+            for nome, p in controlli.items()
+            if not _pulsante_e_dentro_la_pagina(app.pages[nome], p)
+        }
+        assert not fuori, f"pulsanti tagliati (fondo pulsante, fondo pagina): {fuori}"
+    finally:
+        _scala_a(app, 1.0)

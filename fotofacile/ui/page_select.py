@@ -81,7 +81,7 @@ class SelectPage(ttk.Frame):
             comandi, text="Seleziona tutte", style="Secondary.TButton", command=lambda: self.seleziona_tutto(True)
         ).grid(row=0, column=0)
         ttk.Button(
-            comandi, text="Toglie la selezione", style="Secondary.TButton", command=lambda: self.seleziona_tutto(False)
+            comandi, text="Togli la selezione", style="Secondary.TButton", command=lambda: self.seleziona_tutto(False)
         ).grid(row=0, column=1, padx=(10, 0))
         self.bottone_cerca = ttk.Button(
             comandi, text="Cerca di nuovo", style="Secondary.TButton", command=self.start_scan
@@ -103,8 +103,13 @@ class SelectPage(ttk.Frame):
         self.canvas.bind(
             "<Configure>", lambda evento: self.canvas.itemconfigure(self._finestra_lista, width=evento.width)
         )
+        # La rotellina va agganciata a tutta l'applicazione (sopra le caselle il canvas non
+        # riceve gli eventi); si tiene traccia dei collegamenti per toglierli in `destroy`,
+        # altrimenti ogni ricostruzione della pagina ne lascerebbe uno in più.
+        self._collegamenti_rotellina: list[tuple[str, str]] = []
         for evento in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
-            self.canvas.bind_all(evento, self._rotellina, add="+")
+            identificatore = self.canvas.bind_all(evento, self._rotellina, add="+")
+            self._collegamenti_rotellina.append((evento, identificatore))
         contenitore.columnconfigure(0, weight=1)
         contenitore.rowconfigure(0, weight=1)
 
@@ -148,6 +153,22 @@ class SelectPage(ttk.Frame):
             self._attesa_id = self.after(self.ATTESA_TASK, self._avvia_quando_libero)
             return
         self.start_scan()
+
+    def destroy(self) -> None:
+        self._scollega_rotellina()
+        super().destroy()
+
+    def _scollega_rotellina(self) -> None:
+        """Toglie dall'applicazione i collegamenti della rotellina creati da questa pagina."""
+        for evento, identificatore in self._collegamenti_rotellina:
+            try:
+                script = str(self.tk.call("bind", "all", evento))
+                rimasto = "\n".join(r for r in script.split("\n") if identificatore not in r)
+                self.tk.call("bind", "all", evento, rimasto)
+                self.nametowidget(".").deletecommand(identificatore)
+            except tk.TclError:  # applicazione già chiusa
+                pass
+        self._collegamenti_rotellina = []
 
     def stop_polling(self) -> None:
         """Annulla l'attesa programmata (l'app la chiama quando si cambia schermata)."""
@@ -221,6 +242,14 @@ class SelectPage(ttk.Frame):
         self._files = list(file)
         self._folders = group_folders(self._files)
         self.rebuild_list(self._folders)
+        self._messaggio_trovate()
+
+    def _messaggio_trovate(self) -> None:
+        """Dice quante foto compaiono **nell'elenco**, non quante ce ne sono in tutto.
+
+        Miniature e sticker nascosti non vanno contati: altrimenti il messaggio prometterebbe
+        foto che l'elenco poi non mostra.
+        """
         if not self._files:
             self.app.set_status(
                 "Non ho trovato foto da copiare.",
@@ -228,9 +257,17 @@ class SelectPage(ttk.Frame):
                 kind="avviso",
             )
             return
+        visibili = self._visibili(self._folders)
+        if not visibili:
+            self.app.set_status(
+                "Non ho trovato foto da copiare.",
+                hint="Ci sono solo miniature e sticker: metti la spunta a «Mostra anche miniature e sticker» per vederli.",
+                kind="avviso",
+            )
+            return
         quanti, peso = self.selected_total()
         self.app.set_status(
-            f"Trovate {len(self._files)} foto e video.",
+            f"Trovate {sum(cartella.file_count for cartella in visibili)} foto e video.",
             hint=f"Selezionati: {quanti} file ({format_size(peso)}).",
             kind="successo",
         )
@@ -267,6 +304,8 @@ class SelectPage(ttk.Frame):
 
     def _ridisegna(self) -> None:
         self.rebuild_list(self._folders, conserva_spunte=True)
+        if self._scansione_fatta and self._files:
+            self._messaggio_trovate()
 
     def _rotellina(self, evento) -> None:
         """La rotellina del mouse (o due dita sul touchpad) scorre l'elenco."""

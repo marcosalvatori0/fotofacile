@@ -42,6 +42,30 @@ class OptionsPage(ttk.Frame):
         self.dettaglio_salti = TestoAdattivo(self, text="", style="Tenue.TLabel", font=font(14))
         self.dettaglio_salti.grid(row=4, column=0, sticky="ew")
 
+        # Promemoria rosso: resta visibile (anche con «Altre opzioni» chiuse) finché la spunta
+        # «Cancella le foto dal telefono» è attiva; la conferma vera è la finestra di domanda.
+        self.avviso_eliminazione = TestoAdattivo(
+            self,
+            text="Attenzione: le foto verranno rimosse dal telefono. Controlla sempre la copia prima di chiudere il programma.",
+            style="Errore.TLabel",
+            font=font(14),
+        )
+        self.avviso_eliminazione.grid(row=5, column=0, sticky="ew", pady=(8, 0))
+        self.avviso_eliminazione.grid_remove()
+
+        # I pulsanti stanno **sopra** «Altre opzioni»: aprendo le scelte rare il pulsante
+        # principale non si sposta e non finisce sotto il bordo della finestra.
+        navigazione = ttk.Frame(self)
+        navigazione.grid(row=6, column=0, sticky="ew", pady=(18, 0))
+        ttk.Button(
+            navigazione, text="←  Indietro", style="Secondary.TButton", command=self.azione_indietro
+        ).grid(row=0, column=0)
+        self.bottone_avanti = ttk.Button(
+            navigazione, text="Copia le foto  →", style="Big.TButton", command=self.go_next
+        )
+        self.bottone_avanti.grid(row=0, column=1, padx=(12, 0))
+        navigazione.columnconfigure(1, weight=1)
+
         # Le scelte rare stanno chiuse: chi non le cerca non le vede.
         self.altre_opzioni_aperte = False
         self.bottone_altre = ttk.Button(
@@ -50,9 +74,9 @@ class OptionsPage(ttk.Frame):
             style="Link.TButton",
             command=lambda: self.mostra_altre(not self.altre_opzioni_aperte),
         )
-        self.bottone_altre.grid(row=5, column=0, sticky="w", pady=(12, 0))
+        self.bottone_altre.grid(row=7, column=0, sticky="w", pady=(12, 0))
         self.scelte = ttk.Frame(self)
-        self.scelte.grid(row=6, column=0, sticky="ew")
+        self.scelte.grid(row=8, column=0, sticky="ew")
         self.scelte.columnconfigure(0, weight=1)
         self.scelte.grid_remove()
         scelte = self.scelte
@@ -81,24 +105,6 @@ class OptionsPage(ttk.Frame):
             variable=self.elimina_dopo_copia,
             command=self._eliminazione_cambiata,
         ).grid(row=3, column=0, sticky="w", pady=3)
-        # promemoria rosso finché la spunta è attiva (la conferma vera è la finestra di domanda)
-        self.avviso_eliminazione = TestoAdattivo(
-            scelte,
-            text="Attenzione: le foto verranno rimosse dal telefono. Controlla sempre la copia prima di chiudere il programma.",
-            style="Errore.TLabel",
-            font=font(14),
-        )
-
-        navigazione = ttk.Frame(self)
-        navigazione.grid(row=7, column=0, sticky="ew", pady=(18, 0))
-        ttk.Button(
-            navigazione, text="←  Indietro", style="Secondary.TButton", command=self.azione_indietro
-        ).grid(row=0, column=0)
-        self.bottone_avanti = ttk.Button(
-            navigazione, text="Copia le foto  →", style="Big.TButton", command=self.go_next
-        )
-        self.bottone_avanti.grid(row=0, column=1, padx=(12, 0))
-        navigazione.columnconfigure(1, weight=1)
 
         self.columnconfigure(0, weight=1)
 
@@ -136,20 +142,25 @@ class OptionsPage(ttk.Frame):
     def _eliminazione_cambiata(self) -> None:
         if self.elimina_dopo_copia.get():
             # Togliere le foto dal telefono non si può annullare: si chiede subito e la
-            # risposta predefinita è «No».
-            conferma = messagebox.askyesno(
-                "Togliere le foto dal telefono?",
-                "Dopo la copia le foto verranno TOLTE dal telefono.\n\n"
-                "Prima di chiudere il programma controlla che siano nella cartella scelta.\n\n"
-                "Vuoi davvero toglierle dal telefono?",
-                icon="warning",
-                default="no",
-                parent=self,
-            )
+            # risposta predefinita è «No». Se la domanda non riesce ad aprirsi, per prudenza
+            # la spunta resta spenta.
+            try:
+                conferma = messagebox.askyesno(
+                    "Togliere le foto dal telefono?",
+                    "Dopo la copia le foto verranno TOLTE dal telefono.\n\n"
+                    "Prima di chiudere il programma controlla che siano nella cartella scelta.\n\n"
+                    "Vuoi davvero toglierle dal telefono?",
+                    icon="warning",
+                    default="no",
+                    parent=self,
+                )
+            except Exception as errore:
+                self.app.log(f"Non sono riuscito a fare la domanda di conferma: {errore!r}")
+                conferma = False
             if not conferma:
                 self.elimina_dopo_copia.set(False)
         if self.elimina_dopo_copia.get():
-            self.avviso_eliminazione.grid(row=4, column=0, sticky="ew")
+            self.avviso_eliminazione.grid()
         else:
             self.avviso_eliminazione.grid_remove()
         self._aggiorna_spazio()
@@ -203,10 +214,13 @@ class OptionsPage(ttk.Frame):
         if quanti == 0:
             self.riassunto.configure(text="Non c'è niente di nuovo da copiare: le foto erano già state salvate.")
         else:
-            self.riassunto.configure(
-                text=f"Copierò {quanti} {'foto o video' if quanti != 1 else 'foto'} "
+            testo = (
+                f"Copierò {quanti} {'foto o video' if quanti != 1 else 'foto'} "
                 f"({format_size(piano.total_bytes)}) in questa cartella:  {self.chooser.get()}"
             )
+            if self.elimina_dopo_copia.get():
+                testo += "\nPoi le toglierò dal telefono."
+            self.riassunto.configure(text=testo)
         libero = self.free_space()
         if libero is None:
             simbolo, colore = "", COLORI["testo"]

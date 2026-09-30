@@ -311,8 +311,30 @@ class App(tk.Tk):
         self.ricostruisci_pagine()
         return True
 
-    def _tasto_invio(self, _evento=None) -> None:
+    def _tasto_invio(self, _evento=None) -> str | None:
+        """Invio: agisce sul pulsante che ha il focus; altrimenti fa l'azione principale.
+
+        `ttk.Button` risponde solo a Spazio: senza questa regola, Tab su «← Indietro» e poi
+        Invio avviava l'azione principale della pagina (al passo 3, la copia). Le caselle di
+        spunta si cambiano con Spazio: Invio non deve far partire niente.
+        """
+        try:
+            widget = self.focus_get()
+        except (KeyError, tk.TclError):  # menu a tendina aperto: Tk non sa dire chi ha il focus
+            widget = None
+        if isinstance(widget, (ttk.Button, tk.Button)):
+            spento = (
+                widget.instate(["disabled"])
+                if isinstance(widget, ttk.Button)
+                else str(widget.cget("state")) == "disabled"
+            )
+            if not spento:
+                widget.invoke()
+            return "break"
+        if isinstance(widget, (ttk.Checkbutton, tk.Checkbutton, ttk.Radiobutton, tk.Radiobutton)):
+            return "break"
         self._chiama_azione("azione_principale")
+        return None
 
     def _tasto_esc(self, _evento=None) -> None:
         self._chiama_azione("azione_indietro")
@@ -363,13 +385,18 @@ class App(tk.Tk):
                 return
             except Exception as errore:  # rete di sicurezza: l'app non deve mai chiudersi
                 self._task = None
-                self.set_status(
+                generico = FotoFacileError(
                     "Qualcosa non ha funzionato come previsto.",
-                    hint="Riprova; se il problema resta, salva il registro delle operazioni.",
-                    kind="errore",
+                    "Riprova; se il problema resta, salva il registro delle operazioni.",
                 )
                 self.log(f"Errore imprevisto: {errore!r}")
                 self.log(traceback.format_exc())
+                if on_error is not None:
+                    # La pagina che aspettava il lavoro deve poter uscire dall'attesa
+                    # («Sto cercando…», «Copia in corso»): senza, resterebbe in un vicolo cieco.
+                    self._esegui_callback(on_error, generico)
+                else:
+                    self.set_status(generico.message, hint=generico.hint, kind="errore")
                 return
             ritardo = pausa if isinstance(pausa, (int, float)) else attesa
             self.after(max(0, int(ritardo * 1000)), tick)

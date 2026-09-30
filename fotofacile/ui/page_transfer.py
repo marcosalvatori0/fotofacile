@@ -35,20 +35,20 @@ class TransferPage(ttk.Frame):
         self.stato = ttk.Label(self, text="Preparazione…", style="Sottotitolo.TLabel")
         self.stato.grid(row=1, column=0, sticky="w", pady=(0, 6))
 
-        self.percentuale = ttk.Label(self, text="0 %", font=font(48, bold=True))
+        self.percentuale = ttk.Label(self, text="0 %", font=font(40, bold=True))
         self.percentuale.grid(row=2, column=0, sticky="w")
         self.barra_totale = ttk.Progressbar(self, style="Barra.Horizontal.TProgressbar", maximum=100)
-        self.barra_totale.grid(row=3, column=0, sticky="ew", pady=(4, 6))
+        self.barra_totale.grid(row=3, column=0, sticky="ew", pady=(2, 4))
         self.etichetta_file = TestoAdattivo(self, text="", style="Tenue.TLabel", font=font(14))
         self.etichetta_file.grid(row=4, column=0, sticky="ew")
         self.barra_file = ttk.Progressbar(self, style="Barra.Horizontal.TProgressbar", maximum=100)
-        self.barra_file.grid(row=5, column=0, sticky="ew", pady=(2, 8))
+        self.barra_file.grid(row=5, column=0, sticky="ew", pady=(2, 4))
 
         self.dettagli = TestoAdattivo(self, text="", font=font(14))
         self.dettagli.grid(row=6, column=0, sticky="ew")
 
         self.riepilogo_frame = ttk.Frame(self)
-        self.riepilogo_frame.grid(row=7, column=0, sticky="ew", pady=12)
+        self.riepilogo_frame.grid(row=7, column=0, sticky="ew", pady=(6, 8))
         self.riepilogo = TestoAdattivo(self.riepilogo_frame, text="", font=font(17, bold=True))
         self.riepilogo.grid(row=0, column=0, sticky="ew")
         self.riepilogo_errori = TestoAdattivo(
@@ -81,7 +81,7 @@ class TransferPage(ttk.Frame):
         pulsanti.columnconfigure(4, weight=1)
 
         self._in_corso = False  # una copia è già partita e non è ancora finita
-        self._fermata_da_errore = False  # dopo un errore si può tornare indietro
+        self._fermata_da_errore = False  # dopo un errore o un «Interrompi» si può tornare indietro
         self.mostra_altri_pulsanti(False)
 
         self.columnconfigure(0, weight=1)
@@ -263,6 +263,10 @@ class TransferPage(ttk.Frame):
         )
         self.mostra_altri_pulsanti(True)
         self.bottone_annulla.state(["disabled"])
+        if risultati.cancelled:
+            # dopo «Interrompi» si può cambiare idea e tornare alle opzioni, non c'è solo «Chiudi»
+            self._fermata_da_errore = True
+            self.bottone_indietro.grid()
         self.app.log(self.report_text)
 
     def azione_principale(self) -> None:
@@ -271,7 +275,7 @@ class TransferPage(ttk.Frame):
             self.open_folder()
 
     def azione_indietro(self) -> None:
-        """Tasto Esc: durante e dopo una copia riuscita non si torna indietro; dopo un errore sì."""
+        """Tasto Esc: durante e dopo una copia riuscita non si torna indietro; dopo un errore o un'interruzione sì."""
         if self._fermata_da_errore:
             self.app.go_to("options")
 

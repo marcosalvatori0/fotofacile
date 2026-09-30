@@ -206,3 +206,75 @@ def test_senza_pillow_la_conversione_e_spenta(app, monkeypatch):
     pagina = app.pages["options"]
     assert pagina.converti_webp.get() is False
     assert pagina.build_options().converti_webp is False
+
+
+# ── fix-wave C6–C9: il promemoria della cancellazione e la riga dei pulsanti ─────────────
+def test_la_riga_dei_pulsanti_sta_sopra_altre_opzioni(app, tmp_path):
+    """«Copia le foto» non deve spostarsi né sparire quando si aprono le altre opzioni."""
+    _prepara(app, tmp_path)
+    pagina = app.pages["options"]
+    pagina.mostra_altre(True)
+    riga_pulsanti = int(pagina.bottone_avanti.master.grid_info()["row"])
+    assert riga_pulsanti < int(pagina.bottone_altre.grid_info()["row"])
+    assert riga_pulsanti < int(pagina.scelte.grid_info()["row"])
+    pagina.mostra_altre(False)
+    app.update_idletasks()
+    prima = pagina.bottone_avanti.winfo_y() + pagina.bottone_avanti.master.winfo_y()
+    pagina.mostra_altre(True)
+    app.update_idletasks()
+    dopo = pagina.bottone_avanti.winfo_y() + pagina.bottone_avanti.master.winfo_y()
+    assert prima == dopo
+
+
+def test_il_riassunto_dice_che_le_foto_saranno_tolte_dal_telefono(app, tmp_path, monkeypatch):
+    from fotofacile.ui import page_options
+
+    monkeypatch.setattr(page_options.messagebox, "askyesno", lambda *a, **k: True)
+    _prepara(app, tmp_path)
+    pagina = app.pages["options"]
+    pagina.on_show()
+    assert "dal telefono" not in pagina.riassunto.cget("text")
+    pagina.elimina_dopo_copia.set(True)
+    pagina._eliminazione_cambiata()
+    assert pagina.riassunto.cget("text").endswith("Poi le toglierò dal telefono.")
+    pagina.elimina_dopo_copia.set(False)
+    pagina._eliminazione_cambiata()
+    assert "dal telefono" not in pagina.riassunto.cget("text")
+
+
+def test_il_promemoria_resta_visibile_con_le_altre_opzioni_chiuse(app, tmp_path, monkeypatch):
+    from fotofacile.ui import page_options
+
+    monkeypatch.setattr(page_options.messagebox, "askyesno", lambda *a, **k: True)
+    _prepara(app, tmp_path)
+    pagina = app.pages["options"]
+    pagina.on_show()
+    pagina.mostra_altre(True)
+    pagina.elimina_dopo_copia.set(True)
+    pagina._eliminazione_cambiata()
+    pagina.mostra_altre(False)
+    app.update_idletasks()
+    assert pagina.altre_opzioni_aperte is False
+    assert pagina.avviso_eliminazione.master is pagina  # non sta più nel riquadro che si chiude
+    assert pagina.avviso_eliminazione.winfo_manager() == "grid"
+    assert pagina.avviso_eliminazione.winfo_viewable() or not pagina.winfo_viewable()
+    pagina.elimina_dopo_copia.set(False)
+    pagina._eliminazione_cambiata()
+    assert pagina.avviso_eliminazione.winfo_manager() == ""
+
+
+def test_se_la_domanda_di_conferma_fallisce_la_spunta_resta_spenta(app, tmp_path, monkeypatch):
+    from fotofacile.ui import page_options
+
+    def domanda_rotta(*a, **k):
+        raise RuntimeError("finestra non disponibile")
+
+    monkeypatch.setattr(page_options.messagebox, "askyesno", domanda_rotta)
+    _prepara(app, tmp_path)
+    pagina = app.pages["options"]
+    pagina.on_show()
+    pagina.elimina_dopo_copia.set(True)
+    pagina._eliminazione_cambiata()
+    assert pagina.elimina_dopo_copia.get() is False
+    assert pagina.avviso_eliminazione.winfo_manager() == ""
+    assert "dal telefono" not in pagina.riassunto.cget("text")
