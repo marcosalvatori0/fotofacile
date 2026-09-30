@@ -33,6 +33,21 @@ def test_l_aiuto_generico_non_parla_di_debug():
     assert "Debug USB" in testo
 
 
+def test_l_aiuto_cita_trasferimento_file():
+    from fotofacile.ui.page_connect import build_help_text_generico
+
+    testo = build_help_text_generico()
+    assert "Trasferimento file" in testo
+    # deve venire PRIMA di qualunque accenno al Debug USB
+    assert testo.index("Trasferimento file") < testo.index("Debug USB")
+
+
+def test_senza_telefono_il_dettaglio_ricorda_trasferimento_file(app):
+    pagina = app.pages["connect"]
+    pagina._dispositivi_ricevuti([])
+    assert "Trasferimento file" in pagina.dettaglio.cget("text")
+
+
 def test_aiuto_per_marca_sconosciuta_non_lascia_vuoti():
     testo = build_help_text(BRAND_SCONOSCIUTO)
     assert "Debug USB" in testo
@@ -62,7 +77,7 @@ def test_nessun_telefono_invita_a_collegarlo(app):
     app.backend.state = "nessuno"
     pagina = app.pages["connect"]
     pagina.check_now()
-    assert attendi(app, lambda: "collegalo" in pagina.message.lower())
+    assert attendi(app, lambda: "non vedo ancora nessun telefono" in pagina.message.lower())
     assert app.device is None
     assert pagina.bottone_avanti.instate(["disabled"])
 

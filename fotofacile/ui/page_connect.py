@@ -89,10 +89,13 @@ CONSIGLI_SENZA_DEBUG = (
     "Il telefono non viene riconosciuto.",
     "",
     "Prova in quest'ordine:",
-    "1. usa un altro cavo USB (alcuni cavi servono solo per ricaricare);",
-    "2. cambia porta del computer (evita gli adattatori e gli hub);",
-    "3. sblocca lo schermo del telefono e rispondi «Consenti» se compare una richiesta;",
-    "4. scollega e ricollega il cavo tenendo il telefono sbloccato.",
+    "1. Sblocca lo schermo del telefono.",
+    "2. Scorri dall'alto verso il basso: vedrai un messaggio come «Ricarica via USB».",
+    "   Toccalo e scegli «Trasferimento file» (a volte si chiama «File» o «MTP»).",
+    "3. Se compare una richiesta, tocca «Consenti».",
+    "4. Usa un altro cavo USB (alcuni cavi servono solo per ricaricare) o un'altra porta,",
+    "   senza adattatori né hub.",
+    "5. Scollega e ricollega il cavo tenendo il telefono sbloccato.",
     "",
     "Se non basta, l'ultima possibilità è attivare il «Debug USB»: scegli la marca del"
     " telefono qui sopra e segui i passaggi.",
@@ -297,9 +300,12 @@ class ConnectPage(ttk.Frame):
         self.app.device = None
         self.bottone_avanti.state(["disabled"])
         if not dispositivi:
-            self.set_message("Non vedo ancora nessun telefono: collegalo con il cavo e sbloccalo.")
+            self.set_message("Non vedo ancora nessun telefono.")
             self.dettaglio.configure(
-                text="Se il cavo è già collegato, prova un altro cavo USB o un'altra porta del computer."
+                text=(
+                    "Sul telefono scorri dall'alto verso il basso e, al posto di «Ricarica via USB», "
+                    "scegli «Trasferimento file». Poi sblocca lo schermo."
+                )
             )
             return
         stato = dispositivi[0].state
