@@ -713,3 +713,37 @@ def test_d11_errore_del_sistema_durante_la_copia_diretta_da_un_errore_comprensib
         esegui_fino_alla_fine(AiutanteFinto(intervallo=0.0).copia("S1", "/DCIM/foto.jpg", destinazione))
     assert "spazio" in errore.value.message.lower()
     assert list(destinazione.parent.glob("*.part")) == []
+
+# ── D12 ────────────────────────────────────────────────────────────────────
+# Prima: il disco pieno veniva riconosciuto cercando «spazio» anche nel messaggio, che
+# contiene il nome del file. Una foto chiamata «Spazio_bimbi.jpg» che falliva per il cavo
+# staccato diventava «Non c'è più spazio»: l'utente liberava il disco per niente.
+def test_d12_il_nome_del_file_non_fa_credere_a_un_disco_pieno(tmp_path):
+    from fotofacile.core.adb_passi import _esito_di_copia
+
+    processo = ProcessoEsterno(
+        ["/bin/sh", "-c", "exit 1"],
+        umano="Non sono riuscito a copiare Spazio_bimbi.jpg.",
+        hint="Il telefono potrebbe essersi scollegato: controlla il cavo e riprova.",
+    )
+    processo.avvia()
+    processo.process.wait()
+    with pytest.raises(FotoFacileError) as errore:
+        _esito_di_copia(processo, tmp_path / "Spazio_bimbi.jpg")
+    assert "spazio" not in errore.value.message.lower().replace("spazio_bimbi", "")
+    assert "cavo" in errore.value.hint
+
+
+def test_d12_il_disco_pieno_detto_dal_comando_si_riconosce_ancora(tmp_path):
+    from fotofacile.core.adb_passi import _esito_di_copia
+
+    processo = ProcessoEsterno(
+        ["/bin/sh", "-c", "echo 'write: No space left on device' >&2; exit 1"],
+        umano="Non sono riuscito a copiare foto.jpg.",
+        hint="Il telefono potrebbe essersi scollegato: controlla il cavo e riprova.",
+    )
+    processo.avvia()
+    processo.process.wait()
+    with pytest.raises(FotoFacileError) as errore:
+        _esito_di_copia(processo, tmp_path / "foto.jpg")
+    assert "spazio" in errore.value.message.lower()

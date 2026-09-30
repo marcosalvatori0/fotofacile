@@ -90,8 +90,10 @@ def _esito_di_copia(processo: ProcessoEsterno, destinazione: Path) -> None:
         processo.esito()
     except FotoFacileError as errore:
         # Il disco pieno non arriva mai come eccezione Python (a scrivere è il comando
-        # esterno): lo si riconosce dal testo dell'errore riportato dal sistema.
-        testo = f"{errore.hint} {errore.message}".lower()
+        # esterno): lo si riconosce dal testo dell'errore riportato dal sistema, che sta
+        # nel suggerimento. Il messaggio no: contiene il nome del file, e una foto
+        # chiamata «Spazio_bimbi.jpg» farebbe credere a un disco pieno.
+        testo = errore.hint.lower()
         if "no space" in testo or "spazio" in testo or "enospc" in testo:
             raise FotoFacileError(
                 f"Non c'è più spazio mentre copiavo {destinazione.name}.",
