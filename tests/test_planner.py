@@ -213,3 +213,18 @@ def test_piano_non_modifica_i_file_di_input(tmp_path):
     assert file == copia
     assert isinstance(file[0].remote_path, str)
     assert Path(file[0].remote_path).name == "a.jpg"
+
+
+def test_webp_pianificato_con_estensione_jpg(tmp_path):
+    assert destination_for("/sdcard/Pictures/a.webp", tmp_path, False, converti_webp=True) == tmp_path / "a.jpg"
+    assert destination_for("/sdcard/Pictures/a.WEBP", tmp_path, False, converti_webp=True) == tmp_path / "a.jpg"
+    assert destination_for("/sdcard/Pictures/a.webp", tmp_path, False) == tmp_path / "a.webp"
+    assert destination_for("/sdcard/Pictures/a.png", tmp_path, False, converti_webp=True) == tmp_path / "a.png"
+
+
+def test_webp_convertito_non_si_scambia_per_gia_presente(tmp_path):
+    (tmp_path / "a.jpg").write_bytes(b"x" * 100)  # una foto diversa, stesso nome e stessa dimensione
+    file = [foto("/sdcard/Pictures/a.webp", size=100)]
+    piano = build_plan(file, TransferOptions(destination=tmp_path, converti_webp=True))
+    assert [f.dest_path.name for f in piano.files] == ["a (1).jpg"]
+    assert piano.skipped_existing == 0

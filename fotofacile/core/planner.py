@@ -46,6 +46,8 @@ class TransferOptions:
     delete_after: bool = False
     include_videos: bool = True
     date_from: int | None = None
+    #: Trasforma i file WebP in JPG (o PNG se trasparenti): si aprono con qualsiasi programma.
+    converti_webp: bool = False
 
 
 @dataclass(frozen=True)
@@ -80,15 +82,19 @@ def destination_for(
     destination: Path,
     preserve_structure: bool,
     case_insensitive: bool | None = None,
+    converti_webp: bool = False,
 ) -> Path:
     """Percorso di destinazione del file, con nomi validi su ogni sistema operativo.
 
     La cartella scelta dall'utente non viene **mai** riscritta: se il percorso è troppo lungo
     si accorciano solo le cartelle provenienti dal telefono e, se serve, il nome del file.
+    Con ``converti_webp`` un ``.webp`` viene pianificato come ``.jpg``.
     """
     radice = Path(destination)
     relativo = relative_path(remote_path)
     nome = _nome_sicuro(relativo.rsplit("/", 1)[-1])
+    if converti_webp and nome.lower().endswith(".webp"):
+        nome = nome[: -len(".webp")] + ".jpg"
     if not preserve_structure:
         return _limita_percorso(radice / nome, radice)
     cartelle = [_nome_sicuro(parte) for parte in relativo.split("/")[:-1] if parte]
@@ -197,18 +203,22 @@ def build_plan(
         ):
             piano.skipped_duplicates += 1
             continue
+        convertito = options.converti_webp and file.name.lower().endswith(".webp")
         destinazione = destination_for(
             file.remote_path,
             options.destination,
             options.preserve_structure,
             case_insensitive=sensibile,
+            converti_webp=convertito,
         )
         esistente = esistenza.trova(destinazione)
         if esistente is not None:
             # «già presente» vale solo se il nome è identico: se differisce solo per le
             # maiuscole (FOTO.JPG contro foto.jpg) si tratta di un file diverso, e su un
             # disco non sensibile alle maiuscole sovrascriverlo perderebbe una foto.
-            uguale = esistente.name == destinazione.name
+            # Un WebP che verrà convertito non ha una dimensione confrontabile: un file con
+            # lo stesso nome si considera **diverso** (al massimo resta un doppione).
+            uguale = esistente.name == destinazione.name and not convertito
             if uguale and file.size and _dimensione(esistente) == file.size:
                 piano.skipped_existing += 1
                 continue

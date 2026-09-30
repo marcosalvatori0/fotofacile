@@ -24,6 +24,7 @@ from .adb import AdbBackend
 from .errors import FotoFacileError, traduci_errore_file
 from .history import History
 from .adb_passi import percorso_temporaneo
+from .conversione import converti_webp, e_webp
 from .ops import Annullato, esegui_fino_alla_fine
 from .planner import TransferOptions, TransferPlan
 from .scanner import MediaFile
@@ -88,6 +89,22 @@ def _applica_data(percorso: Path, mtime: int) -> None:
         os.utime(percorso, (mtime, mtime))
     except OSError:  # pragma: no cover - file di rete o permessi particolari
         pass
+
+
+def _rimetti_estensione_webp(percorso: Path) -> Path:
+    """Dà al file l'estensione ``.webp`` (il contenuto è WebP): meglio onesto che «.jpg»."""
+    if percorso.suffix.lower() == ".webp":
+        return percorso
+    nuovo = percorso.with_suffix(".webp")
+    contatore = 0
+    while nuovo.exists():
+        contatore += 1
+        nuovo = percorso.with_name(f"{percorso.stem} ({contatore}).webp")
+    try:
+        os.replace(percorso, nuovo)
+    except OSError:  # pragma: no cover - meglio un nome sbagliato che nessun file
+        return percorso
+    return nuovo
 
 
 _trasforma = traduci_errore_file  # un unico posto dove si traducono gli errori di file
@@ -272,16 +289,31 @@ def _passi_di_copia(
             esiti.failed.append((pianificato.media, messaggio))
             continue
 
-        esiti.copied.append(pianificato.dest_path)
-        _applica_data(pianificato.dest_path, pianificato.media.mtime)
+        finale = pianificato.dest_path
+        da_convertire = options.converti_webp and e_webp(finale)
+        if da_convertire:
+            try:
+                finale = converti_webp(finale)
+            except Exception as errore:  # la conversione non deve mai far perdere una foto
+                finale = _rimetti_estensione_webp(finale)
+                esiti.warnings.append(
+                    f"Non sono riuscito a trasformare {finale.name} in JPG ({errore}): "
+                    "l'ho lasciata così com'è."
+                )
+        _applica_data(finale, pianificato.media.mtime)
+        esiti.copied.append(finale)
         if history is not None:
             history.record(
                 serial,
                 pianificato.rel_path,
                 pianificato.media.size,
                 pianificato.media.mtime,
-                str(pianificato.dest_path),
+                str(finale),
             )
+        if da_convertire:
+            # Dopo aver annotato il file: se la finestra si chiude proprio qui, il file
+            # convertito è già nel resoconto e nella cronologia (niente doppioni al giro dopo).
+            yield 0.0  # la conversione occupa un attimo: si lascia respirare la finestra
         if options.delete_after:
             try:
                 yield from copiatore.cancella(serial, pianificato.media.remote_path)

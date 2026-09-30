@@ -1711,3 +1711,46 @@ def test_d31_l_avviso_di_avvio_non_si_ferma_sulla_codifica(tmp_path, monkeypatch
     assert "Non riesco ad aprire la finestra." in grezzo.getvalue().decode("cp1252")
     uscita.detach()
     assert chiamate, "l'avviso visibile deve comparire lo stesso"
+
+
+# ── WebP ───────────────────────────────────────────────────────────────────
+def _webp_bytes(modo="RGB", colore=(9, 99, 199)) -> bytes:
+    import io
+
+    from PIL import Image
+
+    scarico = io.BytesIO()
+    Image.new(modo, (12, 12), colore).save(scarico, "WEBP")
+    return scarico.getvalue()
+
+
+def test_la_copia_converte_i_webp_in_jpg(tmp_path):
+    pytest.importorskip("PIL")
+    from fotofacile.core.transfer import transfer
+
+    dati = _webp_bytes()
+    media = MediaFile("/sdcard/Pictures/a.webp", size=len(dati), mtime=1_500_000_000, kind="photo")
+    opzioni = TransferOptions(destination=tmp_path / "out", converti_webp=True)
+    esiti = transfer(_TelefonoFinto({media.remote_path: dati}), "S1", build_plan([media], opzioni), opzioni)
+    assert [p.name for p in esiti.copied] == ["a.jpg"]
+    assert esiti.copied[0].read_bytes()[:3] == b"\xff\xd8\xff"
+    assert int(esiti.copied[0].stat().st_mtime) == 1_500_000_000
+    assert not esiti.warnings
+
+
+def test_conversione_fallita_conserva_il_file_come_webp(tmp_path, monkeypatch):
+    pytest.importorskip("PIL")
+    from fotofacile.core import transfer as modulo
+
+    dati = _webp_bytes()
+    media = MediaFile("/sdcard/Pictures/a.webp", size=len(dati), mtime=5, kind="photo")
+    opzioni = TransferOptions(destination=tmp_path / "out", converti_webp=True)
+
+    def rotta(_percorso):
+        raise ValueError("Pillow non ci riesce")
+
+    monkeypatch.setattr(modulo, "converti_webp", rotta)
+    esiti = modulo.transfer(_TelefonoFinto({media.remote_path: dati}), "S1", build_plan([media], opzioni), opzioni)
+    assert [p.name for p in esiti.copied] == ["a.webp"]  # estensione corretta, foto salva
+    assert esiti.copied[0].read_bytes() == dati
+    assert any("a.webp" in avviso for avviso in esiti.warnings)
