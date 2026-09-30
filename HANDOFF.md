@@ -1,107 +1,147 @@
 # Handoff: FotoFacile — app desktop per copiare foto da Android
 
-**Generato**: 2026-09-28 (aggiornato **dopo** la seconda revisione indipendente)
-**Branch**: `main` (repo locale, nessun remoto configurato)
-**Stato**: **Completo nella parte testabile** — **383 test verdi**. Consegnati: scelta automatica
-del collegamento (**niente Debug USB obbligatorio**), **copia piatta** predefinita, correzione di
-tutti i difetti `B1–B24` e `C1–C19` elencati in `docs/PIANO-REVISIONE.md`.
-Repo GitHub pubblico `marcosalvatori0/fotofacile` con pipeline che costruisce gli installer su
-runner macOS e Windows; Release `v0.1.0` con `FotoFacile-Setup-0.1.0.exe`, `FotoFacile-portable.zip`,
-`FotoFacile-0.1.0.dmg`.
-**Non verificati** (vedi «Not Yet Done»): collegamenti diretti di Windows e Linux su hardware
-reale, collegamento diretto macOS con un telefono vero, qualsiasi operazione con un telefono
-Android reale.
+**Aggiornato**: 2026-09-30 (fine della revisione v0.2, Parti A–D)
+**Versione**: `0.2.0` (unico punto di verità: `fotofacile/__init__.py`; la legge `scripts/leggi_versione.py`)
+**Branch**: `revisione-v0.2` (HEAD `7226f8b`). **Non è stato unito a `main` e non è stato pubblicato nulla**:
+niente push, niente tag, niente Release. `main` è ancora alla v0.1.0.
+**Stato**: **636 test verdi**, `pyflakes fotofacile scripts` vuoto. Completate le Parti A, B (tranne B2),
+C (tranne C10) e D (D0–D4). Restano da fare le cose elencate in «Not Yet Done», quasi tutte **dipendono da Marco**
+(un Windows vero, un telefono vero, la sua conferma per pubblicare).
+Repo GitHub `marcosalvatori0/fotofacile` (pubblico). La Release `v0.1.0` è **vecchia** (contiene ancora i `.bat`
+e non ha nulla della revisione).
+**Non verificato** (vedi «Not Yet Done»): l'installatore Windows non è mai stato costruito né eseguito su un Windows
+vero; nessuna operazione con un telefono Android reale su nessun sistema.
 
 ---
 
 ## Goal
 
-Permettere a **persone non tecniche** di copiare foto e video da un telefono Android al computer
+Permettere a **persone non tecniche** (anche anziane) di copiare foto e video da un telefono Android al computer
 con una procedura guidata in italiano, senza gestore file e senza gergo tecnico. Multi-piattaforma
 (Windows/macOS/Linux), **senza Debug USB da attivare** e senza dipendenze obbligatorie per chi usa
-il programma. I file arrivano **direttamente nella cartella scelta**, con la possibilità di
-ricreare le cartelle del telefono se serve.
+il programma. I file arrivano **direttamente nella cartella scelta**.
 
 ---
 
 ## Completed
 
-### Collegamento senza Debug USB (novità principale)
-- [x] Livello di trasporto che sceglie da sé il collegamento: `core/trasporto.py`,
-  `core/trasporto_aiutante.py`, `core/trasporto_mac.py`, `core/trasporto_win.py`,
-  `core/trasporto_linux.py` + `fotofacile/aiutanti/`.
-- [x] **macOS**: PTP/MTP via `ImageCaptureCore` (PyObjC) — lo stesso meccanismo di «Acquisizione immagini».
-- [x] **Windows**: WPD via `Shell.Application` in PowerShell (`aiutanti/wpd_win.ps1`).
-- [x] **Linux**: MTP via `gio`/gvfs, ripiego `jmtpfs`.
-- [x] **ADB** resta solo come *scorciatoia* se il Debug USB è già attivo; mai obbligatorio.
-- [x] `TrasportoComposto` prova i collegamenti in ordine e usa il primo che vede davvero il telefono.
-- [x] Le istruzioni «Debug USB» restano come **ultima spiaggia** dietro «Il telefono non viene riconosciuto?».
+### Parte A — correzioni dell'audit (D1–D31)
+- [x] Audit di tutto il codice per gruppi (G1–G8) e correzione di 31 difetti (`D1`–`D31`), ciascuno con un test
+  in `tests/test_regressioni.py`. Il testo completo (domande, risposte, righe di codice) è in
+  **`docs/REVISIONE-v0.2.md`**. Quelli che contano di più: le foto copiate conservano la data di scatto (D1),
+  la cronologia si salva e si unisce (D2, D6), un disco pieno non fa mai perdere file (D11–D13, D23),
+  su Windows le foto si riconoscono anche con le estensioni nascoste (D17, **non provato su Windows vero**),
+  la copia non sovrascrive mai un file esistente, i processi figli si puliscono se l'aiutante è interrotto (D19),
+  il registro di avvio non cresce all'infinito (D27–D28).
 
-### Copia piatta
-- [x] `TransferOptions.preserve_structure=False`: le foto finiscono direttamente nella cartella
-  scelta (`Immagini/FotoFacile/<modello>/<data>`), senza `DCIM/Camera/...`.
-- [x] La struttura si riattiva con la casella «Ricrea anche le cartelle del telefono».
-- [x] Collisioni risolte con `nome (1).jpg`, `nome (2).jpg` — il contatore **sopravvive** all'accorciamento.
+### Parte B — WebP
+- [x] Riconoscimento del formato vero dei file (contenuto, non estensione) e comando `formati` (B1).
+- [x] Conversione opzionale dei WebP in **JPG/PNG** con Pillow durante la copia, senza mai perdere né
+  sovrascrivere un file (B3, B4; fuzzer da 18000 scenari, 0 perdite). Casella «Trasforma le immagini WebP in JPG»
+  nel passo 3 (solo se Pillow c'è) e riga «Conversione WebP» in `doctor` (B5). Pillow è nel pacchetto (`build_app.py`).
 
-### Revisione completa
-- [x] **Fase 1–3**: tutti i difetti `B1–B24` di `docs/PIANO-REVISIONE.md`.
-- [x] **Fase 4** (seconda revisione indipendente): tutti i difetti `C1–C19`. I tre più gravi:
-  - `comando_aiutante()` sbagliava di una cartella il percorso di avvio → **tutto il collegamento
-    diretto era morto dal sorgente**. Ora `osutil.comando_se_stesso()` + `fotofacile/__main__.py`.
-  - `_controllo_fallito` riprovava lo stesso collegamento **all'infinito** (confronto sempre vero).
-    Ora `App._gia_provati` + `App.cambia_collegamento()`.
-  - `_scansione_in_corso` non veniva azzerato quando il lavoro era abbandonato altrove →
-    schermata bloccata per sempre su «Sto cercando…».
-- [x] Diagnostica arricchita: `doctor` mostra la sezione **«Modi di collegamento»**.
+### Parte C — nuova interfaccia (4 passi, pensata per chi non è pratico)
+- [x] **Testo grande e regolabile**: pulsanti `A−` / `A+` (passo 1), scala 1,0 / 1,25 / 1,5 (predefinita 1,25) salvata nelle impostazioni personali
+  (`~/.fotofacile/impostazioni.json`, `core/impostazioni.py`). Font minimo 14 pt; `TestoAdattivo` a capo automatico.
+  Al cambio di scala pagine, banner e registro si ricostruiscono.
+- [x] **Invio** = azione principale della pagina (o preme il pulsante che ha il focus), **Esc** = indietro.
+- [x] **Dettagli nascosti**: il registro tecnico sta dietro «Mostra i dettagli» e non si apre da solo.
+- [x] **Passo 1** «Collega il telefono al computer»: tre istruzioni fisse, indicatore ✔/⚠ grande; dopo 3 tentativi senza
+  telefono compare il pulsante grande «Il telefono non viene riconosciuto? Ti aiuto io»; riga secondaria «Serve aiuto?»,
+  «Riprova», «Installa componente mancante», «Prova senza telefono», `A−`/`A+`.
+- [x] **Passo 2** «Scegli le foto»: **nomi veri delle cartelle** (`core/nomi_cartelle.py`: Camera → «Foto e video scattati
+  con il telefono», WhatsApp, Schermate…), menu **del periodo** (tutte / ultimo mese / 3 mesi / anno), «Mostra anche
+  miniature e sticker» (nascosti di default), «Seleziona tutte» / «Togli la selezione».
+- [x] **Passo 3** «Dove salvo le foto?»: riassunto a parole («Copierò N foto…»), spazio disponibile, «Altre opzioni ▸»
+  chiuse (ricrea cartelle, salta già copiate, WebP, cancella dal telefono). **Cancellare dal telefono** chiede subito
+  conferma con una finestra (predefinito «No») e lascia un promemoria rosso sempre visibile.
+- [x] **Passo 4** «Copia in corso»: **percentuale grande**, tempo residuo a parole («manca circa 2 minuti»), «Interrompi»,
+  a fine copia «Apri la cartella delle foto» / «Salva resoconto» / «Chiudi»; dopo un errore compare «Indietro».
+- [x] **Correzioni dalla revisione di C6–C9** (wave finale, `7226f8b`): Invio sul pulsante che ha il focus, pulsanti principali
+  sempre visibili a testo grande, promemoria di cancellazione, errori imprevisti di `run_task` mostrati con una via d'uscita.
+  Dettaglio in `docs/REVISIONE-v0.2.md`, sezione «Parte C e D».
+- [x] Tema chiaro/scuro (`clam`), contrasto WCAG ≥ 7, focus ben visibile.
 
-### Resto
-- [x] App completa: 4 passi guidati (collegamento → scelta foto → destinazione → copia).
-- [x] Motore **senza thread**: generatori a passi avanzati da `after()`, copia `.part` + rinomina
-  atomica, verifica dimensioni, dedup per dispositivo, cancella-dopo-copia con conferma, retry
-  solo sugli errori transitori.
-- [x] Installazione automatica di platform-tools con **verifica dell'impronta ufficiale** e
-  estrazione **atomica**; **modalità demo** senza telefono.
-- [x] Tema chiaro/scuro secondo il sistema (`clam` + tavolozze, contrasto WCAG ≥ 7). I `tk.Text`
-  (area «Dettagli» e finestra di aiuto) ora hanno `foreground` esplicito: prima erano nero su
-  fondo scuro, cioè invisibili.
-- [x] Diagnostica: `doctor`, `--selftest`, `--prova-finestra`, `--aiutante` (interna);
-  registro `~/.fotofacile/avvio.log`; avviso nativo se la finestra non si può aprire.
-- [x] **383 test verdi** (erano 293), inclusi `tests/test_regressioni.py` (un test per ogni bug
-  corretto, con il commento che spiega cosa succedeva **prima**), `tests/test_trasporto.py`,
-  `tests/test_icona.py`, `tests/test_app_completa.py` (app vera in sottoprocesso).
-- [x] **Verificato a schermo** in modalità scura: area «Dettagli» e finestra di aiuto leggibili.
-- [x] **Collaudo end-to-end dell'app vera**: 54/54 file copiati (60,9 MB) in 11 s, 0 errori,
-  0 `.part` residui, **nessuna sottocartella creata**.
-- [x] **Aiutante macOS avviato davvero**, dal percorso reale usato dall'app e da una cartella
-  estranea: `{"dispositivi": []}` con uscita 0.
-- [x] **(v0.1, superato in v0.2: sostituito dal `Setup.exe`, task D3)** Pacchetto Windows ricreato sulla Scrivania: `~/Desktop/FotoFacile per Windows/`
-  (51 file, 0,39 MB) — `Avvia FotoFacile.bat`, `Crea l'eseguibile per Windows.bat`,
-  `Installa FotoFacile.bat`, `LEGGIMI - Windows.txt`, tutto `fotofacile/` (compreso
-  `aiutanti/wpd_win.ps1`), `requirements.txt`.
-- [x] **Graphify completo e aggiornato**: `graphify-out/` con 1579 nodi, 3747 archi, 86 comunità.
+### Parte D — installatore Windows
+- [x] Script **Inno Setup** `installer/windows/FotoFacile.iss` (italiano, per utente, **senza amministratore**, installa in
+  `%LOCALAPPDATA%\Programs` (`{autopf}` con privilegi minimi), collegamenti su Desktop e menu Start, collegamento «Diagnosi», disinstallazione in Impostazioni → App).
+- [x] Via tutti i `.bat`/`.ps1` d'installazione e la cartella «FotoFacile per Windows»: su Windows resta **solo**
+  `FotoFacile-Setup-<versione>.exe` (più `FotoFacile-portable.zip`).
+- [x] `doctor` e `--selftest` funzionano anche dal programma installato (senza finestra nera): scrivono
+  `diagnosi.txt` / `selftest.txt` in `%USERPROFILE%\.fotofacile` (`FOTOFACILE_NO_OPEN=1` = non aprire il Blocco note).
+- [x] Pipeline `.github/workflows/build-installers.yml`: job Windows costruisce l'exe, lo verifica (`verifica-eseguibile.ps1`),
+  crea lo zip portatile e il Setup, e **lo installa davvero, lo avvia, lo disinstalla** (`prova-installazione.ps1`),
+  poi `SHA256SUMS.txt`. Corretto anche un bug vero di `build_app.py` (zip vuoto su Windows/Linux).
+  **La pipeline non è mai stata eseguita** (vedi «Not Yet Done» a).
+
+### Prima della revisione (v0.1, sempre valido)
+- [x] Scelta automatica del collegamento (`core/trasporto*.py`, `fotofacile/aiutanti/`): macOS PTP/ImageCaptureCore,
+  Windows WPD/PowerShell, Linux MTP `gio`/`jmtpfs`; ADB solo come scorciatoia. **Copia piatta** predefinita.
+- [x] Motore **senza thread** (generatori avanzati da `after()`), copia `.part` + rinomina atomica, verifica dimensioni,
+  dedup, cancella-dopo-copia con conferma, installazione di platform-tools con impronta ufficiale, modalità demo.
+- [x] Diagnostica: `doctor` («Modi di collegamento», «Conversione WebP»), `--selftest`, `--prova-finestra`,
+  `--aiutante` (interna), registro `~/.fotofacile/avvio.log`.
+- [x] Collaudo end-to-end dell'app vera (`tests/pilota_app.py`) e aiutante macOS avviato davvero (senza telefono).
+- [x] Graphify (`graphify-out/`) aggiornato dopo le Parti A e B; dopo la C e la D è stato rigenerato ma **non committato**.
 
 ---
 
-## Not Yet Done
+## Not Yet Done — serve Marco
 
-- [ ] **Nessun telefono Android vero è mai stato collegato** (né diretto né con ADB):
-  autorizzazione, ricerca reale dei media, copia e cancellazione restano da provare su un
-  dispositivo. **È la verifica più importante che manca.**
-- [ ] **Collegamento diretto Windows mai provato su hardware reale**: non c'è una macchina Windows.
-  `wpd_win.ps1` esiste e i test coprono contratto, parsing e cartella di appoggio, ma **nessuna
-  copia vera** è mai passata da `Shell.Application`. PowerShell non esiste su questa macchina:
-  le modifiche agli script sono state verificate solo staticamente (bilanciamento, sintassi degli
-  snippet Python, BOM).
-- [ ] **Collegamento diretto Linux mai provato su hardware reale**: nessun desktop con `gio`/gvfs
-  e nessun `jmtpfs` in questo ambiente; montaggio, elenco e smontaggio coperti solo da test simulati.
-- [ ] **Collegamento diretto macOS verificato solo fino a «nessun telefono collegato»**:
-  l'aiutante parte, `dispositivi` → `{"dispositivi": []}` (uscita 0), `elenca` → «Non vedo nessun
-  telefono collegato.» (uscita 3). Riconoscimento di un telefono vero e copia **mai eseguiti**.
-- [ ] **Nessuna build rifatta dopo la revisione**: `dist/` e la Release `v0.1.0` sono **precedenti**
-  ai trasporti e a PyObjC. La pipeline GitHub li ricostruirà al prossimo tag.
-- [ ] Limite di progetto (non un difetto): con il collegamento diretto di **Windows** la
-  cancellazione dal telefono non è disponibile (vedi Failed Approaches #17).
-- [ ] Opzionale: firma/notarizzazione del `.app` macOS (senza firma: clic destro → Apri la prima volta).
+- [ ] **(a) D5 — pubblicare e ottenere il `.exe`**: fare push del branch `revisione-v0.2`, tag (es. `v0.2.0`) e Release, oppure
+  lanciare la pipeline a mano (`workflow_dispatch`). **Nulla è stato pubblicato: serve la conferma esplicita di Marco.**
+  La **prima esecuzione probabilmente richiederà piccole correzioni**; rischi non verificati (dal report D4, nessun Windows,
+  Inno Setup né PowerShell disponibili qui):
+  1. I due `.ps1` (`verifica-eseguibile.ps1`, `prova-installazione.ps1`) non sono mai stati eseguiti: possibili errori di sintassi o logica.
+  2. Percorso di `ISCC.exe` dopo `choco install innosetup` (atteso `C:\Program Files (x86)\Inno Setup 6\`; il workflow lo cerca con
+     `Program Files*\Inno Setup *`) e presenza di `compiler:Languages\Italian.isl`.
+  3. Che `sys.stdout` sia `None` nell'exe `--windowed` avviato da `Start-Process`; altrimenti `selftest` stampa e non scrive `selftest.txt`
+     e la verifica fallisce (con messaggio chiaro).
+  4. Che il disinstallatore silenzioso di Inno rimuova exe e chiave HKCU entro 90 s.
+  5. I **test su Windows** (`pytest tests -x`) non sono mai girati là: il passo ha `continue-on-error: true` (avviso giallo). Quando sono
+     puliti, togliere quella riga.
+  6. L'**autocollaudo macOS ora è bloccante**: se il runner `macos-14` non ha sessione grafica il job fallisce e con lui la Release (il
+     rimedio è saltare/adattare il passo, non rimettere `|| echo`).
+  7. `SHA256SUMS.txt` esce solo dal job Windows (il `.dmg` non ha checksum); l'upload usa `if: always()` (pubblica anche artefatti parziali,
+     solo come artefatto del run, non come Release); nessun controllo che il tag coincida con `__version__`; `doctor` sul runner
+     può rallentare cercando `adb`.
+  Dopo la pubblicazione: controllare che il `.dmg` non citi più «Come si attiva il Debug USB?» (`scripts/crea_installer_mac.py`,
+  il suo LEGGIMI interno è ancora vecchio: **da correggere**) e unire `revisione-v0.2` in `main`.
+- [ ] **(b) D6 — prove manuali su un Windows vero** (Marco): installare il `Setup.exe`, avviare, disinstallare; in particolare
+  **D17** (foto riconosciute con le estensioni dei file nascoste in Esplora risorse), il collegamento **«Diagnosi»** del menu Start
+  (deve aprire il Blocco note con il rapporto), l'avviso blu **SmartScreen** «Windows ha protetto il PC» → «Ulteriori informazioni»
+  → «Esegui comunque» (l'installer non è firmato), collegamento diretto (WPD) con un telefono.
+- [ ] **(c) B2 — diagnosi dei WebP con i file di Marco**: serve la sua cartella di WebP (e il sistema) per capire perché certe immagini
+  non si aprono; il resto della Parte B è fatto.
+- [ ] **(d) Cartella vecchia `~/Desktop/FotoFacile per Windows/`** (fuori dal repo, contiene i `.bat` superati): **chiedere a Marco**
+  se cancellarla. Non è stata toccata.
+- [ ] **(e) C10 — rimandato**: verifiche automatiche di leggibilità (nessun testo sotto i 14 pt, contrasto, nessun pulsante fuori
+  schermo) e **verifica a schermo** delle 4 pagine a scala 1,0/1,25/1,5 (`launchctl asuser` + `screencapture`). Il brief è in
+  `.superpowers/sdd/task-C10-brief.md`. Limiti già noti: a 1,5× con «Altre opzioni» aperte le ultime caselle possono finire sotto il
+  bordo (il pulsante principale no); a 1,5× il passo 2 lascia ~84 px per l'elenco (scorrevole).
+- [ ] **(f) Minor aperti** (nessuno bloccante):
+  - Parte C: `TestoAdattivo` senza minimo di larghezza (`max(1, …)`, ok grazie a `minsize` dell'app); fixture `focus` dei test dipende
+    dall'ambiente; `_dimensiona_finestra` non fissa la posizione; `_chiama_azione` non controlla il pulsante spento (lo fa ogni pagina);
+    test del focus solo su `Big`/`Checkbutton`; `Checkbutton` dell'elenco non va a capo con nomi lunghissimi; `bind_all` della rotellina
+    (tolti a `SelectPage.destroy`, resta da tenere d'occhio); minor sulla selezione del passo 2 (`page_select`, vedi `progress.md`: `_ridisegna` e le spunte);
+    `page_transfer._torna_indietro` e `page_select` ripetono `set_status` dopo `go_to` (commento fuorviante dopo D29).
+  - Parte B (`carryover.md`): mancano test di `rifiuta_se_esiste` su `AdbAPassi` e `TrasportoWpdWindows`; **NFC/NFD** su APFS
+    (`planner._Esistenza._chiave` e `riservati` senza normalizzazione: il secondo file finisce in `failed` a ogni giro); un `a.JPG`
+    «bugiardo» su FS **case-sensitive** diventa `a (1).jpg`; `_rimetti_estensione_webp` duplica `_libero`; conversione: `samefile` con
+    hardlink, `.conv` preesistente, test mancanti per `unlink`/999 tentativi.
+  - Parte A: test per `mtime == 0`; race residua fra due salvataggi simultanei della cronologia (`.tmp` condiviso); HRESULT non
+    controllato (D8); D12 residuo col nome del file nel dettaglio del comando; timeout assoluto di copia, `.part` orfani, `adb` vivo dopo
+    la chiusura, mount gvfs preesistente smontato (Linux), doppia estensione `x.jpg.jpg` con estensioni nascoste (Windows): «da valutare».
+  - Parte D: autocollaudo macOS bloccante in CI (rischio sopra); `SHA256SUMS` solo per Windows; workflow su Python 3.12, sviluppo su 3.14.
+  - Trailer di alcuni commit della Parte A (`7a12bab`, forse `4a4e690`) dice «Haiku 4.5» invece di «Sonnet 5.5».
+- [ ] **(g) Nessun telefono Android vero è mai stato collegato, su nessun sistema** (né diretto né con ADB): autorizzazione, ricerca
+  reale, copia e cancellazione da provare. **È la verifica più importante che manca.**
+  - Windows diretto (WPD): mai eseguito su hardware; `wpd_win.ps1` coperto solo da test di contratto e parsing.
+  - Linux diretto (`gio`/`jmtpfs`): solo test simulati.
+  - macOS diretto: verificato solo fino a «nessun telefono collegato».
+- [ ] Limite di progetto (non un difetto): con il collegamento diretto di **Windows** la cancellazione dal telefono non è disponibile
+  (Failed Approaches #17).
+- [ ] Opzionale: firma del `.exe` (evita SmartScreen) e firma/notarizzazione del `.app` macOS (senza firma: clic destro → Apri).
 
 ---
 
@@ -160,13 +200,22 @@ ricreare le cartelle del telefono se serve.
     cmd.exe non esegue i `.ps1`. Windows PowerShell 5.1 legge i file senza BOM con la codifica
     ANSI: gli accenti delle frasi italiane diventano illeggibili e `$tipo -eq "Dispositivo
     portatile"` non trova più nulla su Windows italiano. **Soluzione**: i `.ps1` **hanno** il BOM
-    (oggi resta solo `wpd_win.ps1`; i `.bat` non esistono più). C'è un test che lo verifica.
+    (oggi: `wpd_win.ps1` e i due script della pipeline in `installer/windows/`; i `.bat` non esistono più). C'è un test che lo verifica.
 19. **Riprovare lo stesso collegamento dopo un errore.** Il confronto `self.app.remote is not
     precedente` era sempre vero (gli oggetti sono ricostruiti a ogni tentativo) → ciclo infinito
     di tentativi e messaggio d'errore mai mostrato. **Soluzione**: `App._gia_provati`, un insieme
     di nomi già provati.
 20. **Generatore chiuso ≠ processo interrotto.** `GeneratorExit` non è né `OSError` né
     `FotoFacileError`, quindi `except` non lo prende. Dove serve pulizia va sempre un `finally`.
+21. **`app.update()` sulla finestra condivisa dei test.** Una volta ha bloccato la suite. Nei test usare
+    `update_idletasks()` (o `tests/aiuto.py:attendi()`), e sostituire `app.run_task` con un finto quando
+    si provano i flussi d'errore.
+22. **Layout a misura di schermo grande.** Con scala 1,5 i pulsanti «Copia le foto» e «Copia» finivano fuori
+    schermo (avanti/copia sotto «Altre opzioni», percentuale troppo alta). **Soluzione**: pulsanti principali
+    sopra le scelte rare, percentuale a 40 pt; c'è un test (salta se lo schermo è più basso di 800 px). Ogni
+    nuova pagina va provata a scala 1,5.
+23. **Invio globale.** `<Return>` lanciava l'azione principale anche con il focus su un pulsante diverso
+    (es. «Indietro»). **Soluzione**: `App._tasto_invio` preme il pulsante col focus (se non spento).
 
 ---
 
@@ -189,26 +238,32 @@ ricreare le cartelle del telefono se serve.
 | Il consiglio generico **più** il testo d'errore del comando | Quest'ultimo è spesso la spiegazione più precisa («il telefono è bloccato») |
 | Errori non ritentabili non vengono ritentati | Non ricopiare 3 volte un file su disco pieno |
 | Windows = `Setup.exe` (Inno Setup) costruito dalla pipeline | Unico modo onesto di ottenere un `.exe` verificato (su un runner Windows vero); niente `.bat` da lanciare a mano |
+| Installer **per utente, senza amministratore** | Un anziano non ha (né deve avere) i permessi; niente richiesta UAC |
+| Testo grande di serie (scala 1,25) e regolabile con `A−`/`A+` | Il pubblico principale legge male i caratteri piccoli; la scelta si ricorda |
+| Passi con **un solo pulsante grande**, il resto in «Altre opzioni» / «Mostra i dettagli» | Meno scelte = meno errori; le rare restano raggiungibili |
+| Cancellare dal telefono: **conferma a finestra subito** (predefinito «No») + promemoria rosso | L'azione non si annulla; mai attivarla per sbaglio con un doppio clic |
+| Nomi veri delle cartelle (`core/nomi_cartelle.py`) | «Camera» e «Screenshots» non dicono niente a chi non è pratico |
+| `run_task` chiama sempre `on_error` (anche per eccezioni impreviste) | Nessuna pagina resta senza via d'uscita |
+| Versione in un solo punto (`fotofacile/__init__.py`) | Installer, pipeline e programma non possono discordare |
 
 ---
 
 ## Current State
 
-**Working**: avvio → 4 passi → copia → resoconto, in modalità demo e (su macOS) fino al
-riconoscimento del telefono con il collegamento diretto; scelta automatica dei trasporti;
-copia piatta; `doctor` con «Modi di collegamento»; `--selftest`; cartella Windows; grafo graphify.
-**383 test verdi**, lint pulito (`pyflakes`).
+**Working**: avvio → 4 passi → copia → resoconto, in modalità demo e (su macOS) fino al riconoscimento del
+telefono con il collegamento diretto; scelta automatica dei trasporti; copia piatta; conversione WebP;
+nuova interfaccia (testo regolabile, Invio/Esc, nomi veri, conferma di cancellazione); `doctor`;
+`--selftest`; script Inno Setup e pipeline scritti e provati **solo nei test statici**.
+**636 test verdi**, `pyflakes` vuoto.
 
 **Broken**: nulla di noto nella suite.
 
-**Non verificato** (non è la stessa cosa di «funziona»): collegamento diretto Windows e Linux
-(mai eseguiti su hardware reale), collegamento diretto macOS con un telefono vero, qualsiasi
-operazione con un telefono Android reale. Vedi «Not Yet Done».
+**Non verificato** (non è la stessa cosa di «funziona»): **tutta la catena Windows** (pipeline, `.ps1`, Inno Setup,
+installazione vera, D17, WPD), collegamento diretto Linux e macOS con un telefono, qualsiasi operazione con un telefono
+Android reale. Vedi «Not Yet Done».
 
-**Uncommitted Changes**: tutta la revisione (trasporti, copia piatta, `B1–B24`, `C1–C19`,
-asset/icone, `.github/workflows`), i nuovi `requirements.txt`, `docs/PIANO-REVISIONE.md`,
-`tests/test_regressioni.py`, `tests/test_trasporto.py`, `tests/test_icona.py`, `fotofacile/__main__.py`,
-`fotofacile/aiutanti/`, la documentazione aggiornata e `graphify-out/` rigenerato.
+**Git**: il lavoro è **committato** su `revisione-v0.2` (HEAD `7226f8b`, `git log --oneline main..HEAD` = tutta la revisione).
+Fuori dai commit restano solo i file rigenerati di `graphify-out/` (di proposito). Nessun remoto aggiornato.
 
 ---
 
@@ -228,13 +283,22 @@ asset/icone, `.github/workflows`), i nuovi `requirements.txt`, `docs/PIANO-REVIS
 | `fotofacile/ui/app.py` | `usa_collegamento_migliore`, `cambia_collegamento`, `_gia_provati`, `run_task` (epoca anti-abbandono), `ricostruisci_pagine` |
 | `fotofacile/ui/page_connect.py` | Sondaggio con `after_cancel`, finestra di aiuto riusata, ripiego automatico su un altro collegamento |
 | `fotofacile/ui/theme.py` | Tavolozze, `contrasto()` WCAG, `tema_testo()`/`tema_tela()`/`tema_finestra()` per i widget Tk classici |
-| `docs/PIANO-REVISIONE.md` | Elenco completo dei difetti `B1–B24` e `C1–C19` con gravità: è il documento da leggere per capire cosa è stato corretto e perché |
+| `docs/REVISIONE-v0.2.md` | **Leggere per primo**: audit per gruppi (D1–D31), poi «Parte C e D» (interfaccia e installatore) |
+| `docs/PIANO-REVISIONE.md` | Difetti `B1–B24` e `C1–C19` della v0.1 (storico) |
+| `.superpowers/sdd/progress.md` | Registro di tutte le task (A, B, C, D) con i minor aperti; `task-*-report.md` e `carryover.md` hanno i dettagli |
+| `fotofacile/core/impostazioni.py` | Impostazioni personali (`~/.fotofacile/impostazioni.json`, scala del testo) |
+| `fotofacile/core/nomi_cartelle.py` | Nomi comprensibili delle cartelle e riconoscimento di miniature/sticker |
+| `fotofacile/ui/widgets.py` | `TestoAdattivo`, `Banner`, `LogPane`, `StepIndicator`, `PathChooser` |
+| `fotofacile/ui/page_select.py` / `page_options.py` / `page_transfer.py` | Passi 2, 3, 4 (`azione_principale`/`azione_indietro` = Invio/Esc) |
+| `fotofacile/cli.py` | `doctor`, `--selftest`, `emetti()` (stampa o scrive `diagnosi.txt`/`selftest.txt` senza terminale) |
+| `installer/windows/FotoFacile.iss` | Script Inno Setup (+ `Benvenuto.txt`, `verifica-eseguibile.ps1`, `prova-installazione.ps1` usati dalla pipeline) |
+| `scripts/leggi_versione.py` | Legge la versione da `fotofacile/__init__.py` per la pipeline |
 | `tests/test_regressioni.py` | Un test per ogni bug corretto; il commento dice cosa succedeva **prima** |
 | `tests/test_trasporto.py` | Scelta automatica, contratto degli aiutanti, WPD/Linux simulati |
 | `tests/conftest.py` | Finestra condivisa + `azzera()`: capire questo file evita crash e test fragili |
 | `tests/pilota_app.py` | Collaudo end-to-end dell'app vera (`FF_DEST`, `FF_ESITO`) |
 | `scripts/build_app.py` | Build multipiattaforma + icona + `--add-data` degli aiutanti + PyObjC su macOS |
-| `.github/workflows/build-installers.yml` | Installer macOS (dmg) + Windows (Inno Setup) + Release |
+| `.github/workflows/build-installers.yml` | Installer macOS (dmg) + Windows (Inno Setup, con prova d'installazione) + Release (solo su tag `v*`) — **mai eseguita** |
 
 ---
 
@@ -318,6 +382,8 @@ costruito dalla pipeline GitHub), fa doppio clic e preme «Avanti». Chi non vuo
 usa `FotoFacile-portable.zip`. Non ci sono più `.bat`/`.ps1` d'installazione né la cartella
 «FotoFacile per Windows» (task D3). `fotofacile/aiutanti/wpd_win.ps1` **resta**: è l'aiutante
 che parla con il telefono, e viaggia con il programma (`build_app.py --add-data`).
+Il Setup **non si può costruire da macOS**: lo fa il job Windows della pipeline (Python 3.12, PyInstaller, Pillow, Inno Setup da
+Chocolatey). Diagnosi dal programma installato: menu Start → «FotoFacile - Diagnosi» (scrive `%USERPROFILE%\.fotofacile\diagnosi.txt`).
 
 ---
 
@@ -326,7 +392,7 @@ che parla con il telefono, e viaggia con il programma (`build_app.py --add-data`
 1. **Ambiente e test**
    ```bash
    cd ~/Desktop/Programmazione/FotoFacile
-   .venv/bin/python -m pytest tests | tail -3        # atteso: 383 passed
+   .venv/bin/python -m pytest tests | tail -3        # atteso: 636 passed
    ```
    - Nota: `pytest.ini` aggiunge già `-q`, quindi un doppio `-q` nasconde la riga di riepilogo.
    - Se fallisce: `.venv/bin/python -m pytest tests --tb=short` e guarda i primi 3 errori; i test
@@ -363,7 +429,8 @@ che parla con il telefono, e viaggia con il programma (`build_app.py --add-data`
    ```
 
 6. **Windows**: il `Setup.exe` si costruisce solo dalla pipeline (`.github/workflows/build-installers.yml`).
-   Test dell'aiutante e dell'installer: `.venv/bin/python -m pytest tests/test_aiutante_windows.py tests/test_installer_pacchetti.py -q`.
+   Test statici di aiutante, `.iss` e workflow: `.venv/bin/python -m pytest tests/test_aiutante_windows.py tests/test_installer_iss.py tests/test_installer_pacchetti.py tests/test_workflow.py -o addopts="" -q`.
+   Prima di lanciare la pipeline leggere «Not Yet Done» (a): serve la conferma di Marco per push/tag.
 
 7. **Build macOS**: `pip install -r requirements.txt`, poi `python3 scripts/build_app.py --verify` →
    `dist/FotoFacile.app`; l'autocollaudo deve rispondere `{"ok": true}`.
@@ -386,7 +453,7 @@ che parla con il telefono, e viaggia con il programma (`build_app.py --add-data`
 - Graphify: `uv tool install graphifyy` (interprete in `graphify-out/.graphify_python`).
 - Grafica da automazione: `launchctl asuser $(id -u)` + `PYTHONPATH` esplicito + `screencapture`.
 - Nessuna chiave API.
-- Windows: nessun prerequisito sul PC di destinazione (il `Setup.exe` contiene già tutto).
+- Windows: nessun prerequisito sul PC di destinazione (il `Setup.exe` contiene già tutto). Per sviluppare la conversione WebP dal sorgente: `pip install pillow` (facoltativo).
 
 ---
 
@@ -430,7 +497,8 @@ che parla con il telefono, e viaggia con il programma (`build_app.py --add-data`
   standard a righe JSON (`{"dispositivi": [...]}`, una riga per file + `{"fine": true}`, i byte
   della copia su stdout), messaggi per l'utente su stderr, codici 0/2/3. Se cambia, vanno aggiornati
   **tutti e tre** gli aiutanti e `core/trasporto_aiutante.py`.
-- **Codifica degli script PowerShell**: i `.ps1` **devono avere** il BOM UTF-8 (PowerShell 5.1 legge
+- **Codifica degli script PowerShell**: i `.ps1` (`wpd_win.ps1` e i due di `installer/windows/`, questi con
+  fine riga CRLF) **devono avere** il BOM UTF-8 (PowerShell 5.1 legge
   senza BOM come ANSI: accenti illeggibili e confronti di testo rotti); eventuali
   `.bat` **non devono** averlo (cmd.exe non lo salta: `'ï»¿@echo' non riconosciuto`; oggi non ce ne sono).
 - **`wpd_win.ps1` deve viaggiare con il programma**: è incluso da `build_app.py` (`--add-data`). Senza, il collegamento diretto di Windows non funziona.
@@ -454,3 +522,7 @@ che parla con il telefono, e viaggia con il programma (`build_app.py --add-data`
 - Il `.app` non è firmato: prima apertura con clic destro → «Apri». L'`.exe` Windows non può essere
   creato da macOS.
 - Se aggiungi una pagina, aggiorna `azzera()` in `tests/conftest.py`.
+- **La scala del testo è globale** (`theme.imposta_scala`): i test che creano un `App` proprio la spostano; la fixture autouse
+  `scala_testo_normale` la riporta a 1,0. Ogni pagina nuova: nessun `font()` sotto 14, nessun `wraplength` fisso (usare `TestoAdattivo`).
+- **Il `.iss` e i `.ps1` non sono mai stati eseguiti**: non fidarsi finché non gira la pipeline (vedi «Not Yet Done» a).
+- **Non pubblicare** (push, tag, Release) senza chiedere a Marco.

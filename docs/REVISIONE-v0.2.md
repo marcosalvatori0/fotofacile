@@ -1036,3 +1036,66 @@ File letti: `scripts/build_app.py`, `scripts/crea_installer_mac.py`, `scripts/ma
   cambia le icone). `scripts/run_tests.sh`: **ok**.
 - `build_app.py:141-160` riscrive a ogni costruzione `Avvia FotoFacile.command`, che è nel
   repository: oggi il contenuto coincide (nessuna modifica dopo la costruzione), **ok**.
+
+
+---
+
+## Parte C e D — nuova interfaccia e installatore Windows
+
+Commit `46259de..7226f8b` (18 commit sul ramo `revisione-v0.2`). A fine lavoro: **636 test verdi**, `pyflakes` vuoto,
+versione **0.2.0**. Questa parte non è un audit: descrive cosa è cambiato e perché, e le correzioni scaturite
+dalla revisione finale.
+
+### Parte C — interfaccia pensata per chi non è pratico
+
+**Perché.** Il pubblico principale è fatto di persone anziane o poco pratiche: caratteri piccoli, troppe scelte, parole
+tecniche («Sfoglia», «Camera», «Debug USB») e azioni pericolose a portata di clic.
+
+**Cosa è cambiato.**
+- **Testo grande e regolabile** (`3a2f271`, `64a2d1a`, `155c99d`): scala 1,0 / 1,25 / 1,5 (predefinita 1,25) con i pulsanti
+  `A−` / `A+`, salvata in `~/.fotofacile/impostazioni.json` (`core/impostazioni.py`; un file rotto o con valori strani torna ai
+  predefiniti). Nessun testo sotto i 14 pt a scala normale, focus ben visibile, `TestoAdattivo` che va a capo da solo (`10cdabd`, `5b5b4e4`).
+- **Tasti**: Invio = azione principale, Esc = indietro. **Dettagli** tecnici chiusi dietro «Mostra i dettagli».
+- **Passo 1** (`139bdc1`): tre istruzioni fisse, indicatore ✔/⚠; dopo tre tentativi senza telefono compare l'aiuto grande;
+  «Riprova», «Installa componente mancante» e «Prova senza telefono» diventano collegamenti discreti.
+- **Passo 2** (`5707c78`, `57b1a72`, `b217073`): **nomi veri delle cartelle** (`core/nomi_cartelle.py`: solo l'ultimo segmento del
+  percorso, sottocartelle «Foto inviate su WhatsApp», «Memoria del telefono», nomi uguali distinti da «(in …)»), menu del **periodo**
+  al posto della data scritta a mano, miniature e sticker nascosti salvo «Mostra anche…».
+- **Passo 3** (`43d0d17`): riassunto a parole, «Altre opzioni» chiuse, conferma con finestra prima di **cancellare dal telefono**.
+- **Passo 4** (`82629f4`): percentuale grande, tempo residuo a parole («manca circa 2 minuti»), singolari corretti
+  («1 secondo»), «Fatto!» chiaro, «Indietro» dopo un errore, nessuna seconda copia in parallelo.
+- **Versione unica** (`adecf40`): `0.2.0` solo in `fotofacile/__init__.py`.
+
+**Problemi trovati dalla revisione combinata di C6–C9 e corretti** (`7226f8b`, «fix wave»):
+
+| # | Problema | Correzione |
+|---|---|---|
+| 1 | **Pulsanti fuori schermo**: con «Altre opzioni» aperte, testo grande o schermo basso, «Copia le foto» (passo 3) e i pulsanti del passo 4 finivano sotto il bordo (a 1,5× fino a 30–170 px di troppo). | Riga «Indietro / Copia le foto» **sopra** «Altre opzioni»; percentuale 48→40 pt e margini ridotti. Test a scala 1,5 (salta se lo schermo è < 800 px). |
+| 2 | **Invio sul pulsante sbagliato**: con il focus su «Indietro» un Invio lanciava l'azione principale. | `App._tasto_invio` preme il pulsante che ha il focus (se non spento); sulle caselle non fa nulla. |
+| 3 | **Promemoria di cancellazione invisibile** con «Altre opzioni» chiuse (la spunta poteva restare attiva senza che si vedesse). | Avviso rosso sempre visibile finché la spunta è attiva; il riassunto dice «Poi le toglierò dal telefono.»; se la finestra di conferma stessa fallisce la spunta resta spenta. |
+| 4 | **Errori imprevisti**: `run_task` non chiamava `on_error` per le eccezioni generiche, e la pagina di copia restava senza pulsanti. | Chiama `on_error` con un messaggio umano («Qualcosa non ha funzionato come previsto») e un suggerimento. |
+| 5 | **Caratteri vecchi dopo `A+`**: banner e registro non seguivano la nuova scala (`7e45557`). | `Banner` e `LogPane` hanno `aggiorna_font()`, chiamato da `cambia_scala`. |
+| minor | «Toglie la selezione» → «Togli la selezione»; «Indietro» anche dopo l'interruzione; messaggio «Trovate N» conta solo le cartelle visibili; le rotelle del mouse non si accumulano a ogni ricostruzione. | Corretti. |
+
+**Ancora aperto.** C10 (controlli automatici di leggibilità e verifica a schermo) è **rimandato**; a 1,5× con «Altre opzioni» aperte le
+ultime caselle possono restare sotto il bordo (il pulsante principale no). I minor sono in `HANDOFF.md`.
+
+### Parte D — installatore Windows
+
+**Perché.** Il pacchetto v0.1 (cartella con `.bat` e `.ps1`, Python da installare) era fragile e poco adatto a un anziano.
+Un `.exe` non si può costruire da macOS, quindi lo produce la pipeline su un runner Windows vero.
+
+**Cosa è cambiato.**
+- **`installer/windows/FotoFacile.iss`** (`1d2cc7f`): Inno Setup in italiano, finestra grande, **senza amministratore** (installa per
+  utente), collegamenti su Desktop e menu Start, collegamento «Diagnosi», disinstallazione da Impostazioni → App.
+- **Diagnosi senza finestra nera** (`7f69836`): `doctor` e `--selftest` dal programma installato scrivono `diagnosi.txt` /
+  `selftest.txt` in `%USERPROFILE%\.fotofacile` (`emetti()` in `cli.py`); `doctor` apre il Blocco note.
+- **Via i `.bat` e i `.ps1` d'installazione** (`eceeaae`), con la relativa cartella «FotoFacile per Windows» (quella sulla Scrivania di
+  Marco resta da cancellare, chiedere a lui). Restano solo `Setup.exe` e `FotoFacile-portable.zip`.
+- **Pipeline** (`762a5b6`): dopo la costruzione l'exe viene verificato (`selftest` con `"ok": true`, `doctor` con «Conversione WebP»,
+  `wpd_win.ps1` dentro il pacchetto); il Setup viene **installato, avviato e disinstallato davvero** sul runner
+  (`prova-installazione.ps1`); `SHA256SUMS.txt` nella Release; l'autocollaudo macOS non è più mascherato da `|| echo`.
+  Corretto un bug vero: `build_app.py` produceva uno zip **vuoto** su Windows/Linux (chiude anche il difetto segnalato dall'audit G8).
+
+**Da provare.** Nulla di questo è stato eseguito su Windows: la pipeline non è mai partita (nessun push) e i `.ps1` non sono mai
+stati lanciati. Rischi noti della prima esecuzione, prove manuali (D6) e passi che spettano a Marco (D5): `HANDOFF.md`, «Not Yet Done».

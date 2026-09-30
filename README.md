@@ -4,8 +4,9 @@ Copia le foto dal telefono Android al computer in pochi clic: niente gestore fil
 cartelle difficili da trovare, niente parole tecniche. **Non serve attivare il Debug USB**:
 il programma trova da sé il modo di leggere il telefono.
 
-Funziona su **Windows**, **macOS** e **Linux**. Nei pacchetti pronti non c'è nulla da
-installare; chi usa il programma dal sorgente ha solo bisogno di Python con la sua grafica.
+Funziona su **Windows**, **macOS** e **Linux**. Versione attuale: **0.2.0**. Su Windows basta
+scaricare `FotoFacile-Setup-<versione>.exe` (vedi «Windows: un solo file da scaricare» più sotto);
+su macOS il `.dmg`. Chi usa il programma dal sorgente ha solo bisogno di Python con la sua grafica.
 
 ## Cosa serve
 
@@ -34,7 +35,12 @@ bisogno di nulla.
 | Linux | `python3 fotofacile.py` |
 
 Si apre una finestra con quattro passi. Premi **Avanti** per andare avanti e **Indietro** per
-tornare: non si perde nulla, e le foto già copiate non vengono copiate di nuovo.
+tornare (oppure i tasti **Invio** ed **Esc**): non si perde nulla, e le foto già copiate non
+vengono copiate di nuovo.
+
+I caratteri sono grandi di proposito. Con i pulsanti **A−** e **A+** (nella prima schermata,
+accanto a «Testo») si rimpiccioliscono o ingrandiscono ancora: la scelta viene ricordata. I
+particolari tecnici restano nascosti e si vedono solo premendo **«Mostra i dettagli»**.
 
 ## La prima volta: collega il telefono
 
@@ -45,26 +51,35 @@ Non c'è nessuna impostazione da attivare, per nessuna marca: Samsung, Xiaomi, G
 Huawei, Oppo e tutti gli altri funzionano subito. Se compare una richiesta sullo schermo del
 telefono, tocca **Consenti**.
 
-Se il telefono non viene riconosciuto, premi **«Il telefono non viene riconosciuto?»**: il
-programma elenca prima le cose semplici (un altro cavo USB, un'altra porta del computer, lo
-schermo sbloccato), e solo alla fine le istruzioni per attivare il Debug USB della tua
-marca, come ultima possibilità. Prova anche **«Riprova il collegamento»**. Su Windows a
-volte serve il driver USB del produttore del telefono.
+Se il telefono non viene riconosciuto, premi **«Serve aiuto?»** (dopo qualche tentativo compare
+anche il grande **«Il telefono non viene riconosciuto? Ti aiuto io»**): il programma elenca prima
+le cose semplici (un altro cavo USB, un'altra porta del computer, lo schermo sbloccato, e sul
+telefono la scelta **«Trasferimento file»**), e solo alla fine le istruzioni per attivare il Debug
+USB della tua marca, come ultima possibilità. Prova anche **«Riprova»**. Su Windows a volte serve il
+driver USB del produttore del telefono.
 
-Non hai un telefono a portata di mano? Premi **«Prova il programma senza telefono (demo)»**:
+Non hai un telefono a portata di mano? Premi **«Prova senza telefono»**:
 viene usato un telefono finto e puoi vedere tutta la procedura.
 
 ## Uso quotidiano
 
-1. **Scegli le foto**: metti o togli la spunta alle cartelle trovate sul telefono (Camera,
-   Screenshot, WhatsApp…). Puoi includere o escludere i video e copiare solo le foto più
-   recenti di una certa data.
-2. **Destinazione**: va bene la cartella proposta (per esempio *Immagini → FotoFacile → nome
-   del telefono → data*). Le foto e i video finiscono **direttamente lì**, senza ricreare le
-   cartelle del telefono. Se preferisci ritrovare la stessa struttura di cartelle del
-   telefono, spunta **«Ricrea anche le cartelle del telefono (di solito non serve)»**.
-3. **Copia**: vedi quante foto restano, a che velocità e quanto tempo manca. Puoi interrompere
-   quando vuoi: le foto già copiate restano al sicuro e i file mezzi copiati vengono eliminati.
+1. **Scegli le foto**: metti o togli la spunta alle cartelle trovate sul telefono, che hanno nomi
+   comprensibili (per esempio «Foto e video scattati con il telefono», «Foto ricevute su
+   WhatsApp», «Schermate salvate»). Puoi includere o escludere i video e scegliere dal menu
+   **«Quali foto vuoi?»** tutte le foto, quelle dell'ultimo mese, degli ultimi 3 mesi o
+   dell'ultimo anno. Miniature e sticker sono nascosti, a meno che spunti «Mostra anche
+   miniature e sticker».
+2. **Dove salvo le foto?**: va bene la cartella proposta (per esempio *Immagini → FotoFacile →
+   nome del telefono → data*; per cambiarla, «Cambia cartella…»). Le foto e i video finiscono
+   **direttamente lì**, senza ricreare le cartelle del telefono. Il programma dice a parole
+   quante foto copierà e se lo spazio basta. Le scelte rare stanno sotto **«Altre opzioni»**:
+   ricreare le cartelle del telefono («di solito non serve»), saltare le foto già copiate,
+   **trasformare le immagini WebP in JPG** (si aprono con qualsiasi programma) e **cancellare le
+   foto dal telefono dopo averle copiate**: quest'ultima chiede sempre conferma con una
+   finestra e lascia un avviso rosso ben visibile.
+3. **Copia**: vedi la percentuale in grande, quante foto restano e quanto tempo manca, a
+   parole. Puoi interrompere quando vuoi: le foto già copiate restano al sicuro e i file mezzi
+   copiati vengono eliminati.
 4. Alla fine puoi **aprire la cartella delle foto** e **salvare un resoconto** di quello che è
    stato copiato.
 
@@ -74,7 +89,7 @@ viene usato un telefono finto e puoi vedere tutta la procedura.
 |---|---|
 | «Non vedo ancora nessun telefono» | Controlla il cavo, sblocca lo schermo, prova un'altra porta USB |
 | «Sbloccalo e tocca Consenti» | Guarda lo schermo del telefono: c'è una richiesta da approvare |
-| «Il telefono non risponde» | Scollega e ricollega il cavo, poi premi «Riprova il collegamento» |
+| «Il telefono non risponde» | Scollega e ricollega il cavo, poi premi «Riprova» |
 | «Non riesco a collegarmi al telefono» | Premi «Installa componente mancante» (serve internet): compare solo se il computer non offre nessun collegamento normale |
 | «Con il collegamento di Windows non riesco a cancellare i file dal telefono» | Con il collegamento normale di Windows la cancellazione non è disponibile: cancella dalla Galleria, oppure attiva il Debug USB e riprova |
 | «Non c'è abbastanza spazio» | Scegli un'altra cartella o libera spazio sul disco |
@@ -141,7 +156,7 @@ Ogni versione pubblicata ha gli installer costruiti automaticamente su computer 
 
 | File | A cosa serve |
 |---|---|
-| `FotoFacile-Setup-<versione>.exe` | installer Windows: copia il programma, crea i collegamenti sul Desktop e nel menu Start, registra la disinstallazione in Impostazioni → App |
+| `FotoFacile-Setup-<versione>.exe` | installer Windows (senza permessi di amministratore): copia il programma, crea i collegamenti sul Desktop e nel menu Start, registra la disinstallazione in Impostazioni → App |
 | `FotoFacile-portable.zip` | Windows senza installare nulla: si scompatta e si usa |
 | `FotoFacile-<versione>.dmg` | installer macOS: si apre e si trascina l'app in Applicazioni |
 
@@ -187,6 +202,8 @@ procedura completa funzioni.
   processo principale non li importa mai: li avvia come processi separati e legge le loro
   risposte.
 - `fotofacile/ui/` — interfaccia Tkinter: quattro schermate, nessuna logica di business.
+- `installer/windows/` — script Inno Setup (`FotoFacile.iss`) e i due script PowerShell usati dalla
+  pipeline per provare davvero l'installazione.
 - **Scelta importante:** il programma **non usa thread**. Le operazioni lunghe sono
   generatori che avanzano a piccoli passi dentro il ciclo della grafica
   (`fotofacile/core/ops.py`, `fotofacile/core/adb_passi.py`,
@@ -195,7 +212,8 @@ procedura completa funzioni.
   (per esempio macOS con Tk 9).
 - Specifica: `docs/superpowers/specs/2026-09-28-fotofacile-design.md`
 - Piano di lavoro: `docs/superpowers/plans/2026-09-28-fotofacile.md`
-- Revisione e correzioni: `docs/PIANO-REVISIONE.md`
+- Revisione e correzioni: `docs/PIANO-REVISIONE.md` (v0.1) e `docs/REVISIONE-v0.2.md` (v0.2: audit, nuova interfaccia, installatore)
+- Stato del lavoro e cose da fare: `HANDOFF.md`
 - Dipendenze: per l'uso nessuna obbligatoria; su macOS il collegamento diretto usa
   `pyobjc-framework-ImageCaptureCore` (`requirements.txt`); `pytest` solo per lo sviluppo
   (`requirements-dev.txt`).
