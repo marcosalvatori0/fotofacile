@@ -159,6 +159,11 @@ def selftest() -> int:
     return 0 if dati["ok"] else 1
 
 
+#: Oltre questa dimensione il registro di avvio ricomincia da capo; la parte precedente resta
+#: in «avvio.log.1» (una copia sola). Così il file non cresce per sempre.
+LIMITE_LOG_AVVIO = 256 * 1024
+
+
 def scrivi_log_avvio(testo: str, env: Mapping[str, str] | None = None) -> Path:
     """Annota un messaggio nel registro di avvio (~/.fotofacile/avvio.log).
 
@@ -169,6 +174,11 @@ def scrivi_log_avvio(testo: str, env: Mapping[str, str] | None = None) -> Path:
     percorso = app_dir(env) / "avvio.log"
     path_obj = Path(percorso)
     path_obj.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if path_obj.stat().st_size >= LIMITE_LOG_AVVIO:
+            path_obj.replace(path_obj.with_name(path_obj.name + ".1"))
+    except OSError:  # registro ancora assente, o copia in uso: si continua ad aggiungere
+        pass
     with path_obj.open("a", encoding="utf-8") as uscita:
         uscita.write(f"{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}  {testo}\n")
     return path_obj

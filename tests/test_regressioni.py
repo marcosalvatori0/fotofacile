@@ -1495,3 +1495,37 @@ def test_d26_nomi_con_separatori_unicode_restano_un_file_solo():
         "/sdcard/DCIM/c\x85d.jpg",
         "/sdcard/DCIM/e.jpg",
     ]
+
+
+# ── D27 ────────────────────────────────────────────────────────────────────
+# Prima: `scrivi_log_avvio` aggiungeva righe a `~/.fotofacile/avvio.log` per sempre, senza
+# limite né rotazione (due righe a ogni apertura del programma, più gli avvisi interi).
+def test_d27_il_registro_di_avvio_non_cresce_per_sempre(tmp_path):
+    from fotofacile.cli import scrivi_log_avvio
+
+    env = {"HOME": str(tmp_path), "USERPROFILE": str(tmp_path)}
+    registro = tmp_path / ".fotofacile" / "avvio.log"
+    copia = registro.with_name("avvio.log.1")
+    registro.parent.mkdir()
+    registro.write_text("riga vecchia\n" * 200_000, encoding="utf-8")  # circa 2,6 MB
+
+    scrivi_log_avvio("dopo la prima rotazione", env)
+    assert registro.stat().st_size < 1024, "il registro riparte da capo"
+    assert "dopo la prima rotazione" in registro.read_text(encoding="utf-8")
+    assert copia.read_text(encoding="utf-8").startswith("riga vecchia"), "la copia precedente resta"
+
+    registro.write_text("riga più recente\n" * 200_000, encoding="utf-8")
+    scrivi_log_avvio("dopo la seconda rotazione", env)
+    assert copia.read_text(encoding="utf-8").startswith("riga più recente"), "si tiene una copia sola"
+    assert sorted(voce.name for voce in registro.parent.iterdir()) == ["avvio.log", "avvio.log.1"]
+
+
+def test_d27_un_registro_piccolo_continua_a_crescere(tmp_path):
+    from fotofacile.cli import scrivi_log_avvio
+
+    env = {"HOME": str(tmp_path), "USERPROFILE": str(tmp_path)}
+    scrivi_log_avvio("prima", env)
+    percorso = scrivi_log_avvio("seconda", env)
+    testo = percorso.read_text(encoding="utf-8")
+    assert "prima" in testo and "seconda" in testo
+    assert not percorso.with_name("avvio.log.1").exists()
