@@ -236,7 +236,8 @@ def test_webp_da_convertire_riserva_anche_png_e_webp(tmp_path):
     file = [foto("/sdcard/Pictures/a.webp"), foto("/sdcard/Download/a.png"), foto("/sdcard/Music/a.webp")]
     opzioni = TransferOptions(destination=tmp_path, preserve_structure=False, converti_webp=True)
     piano = build_plan(file, opzioni)
-    assert [f.dest_path.name for f in piano.files] == ["a.jpg", "a (1).png", "a (1).jpg"]
+    # Il terzo file salta «a (1).jpg»: «a (1).png» è del PNG e le tre varianti devono restare libere.
+    assert [f.dest_path.name for f in piano.files] == ["a.jpg", "a (1).png", "a (2).jpg"]
 
 
 def test_webp_riserva_png_e_webp_senza_distinzione_di_maiuscole(tmp_path):
@@ -251,3 +252,25 @@ def test_senza_conversione_il_piano_dei_webp_non_cambia(tmp_path):
     opzioni = TransferOptions(destination=tmp_path, preserve_structure=False)
     piano = build_plan(file, opzioni)
     assert [f.dest_path.name for f in piano.files] == ["a.webp", "a.png", "a (1).webp"]
+
+
+def test_webp_da_convertire_ha_le_tre_varianti_libere_e_distinte_dagli_altri(tmp_path):
+    # PNG, WebP, PNG: a runtime il WebP può diventare a.jpg, a.png o restare a.webp e il nome
+    # lo sceglie il disco, non il piano; per questo le tre varianti sono riservate al WebP.
+    file = [foto("/sdcard/Download/a.png"), foto("/sdcard/Pictures/a.webp"), foto("/sdcard/Music/a.png")]
+    opzioni = TransferOptions(destination=tmp_path, preserve_structure=False, converti_webp=True)
+    piano = build_plan(file, opzioni)
+    destinazioni = [f.dest_path for f in piano.files]
+    assert len(set(destinazioni)) == 3
+    webp = destinazioni[1]
+    assert webp.suffix == ".jpg"
+    varianti = {webp.with_suffix(e) for e in (".jpg", ".png", ".webp")}
+    assert not varianti & {destinazioni[0], destinazioni[2]}
+
+
+def test_webp_sceglie_il_primo_nome_con_tutte_le_varianti_libere(tmp_path):
+    (tmp_path / "a.webp").write_bytes(b"x")  # già su disco: a.jpg sarebbe libero, ma a.webp no
+    file = [foto("/sdcard/Pictures/a.webp"), foto("/sdcard/Music/a (1).png")]
+    opzioni = TransferOptions(destination=tmp_path, preserve_structure=False, converti_webp=True)
+    piano = build_plan(file, opzioni)
+    assert [f.dest_path.name for f in piano.files] == ["a (1).jpg", "a (1) (1).png"]

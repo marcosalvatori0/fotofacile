@@ -34,6 +34,8 @@ MAX_PERCORSO = 240
 MIN_NOME = 12
 #: Quante volte si prova ad aggiungere « (1)», « (2)»… a un nome già occupato.
 MAX_TENTATIVI_NOME = 1000
+# Estensioni che la conversione di un WebP può produrre (la prima è quella pianificata).
+VARIANTI_WEBP = (".jpg", ".png", ".webp")
 
 
 @dataclass(frozen=True)
@@ -211,24 +213,31 @@ def build_plan(
             case_insensitive=sensibile,
             converti_webp=convertito,
         )
-        esistente = esistenza.trova(destinazione)
-        if esistente is not None:
-            # «già presente» vale solo se il nome è identico: se differisce solo per le
-            # maiuscole (FOTO.JPG contro foto.jpg) si tratta di un file diverso, e su un
-            # disco non sensibile alle maiuscole sovrascriverlo perderebbe una foto.
-            # Un WebP che verrà convertito non ha una dimensione confrontabile: un file con
-            # lo stesso nome si considera **diverso** (al massimo resta un doppione).
-            uguale = esistente.name == destinazione.name and not convertito
-            if uguale and file.size and _dimensione(esistente) == file.size:
-                piano.skipped_existing += 1
-                continue
-            destinazione = esistenza.nome_libero(destinazione, options.destination)
-        esistenza.registra(destinazione)
         if convertito:
-            # La conversione può dare un .png (trasparenza) o lasciare un .webp (animato):
-            # si riservano anche questi nomi, così un file successivo non ci finisce sopra.
-            esistenza.registra(destinazione.with_suffix(".png"))
-            esistenza.registra(destinazione.with_suffix(".webp"))
+            # Il WebP può diventare .jpg (opaco), .png (trasparente) o restare .webp (animato),
+            # e a runtime il nome lo sceglie il disco, non il piano. Per questo qui si sceglie
+            # un nome di base per cui **tutte e tre** le varianti sono libere (su disco e nel
+            # piano) e le si riserva: a runtime la conversione trova sempre il suo nome e non
+            # deve mai aggiungere « (1)» da sola, e nessun altro file del piano (prima o dopo)
+            # può prendere uno di quei nomi. Un WebP non ha una dimensione confrontabile con
+            # il file convertito, quindi non viene mai scambiato per «già presente».
+            destinazione = esistenza.nome_libero_con_varianti(
+                destinazione, options.destination, VARIANTI_WEBP
+            )
+            for estensione in VARIANTI_WEBP:
+                esistenza.registra(destinazione.with_suffix(estensione))
+        else:
+            esistente = esistenza.trova(destinazione)
+            if esistente is not None:
+                # «già presente» vale solo se il nome è identico: se differisce solo per le
+                # maiuscole (FOTO.JPG contro foto.jpg) si tratta di un file diverso, e su un
+                # disco non sensibile alle maiuscole sovrascriverlo perderebbe una foto.
+                uguale = esistente.name == destinazione.name
+                if uguale and file.size and _dimensione(esistente) == file.size:
+                    piano.skipped_existing += 1
+                    continue
+                destinazione = esistenza.nome_libero(destinazione, options.destination)
+            esistenza.registra(destinazione)
         piano.files.append(PlannedFile(media=file, rel_path=relativo, dest_path=destinazione))
         piano.total_bytes += file.size
     return piano
@@ -275,17 +284,36 @@ class _Esistenza:
         self._indice(percorso.parent).setdefault(self._chiave(percorso.name), percorso)
 
     def nome_libero(self, percorso: Path, radice: Path) -> Path:
-        """Trova un nome non ancora occupato aggiungendo « (1)», « (2)»…
+        """Trova un nome non ancora occupato aggiungendo « (1)», « (2)»…"""
+        return self._primo_libero(percorso, radice, (), partenza=1)
+
+    def nome_libero_con_varianti(self, percorso: Path, radice: Path, estensioni: Sequence[str]) -> Path:
+        """Come ``nome_libero``, ma il nome vale solo se **tutte** le varianti sono libere.
+
+        Si parte dal nome così com'è (senza contatore): ``percorso`` è il nome di base con la
+        prima estensione; ``estensioni`` elenca le varianti (per esempio ``.jpg``, ``.png``,
+        ``.webp``) che devono restare libere insieme. Si restituisce il percorso con
+        l'estensione di ``percorso``.
+        """
+        return self._primo_libero(percorso, radice, tuple(estensioni), partenza=0)
+
+    def _primo_libero(
+        self, percorso: Path, radice: Path, estensioni: tuple[str, ...], partenza: int
+    ) -> Path:
+        """Il primo nome, dal contatore ``partenza``, per cui ogni variante è libera.
 
         Il ciclo è **limitato**: se per qualche motivo non si trovasse un nome libero
         (per esempio un accorciamento che cancella il contatore) si solleva un errore
         comprensibile invece di bloccare la finestra per sempre.
         """
-        for contatore in range(1, MAX_TENTATIVI_NOME):
-            candidato = _limita_percorso(
-                percorso.with_name(f"{percorso.stem} ({contatore}){percorso.suffix}"), radice
-            )
-            if self.trova(candidato) is None:
+        for contatore in range(partenza, MAX_TENTATIVI_NOME):
+            candidato = percorso
+            if contatore:
+                candidato = _limita_percorso(
+                    percorso.with_name(f"{percorso.stem} ({contatore}){percorso.suffix}"), radice
+                )
+            varianti = [candidato.with_suffix(e) for e in estensioni] or [candidato]
+            if all(self.trova(variante) is None for variante in varianti):
                 return candidato
         raise TransferError(
             f"Troppi file con lo stesso nome in {percorso.parent}.",

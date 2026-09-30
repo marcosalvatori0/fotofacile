@@ -1781,3 +1781,100 @@ def test_webp_trasparente_e_png_omonimo_non_si_sovrascrivono(tmp_path):
     convertito = [dati for dati in contenuti if dati != png]
     assert len(convertito) == 1 and convertito[0][:8] == b"\x89PNG\r\n\x1a\n"
     assert {p.suffix for p in (tmp_path / "out").iterdir()} == {".png"}
+
+
+def _immagine_bytes(formato: str, modo: str, colore, **extra) -> bytes:
+    import io
+
+    from PIL import Image
+
+    scarico = io.BytesIO()
+    Image.new(modo, (9, 9), colore).save(scarico, formato, **extra)
+    return scarico.getvalue()
+
+
+def _webp_animato_bytes() -> bytes:
+    import io
+
+    from PIL import Image
+
+    scarico = io.BytesIO()
+    fotogrammi = [Image.new("RGB", (9, 9), colore) for colore in ((255, 0, 0), (0, 255, 0), (0, 0, 255))]
+    fotogrammi[0].save(scarico, "WEBP", save_all=True, append_images=fotogrammi[1:], duration=50, loop=0)
+    return scarico.getvalue()
+
+
+def _copia_piatta(tmp_path, voci, preesistenti=None):
+    """Copia piatta con conversione WebP; ``voci`` è una lista di (percorso, contenuto)."""
+    from fotofacile.core.transfer import transfer
+
+    uscita = tmp_path / "out"
+    uscita.mkdir()
+    for nome, dati in (preesistenti or {}).items():
+        (uscita / nome).write_bytes(dati)
+    media = [
+        MediaFile(percorso, size=len(dati), mtime=1_500_000_000 + i, kind="photo")
+        for i, (percorso, dati) in enumerate(voci)
+    ]
+    opzioni = TransferOptions(destination=uscita, preserve_structure=False, converti_webp=True)
+    telefono = _TelefonoFinto({m.remote_path: dati for m, (_p, dati) in zip(media, voci)})
+    return uscita, transfer(telefono, "S1", build_plan(media, opzioni), opzioni)
+
+
+def test_webp_trasparente_tra_due_png_omonimi_non_perde_nessuna_foto(tmp_path):
+    """Ordine PNG, WebP trasparente, PNG: il nome del convertito lo decide il piano, non il disco."""
+    pytest.importorskip("PIL")
+    png1 = _immagine_bytes("PNG", "RGB", (1, 2, 3))
+    png2 = _immagine_bytes("PNG", "RGB", (200, 100, 50))
+    webp = _webp_bytes("RGBA", (200, 10, 10, 0))
+    uscita, esiti = _copia_piatta(
+        tmp_path,
+        [("/sdcard/Download/a.png", png1), ("/sdcard/Pictures/a.webp", webp), ("/sdcard/Music/a.png", png2)],
+    )
+    assert esiti.failed == []
+    assert len(esiti.copied) == 3 and len(set(esiti.copied)) == 3
+    contenuti = [p.read_bytes() for p in esiti.copied]
+    assert png1 in contenuti and png2 in contenuti  # i due PNG originali, intatti byte per byte
+    convertito = [dati for dati in contenuti if dati not in (png1, png2)]
+    assert len(convertito) == 1 and convertito[0][:8] == b"\x89PNG\r\n\x1a\n"
+    assert len(list(uscita.iterdir())) == 3
+
+
+@pytest.mark.parametrize("ordine", [(0, 1, 2), (0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0)])
+def test_webp_animato_e_statico_omonimi_con_un_png_non_si_sovrascrivono(tmp_path, ordine):
+    pytest.importorskip("PIL")
+    animato = _webp_animato_bytes()
+    statico = _webp_bytes("RGB", (9, 99, 199))
+    png = _immagine_bytes("PNG", "RGB", (1, 2, 3))
+    voci = [
+        ("/sdcard/Pictures/a.webp", animato),
+        ("/sdcard/Music/a.webp", statico),
+        ("/sdcard/Download/a.png", png),
+    ]
+    uscita, esiti = _copia_piatta(tmp_path, [voci[i] for i in ordine])
+    assert esiti.failed == []
+    assert len(esiti.copied) == 3 and len(set(esiti.copied)) == 3
+    assert len(list(uscita.iterdir())) == 3
+    assert png in [p.read_bytes() for p in esiti.copied]
+
+
+@pytest.mark.parametrize("trasparente", [True, False])
+def test_webp_non_finisce_sul_nome_di_un_file_gia_nella_cartella(tmp_path, trasparente):
+    """``a.png`` (o ``a.webp``) è già nella cartella di destinazione e ``a (1).png`` arriva dopo."""
+    pytest.importorskip("PIL")
+    esistente = _immagine_bytes("PNG", "RGB", (7, 7, 7))
+    altro_png = _immagine_bytes("PNG", "RGB", (200, 100, 50))
+    if trasparente:
+        webp, nome_esistente = _webp_bytes("RGBA", (200, 10, 10, 0)), "a.png"
+    else:
+        webp, nome_esistente = _webp_animato_bytes(), "a.webp"
+    uscita, esiti = _copia_piatta(
+        tmp_path,
+        [("/sdcard/Pictures/a.webp", webp), ("/sdcard/Music/a (1).png", altro_png)],
+        preesistenti={nome_esistente: esistente},
+    )
+    assert esiti.failed == []
+    assert len(esiti.copied) == 2 and len(set(esiti.copied)) == 2
+    assert (uscita / nome_esistente).read_bytes() == esistente
+    assert altro_png in [p.read_bytes() for p in esiti.copied]
+    assert len(list(uscita.iterdir())) == 3
