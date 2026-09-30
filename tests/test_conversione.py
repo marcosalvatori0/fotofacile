@@ -139,3 +139,25 @@ def test_errore_durante_la_scrittura_lascia_intatto_l_originale(tmp_path, monkey
     assert sorgente.read_bytes() == prima
     assert not list(tmp_path.glob("*.conv"))
     assert len(_immagini_in(tmp_path)) == 1
+
+
+def test_un_nome_riservato_dal_piano_non_viene_scelto(tmp_path):
+    """``evita`` elenca nomi (in minuscolo) che il piano darà ad altri file: anche se liberi sul disco."""
+    sorgente = _webp(tmp_path / "a.webp")
+    finale = converti_webp(sorgente, evita=frozenset({str(tmp_path / "a.jpg").casefold()}))
+    assert finale == tmp_path / "a (1).jpg"
+    assert not (tmp_path / "a.jpg").exists()
+
+
+def test_un_nome_riservato_con_maiuscole_diverse_non_viene_scelto(tmp_path):
+    sorgente = _webp(tmp_path / "Foto.webp", modo="RGBA", colore=(1, 2, 3, 0))
+    finale = converti_webp(sorgente, evita=frozenset({str(tmp_path / "FOTO.PNG").casefold()}))
+    assert finale == tmp_path / "Foto (1).png"
+
+
+def test_un_nome_riservato_vale_anche_per_l_animazione(tmp_path):
+    sorgente = tmp_path / "a.jpg"  # WebP animato con estensione bugiarda
+    fotogrammi = [Image.new("RGB", (9, 9), c) for c in ((255, 0, 0), (0, 255, 0))]
+    fotogrammi[0].save(sorgente, "WEBP", save_all=True, append_images=fotogrammi[1:], duration=50, loop=0)
+    finale = converti_webp(sorgente, evita=frozenset({str(tmp_path / "a.webp").casefold()}))
+    assert finale == tmp_path / "a (1).webp"

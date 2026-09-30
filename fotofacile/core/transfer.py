@@ -91,14 +91,32 @@ def _applica_data(percorso: Path, mtime: int) -> None:
         pass
 
 
-def _rimetti_estensione_webp(percorso: Path) -> Path:
-    """Dà al file l'estensione ``.webp`` (il contenuto è WebP): meglio onesto che «.jpg»."""
+def _rimetti_estensione_webp(
+    percorso: Path, evita: frozenset[str] = frozenset(), avvisi: list[str] | None = None
+) -> Path:
+    """Dà al file l'estensione ``.webp`` (il contenuto è WebP): meglio onesto che «.jpg».
+
+    Non sceglie mai un nome già sul disco o in ``evita`` (nomi in ``casefold`` riservati dal
+    piano ad altri file): se dopo 1000 tentativi non ne trova uno libero lascia il nome
+    attuale e lo scrive in ``avvisi``, invece di sovrascrivere la foto di qualcuno.
+    """
     if percorso.suffix.lower() == ".webp":
         return percorso
+
+    def occupato(candidato: Path) -> bool:
+        return candidato.exists() or str(candidato).casefold() in evita
+
     nuovo = percorso.with_suffix(".webp")
     contatore = 0
-    while nuovo.exists():
+    while occupato(nuovo):
         contatore += 1
+        if contatore >= 1000:
+            if avvisi is not None:
+                avvisi.append(
+                    f"Non ho trovato un nome libero per dare a {percorso.name} l'estensione .webp: "
+                    "l'ho lasciata col nome attuale."
+                )
+            return percorso
         nuovo = percorso.with_name(f"{percorso.stem} ({contatore}).webp")
     try:
         os.replace(percorso, nuovo)
@@ -215,6 +233,9 @@ def _passi_di_copia(
 ) -> Generator[float, None, TransferResults]:
     """Il corpo della copia; il salvataggio della cronologia sta nell'involucro."""
     avanzamento = Progress(total_files=plan.file_count, bytes_total=plan.total_bytes)
+    # Nomi che il piano darà ai file non ancora scritti: la conversione WebP (il cui nome
+    # finale dipende dal contenuto, non dall'estensione) non deve mai sceglierne uno.
+    riservati = frozenset(str(p.dest_path).casefold() for p in plan.files)
     inizio = orologio()
     ultimo = _pubblica(on_progress, avanzamento, orologio, 0.0, forza=True)
 
@@ -293,9 +314,9 @@ def _passi_di_copia(
         da_convertire = options.converti_webp and e_webp(finale)
         if da_convertire:
             try:
-                finale = converti_webp(finale)
+                finale = converti_webp(finale, evita=riservati)
             except Exception as errore:  # la conversione non deve mai far perdere una foto
-                finale = _rimetti_estensione_webp(finale)
+                finale = _rimetti_estensione_webp(finale, evita=riservati, avvisi=esiti.warnings)
                 esiti.warnings.append(
                     f"Non sono riuscito a trasformare {finale.name} in JPG ({errore}): "
                     "l'ho lasciata così com'è."

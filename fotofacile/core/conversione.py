@@ -33,19 +33,30 @@ def _stesso_file(a: Path, b: Path) -> bool:
     return a == b or (a.exists() and b.exists() and os.path.samefile(a, b))
 
 
-def _libero(percorso: Path, occupato_da: Path | None) -> Path:
-    """Un nome non ancora usato (aggiunge « (1)», « (2)»…); ``occupato_da`` è il file stesso."""
-    if not percorso.exists() or (occupato_da is not None and _stesso_file(percorso, occupato_da)):
+def _libero(percorso: Path, occupato_da: Path | None, evita: frozenset[str] = frozenset()) -> Path:
+    """Un nome non ancora usato (aggiunge « (1)», « (2)»…); ``occupato_da`` è il file stesso.
+
+    ``evita`` sono nomi (già in ``casefold``) che il piano darà ad altri file non ancora
+    copiati: sul disco non ci sono ancora, ma scriverci sopra li farebbe sovrascrivere.
+    Il confronto ignora le maiuscole: al peggio si aggiunge un « (1)» in più, mai una perdita.
+    """
+    if occupato_da is not None and _stesso_file(percorso, occupato_da):
+        return percorso
+
+    def occupato(candidato: Path) -> bool:
+        return candidato.exists() or str(candidato).casefold() in evita
+
+    if not occupato(percorso):
         return percorso
     for contatore in range(1, 1000):
         candidato = percorso.with_name(f"{percorso.stem} ({contatore}){percorso.suffix}")
-        if not candidato.exists():
+        if not occupato(candidato):
             return candidato
     # mai restituire un nome occupato: si sovrascriverebbe la foto di qualcun altro
     raise FileExistsError(f"nessun nome libero vicino a {percorso}")
 
 
-def converti_webp(percorso: Path, qualita: int = 95) -> Path:
+def converti_webp(percorso: Path, qualita: int = 95, evita: frozenset[str] = frozenset()) -> Path:
     """Converte **sul posto** un file WebP e restituisce il percorso finale.
 
     - opaco → ``.jpg`` (qualità alta, EXIF e profilo colore conservati);
@@ -54,6 +65,9 @@ def converti_webp(percorso: Path, qualita: int = 95) -> Path:
 
     Si scrive su un file temporaneo e lo si rimpiazza solo a lavoro finito: se qualcosa va
     storto l'originale è intatto. La data del file viene conservata.
+
+    ``evita``: nomi (in ``casefold``) riservati dal piano di copia a file non ancora scritti,
+    che il nome scelto non deve mai coincidere con nessuno (vedi :func:`_libero`).
     """
     from PIL import Image
 
@@ -63,7 +77,7 @@ def converti_webp(percorso: Path, qualita: int = 95) -> Path:
     try:
         with Image.open(sorgente) as immagine:
             if getattr(immagine, "is_animated", False):
-                finale = _libero(sorgente.with_suffix(".webp"), sorgente)
+                finale = _libero(sorgente.with_suffix(".webp"), sorgente, evita)
                 sul_posto = _stesso_file(finale, sorgente)
                 if sul_posto:
                     finale = sorgente  # il nome non cambia (anche se differisce solo per le maiuscole)
@@ -80,7 +94,7 @@ def converti_webp(percorso: Path, qualita: int = 95) -> Path:
                 else:
                     formato, estensione, pronta = "JPEG", ".jpg", immagine.convert("RGB")
                     opzioni.update(quality=qualita, subsampling=0)
-                finale = _libero(sorgente.with_suffix(estensione), sorgente)
+                finale = _libero(sorgente.with_suffix(estensione), sorgente, evita)
                 sul_posto = _stesso_file(finale, sorgente)
                 if sul_posto:
                     finale = sorgente  # il nome non cambia: niente unlink del file appena scritto

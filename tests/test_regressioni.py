@@ -1746,7 +1746,7 @@ def test_conversione_fallita_conserva_il_file_come_webp(tmp_path, monkeypatch):
     media = MediaFile("/sdcard/Pictures/a.webp", size=len(dati), mtime=5, kind="photo")
     opzioni = TransferOptions(destination=tmp_path / "out", converti_webp=True)
 
-    def rotta(_percorso):
+    def rotta(_percorso, **_k):
         raise ValueError("Pillow non ci riesce")
 
     monkeypatch.setattr(modulo, "converti_webp", rotta)
@@ -1878,3 +1878,124 @@ def test_webp_non_finisce_sul_nome_di_un_file_gia_nella_cartella(tmp_path, trasp
     assert (uscita / nome_esistente).read_bytes() == esistente
     assert altro_png in [p.read_bytes() for p in esiti.copied]
     assert len(list(uscita.iterdir())) == 3
+
+
+# ── WebP con estensione bugiarda: il piano riserva i nomi, il disco non basta ──
+class _TelefonoCheControllaLeCancellazioni(_TelefonoFinto):
+    """Ogni cancellazione dal telefono deve avere il suo file sul disco (niente foto perse)."""
+
+    def __init__(self, contenuti, cartella: Path) -> None:
+        super().__init__(contenuti)
+        self.cartella = cartella
+        self.file_al_momento: list[int] = []
+
+    def delete_file(self, serial, remote_path):
+        super().delete_file(serial, remote_path)
+        self.file_al_momento.append(len([p for p in self.cartella.rglob("*") if p.is_file()]))
+
+
+def _copia_con_opzioni(tmp_path, voci, preserve_structure=False, delete_after=False):
+    """Come ``_copia_piatta`` ma con le opzioni scelte; ``voci`` = (percorso, contenuto)."""
+    from fotofacile.core.transfer import transfer
+
+    uscita = tmp_path / "out"
+    uscita.mkdir()
+    media = [
+        MediaFile(percorso, size=len(dati), mtime=1_500_000_000 + i, kind="photo")
+        for i, (percorso, dati) in enumerate(voci)
+    ]
+    opzioni = TransferOptions(
+        destination=uscita,
+        preserve_structure=preserve_structure,
+        converti_webp=True,
+        delete_after=delete_after,
+    )
+    telefono = _TelefonoCheControllaLeCancellazioni({m.remote_path: d for m, (_p, d) in zip(media, voci)}, uscita)
+    esiti = transfer(telefono, "S1", build_plan(media, opzioni), opzioni)
+    return uscita, esiti, telefono
+
+
+def _controlla_nessuna_perdita(uscita, esiti, originali, n_foto):
+    """Nessun errore, percorsi distinti, gli originali veri intatti byte per byte, un file per foto."""
+    assert esiti.failed == []
+    assert len(esiti.copied) == n_foto and len(set(esiti.copied)) == n_foto
+    assert all(p.is_file() for p in esiti.copied)
+    files = [p for p in uscita.rglob("*") if p.is_file()]
+    assert len(files) == n_foto  # niente foto sovrascritte, niente avanzi (.part, .conv)
+    contenuti = [p.read_bytes() for p in files]
+    for dati in originali:
+        assert dati in contenuti  # l'originale vero è su disco, identico
+    assert len(set(contenuti)) == n_foto  # tutte diverse: nessuna è la copia di un'altra
+    return contenuti
+
+
+def test_webp_travestito_da_jpg_non_sovrascrive_il_png_pianificato_dopo(tmp_path):
+    """B1: Download/a.jpg è WebP trasparente (→ a.png), Music/a.png è un PNG vero."""
+    pytest.importorskip("PIL")
+    webp = _webp_bytes("RGBA", (200, 10, 10, 0))
+    png = _immagine_bytes("PNG", "RGB", (1, 2, 3))
+    uscita, esiti, _tel = _copia_con_opzioni(
+        tmp_path, [("/sdcard/Download/a.jpg", webp), ("/sdcard/Music/a.png", png)]
+    )
+    contenuti = _controlla_nessuna_perdita(uscita, esiti, [png], 2)
+    convertito = [d for d in contenuti if d != png][0]
+    assert convertito[:8] == b"\x89PNG\r\n\x1a\n"  # il WebP è diventato un PNG, con un altro nome
+
+
+def test_webp_travestito_da_jpeg_e_webp_omonimo_non_si_sovrascrivono(tmp_path):
+    """B2: g.jpeg è WebP opaco, Pictures/g.webp è un altro WebP opaco: due JPG diversi."""
+    pytest.importorskip("PIL")
+    primo = _webp_bytes("RGB", (9, 99, 199))
+    secondo = _webp_bytes("RGB", (199, 99, 9))
+    uscita, esiti, _tel = _copia_con_opzioni(
+        tmp_path, [("/sdcard/Download/g.jpeg", primo), ("/sdcard/Pictures/g.webp", secondo)]
+    )
+    contenuti = _controlla_nessuna_perdita(uscita, esiti, [], 2)
+    assert all(d[:3] == b"\xff\xd8\xff" for d in contenuti)
+
+
+def test_webp_travestito_da_png_non_sovrascrive_il_jpeg_vero_pianificato_dopo(tmp_path):
+    """B4: Download/k.png è WebP opaco (→ k.jpg), DCIM/k.jpg è un JPEG vero."""
+    pytest.importorskip("PIL")
+    webp = _webp_bytes("RGB", (9, 99, 199))
+    jpg = _immagine_bytes("JPEG", "RGB", (50, 60, 70))
+    uscita, esiti, _tel = _copia_con_opzioni(
+        tmp_path, [("/sdcard/Download/k.png", webp), ("/sdcard/DCIM/k.jpg", jpg)]
+    )
+    contenuti = _controlla_nessuna_perdita(uscita, esiti, [jpg], 2)
+    assert all(d[:3] == b"\xff\xd8\xff" for d in contenuti)
+
+
+def test_webp_travestito_nella_stessa_cartella_con_struttura_e_cancellazione(tmp_path):
+    """B5: DCIM/m.jpg è WebP trasparente, DCIM/m.png è un PNG; struttura e «cancella dal telefono»."""
+    pytest.importorskip("PIL")
+    webp = _webp_bytes("RGBA", (200, 10, 10, 0))
+    png = _immagine_bytes("PNG", "RGB", (1, 2, 3))
+    uscita, esiti, telefono = _copia_con_opzioni(
+        tmp_path,
+        [("/sdcard/DCIM/m.jpg", webp), ("/sdcard/DCIM/m.png", png)],
+        preserve_structure=True,
+        delete_after=True,
+    )
+    contenuti = _controlla_nessuna_perdita(uscita, esiti, [png], 2)
+    assert [d for d in contenuti if d != png][0][:8] == b"\x89PNG\r\n\x1a\n"
+    assert sorted(telefono.cancellati) == ["/sdcard/DCIM/m.jpg", "/sdcard/DCIM/m.png"]
+    assert esiti.deleted_from_phone == 2
+    # ogni foto tolta dal telefono aveva già il suo file sul disco
+    assert all(n >= i for i, n in enumerate(telefono.file_al_momento, start=1))
+
+
+def test_rimettere_l_estensione_webp_non_sceglie_nomi_riservati_e_non_gira_all_infinito(tmp_path):
+    from fotofacile.core.transfer import _rimetti_estensione_webp
+
+    sorgente = tmp_path / "a.jpg"
+    sorgente.write_bytes(b"dati")
+    riservato = {str(tmp_path / "a.webp").casefold()}
+    assert _rimetti_estensione_webp(sorgente, evita=frozenset(riservato)) == tmp_path / "a (1).webp"
+    (tmp_path / "a (1).webp").rename(sorgente)  # rimette il file com'era
+
+    riservato |= {str(tmp_path / f"a ({n}).webp").casefold() for n in range(1, 1001)}
+    avvisi: list[str] = []
+    assert _rimetti_estensione_webp(sorgente, evita=frozenset(riservato), avvisi=avvisi) == sorgente
+    assert sorgente.read_bytes() == b"dati" and len(avvisi) == 1 and "a.jpg" in avvisi[0]
+
