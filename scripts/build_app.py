@@ -76,6 +76,9 @@ def comando_pyinstaller(icona: Path | None) -> list[str]:
     # è uno script PowerShell, che senza questa riga non finirebbe dentro il pacchetto e il
     # collegamento diretto non funzionerebbe sulla versione installata.
     comando += ["--add-data", f"{RADICE / 'fotofacile' / 'aiutanti'}{os.pathsep}fotofacile/aiutanti"]
+    # Pillow serve solo alla conversione WebP → JPG; PyInstaller ha un suo «hook» ma
+    # i codec (_webp) vanno chiesti espressamente.
+    comando += ["--collect-submodules", "PIL", "--collect-binaries", "PIL"]
     if sys.platform == "darwin":
         # PyObjC serve al collegamento diretto: importato solo dall'aiutante, mai dal
         # programma principale, quindi PyInstaller non lo vede da solo.

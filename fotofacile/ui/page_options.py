@@ -7,6 +7,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import ttk
 
+from ..core.conversione import pillow_disponibile
 from ..core.errors import FotoFacileError
 from ..core.format import format_size
 from ..core.planner import TransferOptions, build_plan, ensure_space, suggested_destination
@@ -27,6 +28,9 @@ class OptionsPage(ttk.Frame):
         self.mantieni_cartelle = tk.BooleanVar(value=False)
         self.salta_gia_copiate = tk.BooleanVar(value=True)
         self.elimina_dopo_copia = tk.BooleanVar(value=False)
+        # Attiva di default solo se possibile: senza Pillow non si può convertire.
+        self._conversione_possibile = pillow_disponibile()
+        self.converti_webp = tk.BooleanVar(value=self._conversione_possibile)
         self._conferma_eliminazione = False
 
         ttk.Label(self, text="Dove vuoi salvare le foto?", style="Titolo.TLabel").grid(row=0, column=0, sticky="w")
@@ -58,12 +62,19 @@ class OptionsPage(ttk.Frame):
             variable=self.salta_gia_copiate,
             command=self._aggiorna_spazio,
         ).grid(row=1, column=0, sticky="w", pady=3)
+        if self._conversione_possibile:
+            ttk.Checkbutton(
+                scelte,
+                text="Trasforma le immagini WebP in JPG (si aprono con qualsiasi programma)",
+                variable=self.converti_webp,
+                command=self._aggiorna_spazio,
+            ).grid(row=2, column=0, sticky="w", pady=3)
         ttk.Checkbutton(
             scelte,
             text="Cancella le foto dal telefono dopo averle copiate",
             variable=self.elimina_dopo_copia,
             command=self._eliminazione_cambiata,
-        ).grid(row=2, column=0, sticky="w", pady=3)
+        ).grid(row=3, column=0, sticky="w", pady=3)
         self.avviso_eliminazione = ttk.Label(
             scelte,
             text="Attenzione: le foto verranno rimosse dal telefono. Controlla sempre la copia prima di chiudere il programma.",
@@ -104,7 +115,7 @@ class OptionsPage(ttk.Frame):
 
     def _eliminazione_cambiata(self) -> None:
         if self.elimina_dopo_copia.get():
-            self.avviso_eliminazione.grid(row=3, column=0, sticky="w")
+            self.avviso_eliminazione.grid(row=4, column=0, sticky="w")
         else:
             self.avviso_eliminazione.grid_remove()
         self._conferma_eliminazione = False
@@ -118,6 +129,7 @@ class OptionsPage(ttk.Frame):
             skip_existing=self.salta_gia_copiate.get(),
             delete_after=self.elimina_dopo_copia.get(),
             include_videos=True,
+            converti_webp=self.converti_webp.get() and self._conversione_possibile,
         )
 
     def free_space(self) -> int | None:

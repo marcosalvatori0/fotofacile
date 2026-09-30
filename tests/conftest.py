@@ -90,6 +90,7 @@ def azzera(applicazione, tmp_path) -> None:
     opzioni.mantieni_cartelle.set(False)
     opzioni.salta_gia_copiate.set(True)
     opzioni.elimina_dopo_copia.set(False)
+    opzioni.converti_webp.set(opzioni._conversione_possibile)
     opzioni._conferma_eliminazione = False
     opzioni.avviso_eliminazione.grid_remove()
 

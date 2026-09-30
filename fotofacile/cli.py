@@ -24,6 +24,7 @@ def build_doctor_report(
     app_folder: str,
     writing_ok: bool,
     modi: Sequence[tuple[str, bool]] = (),
+    conversione_webp: bool | None = None,
 ) -> str:
     """Testo della diagnosi: serve al supporto per capire cosa non va su un computer."""
     righe = [
@@ -48,6 +49,8 @@ def build_doctor_report(
         righe.append("Telefoni collegati: nessuno")
     righe.append(f"Cartella dati: {app_folder}")
     righe.append(f"Scrittura: {'ok' if writing_ok else 'problema'}")
+    if conversione_webp is not None:
+        righe.append(f"Conversione WebP: {'disponibile' if conversione_webp else 'non disponibile'}")
     if not adb_path and not modi:
         righe.extend(
             [
@@ -110,6 +113,8 @@ def doctor(env: Mapping[str, str] | None = None) -> int:
         versione_tk = str(tkinter.TkVersion)
     except Exception:  # pragma: no cover - Tkinter assente
         versione_tk = "non disponibile"
+    from .core.conversione import pillow_disponibile
+
     _stampa(
         build_doctor_report(
             adb_path=percorso_adb,
@@ -121,6 +126,7 @@ def doctor(env: Mapping[str, str] | None = None) -> int:
             app_folder=str(cartella),
             writing_ok=scrittura,
             modi=elenco_modi(ambiente),
+            conversione_webp=pillow_disponibile(),
         )
     )
     return 0

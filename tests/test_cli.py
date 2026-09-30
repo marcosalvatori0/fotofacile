@@ -292,3 +292,12 @@ def test_formati_mostra_il_formato_vero(tmp_path, capsys):
 def test_formati_cartella_vuota(tmp_path, capsys):
     assert main(["formati", str(tmp_path)], env={}) == 0
     assert "non contiene file" in capsys.readouterr().out
+
+
+def test_la_diagnosi_riferisce_la_conversione_webp():
+    from fotofacile.cli import build_doctor_report
+
+    base = dict(adb_path=None, adb_version="", system="linux", python_version="3.12", tk_version="8.6",
+                devices=[], app_folder="/x", writing_ok=True)
+    assert "Conversione WebP: disponibile" in build_doctor_report(**base, conversione_webp=True)
+    assert "Conversione WebP: non disponibile" in build_doctor_report(**base, conversione_webp=False)

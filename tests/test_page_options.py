@@ -86,3 +86,23 @@ def test_secondo_giro_non_ricopia_nulla(app, tmp_path):
     piano = app.pages["options"].build_plan()
     assert piano.file_count == 0
     assert piano.skipped_duplicates == len(app.media_files)
+
+
+def test_la_conversione_webp_e_attiva_se_pillow_c_e(app, tmp_path, monkeypatch):
+    from fotofacile.ui import page_options
+
+    monkeypatch.setattr(page_options, "pillow_disponibile", lambda: True)
+    app.ricostruisci_pagine()
+    pagina = app.pages["options"]
+    assert pagina.converti_webp.get() is True
+    assert pagina.build_options().converti_webp is True
+
+
+def test_senza_pillow_la_conversione_e_spenta(app, monkeypatch):
+    from fotofacile.ui import page_options
+
+    monkeypatch.setattr(page_options, "pillow_disponibile", lambda: False)
+    app.ricostruisci_pagine()
+    pagina = app.pages["options"]
+    assert pagina.converti_webp.get() is False
+    assert pagina.build_options().converti_webp is False
