@@ -5,14 +5,14 @@ from __future__ import annotations
 import shutil
 import tkinter as tk
 from pathlib import Path
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 from ..core.conversione import pillow_disponibile
 from ..core.errors import FotoFacileError
 from ..core.format import format_size
 from ..core.planner import TransferOptions, build_plan, ensure_space, suggested_destination
 from .theme import COLORI, font
-from .widgets import PathChooser
+from .widgets import PathChooser, TestoAdattivo
 
 
 class OptionsPage(ttk.Frame):
@@ -31,25 +31,31 @@ class OptionsPage(ttk.Frame):
         # Attiva di default solo se possibile: senza Pillow non si può convertire.
         self._conversione_possibile = pillow_disponibile()
         self.converti_webp = tk.BooleanVar(value=self._conversione_possibile)
-        self._conferma_eliminazione = False
 
-        ttk.Label(self, text="Dove vuoi salvare le foto?", style="Titolo.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(
-            self,
-            text=(
-                "Le foto e i video verranno messi direttamente in questa cartella, senza ricreare "
-                "le cartelle del telefono. Va bene quella proposta: potrai sempre spostarli dopo."
-            ),
-            style="Sottotitolo.TLabel",
-            wraplength=860,
-            justify="left",
-        ).grid(row=1, column=0, sticky="w", pady=(0, 10))
-
+        ttk.Label(self, text="Dove salvo le foto?", style="Titolo.TLabel").grid(row=0, column=0, sticky="w")
+        self.riassunto = TestoAdattivo(self, text="", font=font(17))
+        self.riassunto.grid(row=1, column=0, sticky="ew", pady=(4, 10))
         self.chooser = PathChooser(self, on_change=lambda _percorso: self._aggiorna_spazio())
         self.chooser.grid(row=2, column=0, sticky="ew")
+        self.spazio = TestoAdattivo(self, text="", font=font(15, bold=True))
+        self.spazio.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        self.dettaglio_salti = TestoAdattivo(self, text="", style="Tenue.TLabel", font=font(14))
+        self.dettaglio_salti.grid(row=4, column=0, sticky="ew")
 
-        scelte = ttk.Frame(self)
-        scelte.grid(row=3, column=0, sticky="w", pady=12)
+        # Le scelte rare stanno chiuse: chi non le cerca non le vede.
+        self.altre_opzioni_aperte = False
+        self.bottone_altre = ttk.Button(
+            self,
+            text="Altre opzioni ▸",
+            style="Link.TButton",
+            command=lambda: self.mostra_altre(not self.altre_opzioni_aperte),
+        )
+        self.bottone_altre.grid(row=5, column=0, sticky="w", pady=(12, 0))
+        self.scelte = ttk.Frame(self)
+        self.scelte.grid(row=6, column=0, sticky="ew")
+        self.scelte.columnconfigure(0, weight=1)
+        self.scelte.grid_remove()
+        scelte = self.scelte
         ttk.Checkbutton(
             scelte,
             text="Ricrea anche le cartelle del telefono (di solito non serve)",
@@ -75,24 +81,18 @@ class OptionsPage(ttk.Frame):
             variable=self.elimina_dopo_copia,
             command=self._eliminazione_cambiata,
         ).grid(row=3, column=0, sticky="w", pady=3)
-        self.avviso_eliminazione = ttk.Label(
+        # promemoria rosso finché la spunta è attiva (la conferma vera è la finestra di domanda)
+        self.avviso_eliminazione = TestoAdattivo(
             scelte,
             text="Attenzione: le foto verranno rimosse dal telefono. Controlla sempre la copia prima di chiudere il programma.",
             style="Errore.TLabel",
-            wraplength=780,
-            justify="left",
-            font=font(11),
+            font=font(14),
         )
 
-        self.spazio = ttk.Label(self, text="", font=font(13, bold=True))
-        self.spazio.grid(row=4, column=0, sticky="w", pady=(6, 0))
-        self.dettaglio_salti = ttk.Label(self, text="", style="Tenue.TLabel", font=font(11))
-        self.dettaglio_salti.grid(row=5, column=0, sticky="w")
-
         navigazione = ttk.Frame(self)
-        navigazione.grid(row=6, column=0, sticky="ew", pady=(18, 0))
+        navigazione.grid(row=7, column=0, sticky="ew", pady=(18, 0))
         ttk.Button(
-            navigazione, text="←  Indietro", style="Secondary.TButton", command=lambda: self.app.go_to("prev")
+            navigazione, text="←  Indietro", style="Secondary.TButton", command=self.azione_indietro
         ).grid(row=0, column=0)
         self.bottone_avanti = ttk.Button(
             navigazione, text="Copia le foto  →", style="Big.TButton", command=self.go_next
@@ -113,12 +113,45 @@ class OptionsPage(ttk.Frame):
         )
         self._aggiorna_spazio()
 
+    def mostra_altre(self, mostra: bool) -> None:
+        self.altre_opzioni_aperte = bool(mostra)
+        if mostra:
+            self.scelte.grid()
+            self.bottone_altre.configure(text="Altre opzioni ▾")
+        else:
+            self.scelte.grid_remove()
+            self.bottone_altre.configure(text="Altre opzioni ▸")
+
+    def azione_principale(self) -> None:
+        """Tasto Invio: come «Copia le foto»."""
+        # Invio è collegato a tutta la finestra e non guarda lo stato dei pulsanti.
+        if not self.bottone_avanti.instate(["!disabled"]):
+            return
+        self.go_next()
+
+    def azione_indietro(self) -> None:
+        """Tasto Esc: torna al passo precedente."""
+        self.app.go_to("prev")
+
     def _eliminazione_cambiata(self) -> None:
         if self.elimina_dopo_copia.get():
-            self.avviso_eliminazione.grid(row=4, column=0, sticky="w")
+            # Togliere le foto dal telefono non si può annullare: si chiede subito e la
+            # risposta predefinita è «No».
+            conferma = messagebox.askyesno(
+                "Togliere le foto dal telefono?",
+                "Dopo la copia le foto verranno TOLTE dal telefono.\n\n"
+                "Prima di chiudere il programma controlla che siano nella cartella scelta.\n\n"
+                "Vuoi davvero toglierle dal telefono?",
+                icon="warning",
+                default="no",
+                parent=self,
+            )
+            if not conferma:
+                self.elimina_dopo_copia.set(False)
+        if self.elimina_dopo_copia.get():
+            self.avviso_eliminazione.grid(row=4, column=0, sticky="ew")
         else:
             self.avviso_eliminazione.grid_remove()
-        self._conferma_eliminazione = False
         self._aggiorna_spazio()
 
     # ── opzioni, spazio, piano ────────────────────────────────────────────
@@ -154,25 +187,37 @@ class OptionsPage(ttk.Frame):
         try:
             piano = self.build_plan()
         except FotoFacileError as errore:
-            self.spazio.configure(text=errore.message, foreground=COLORI["errore"])
+            self.riassunto.configure(text="")
+            self.spazio.configure(text=f"✖ {errore.message}", foreground=COLORI["errore"])
             self.dettaglio_salti.configure(text=errore.hint)
             return
         except OSError as errore:
+            self.riassunto.configure(text="")
             self.spazio.configure(
-                text=f"Non riesco a leggere la cartella scelta: {errore.strerror or errore}",
+                text=f"✖ Non riesco a leggere la cartella scelta: {errore.strerror or errore}",
                 foreground=COLORI["errore"],
             )
+            self.dettaglio_salti.configure(text="")
             return
+        quanti = piano.file_count
+        if quanti == 0:
+            self.riassunto.configure(text="Non c'è niente di nuovo da copiare: le foto erano già state salvate.")
+        else:
+            self.riassunto.configure(
+                text=f"Copierò {quanti} {'foto o video' if quanti != 1 else 'foto'} "
+                f"({format_size(piano.total_bytes)}) in questa cartella:  {self.chooser.get()}"
+            )
         libero = self.free_space()
         if libero is None:
-            colore = COLORI["testo"]
+            simbolo, colore = "", COLORI["testo"]
             testo_spazio = f"Da copiare: {format_size(piano.total_bytes)} — spazio libero non leggibile"
+        elif piano.total_bytes <= libero:
+            simbolo, colore = "✔ ", COLORI["successo"]
+            testo_spazio = f"Da copiare: {format_size(piano.total_bytes)} — Spazio libero: {format_size(libero)}"
         else:
-            colore = COLORI["successo"] if piano.total_bytes <= libero else COLORI["errore"]
-            testo_spazio = (
-                f"Da copiare: {format_size(piano.total_bytes)} — Spazio libero: {format_size(libero)}"
-            )
-        self.spazio.configure(text=testo_spazio, foreground=colore)
+            simbolo, colore = "✖ ", COLORI["errore"]
+            testo_spazio = f"Da copiare: {format_size(piano.total_bytes)} — Spazio libero: {format_size(libero)}"
+        self.spazio.configure(text=simbolo + testo_spazio, foreground=colore)
         saltati = piano.skipped_duplicates + piano.skipped_existing
         self.dettaglio_salti.configure(
             text=f"Verranno saltati {saltati} file già presenti." if saltati else ""
@@ -183,14 +228,14 @@ class OptionsPage(ttk.Frame):
         if not str(opzioni.destination).strip() or str(opzioni.destination) == ".":
             self.app.set_status(
                 "Scegli una cartella dove salvare le foto.",
-                hint="Premi «Sfoglia…» e indica una cartella, per esempio Immagini.",
+                hint="Premi «Cambia cartella…» e indica una cartella, per esempio Immagini.",
                 kind="avviso",
             )
             return
         if not opzioni.destination.is_absolute():
             self.app.set_status(
                 "La cartella indicata non è completa.",
-                hint="Premi «Sfoglia…» e scegli la cartella dal riquadro che si apre.",
+                hint="Premi «Cambia cartella…» e scegli la cartella dal riquadro che si apre.",
                 kind="avviso",
             )
             return
@@ -207,14 +252,6 @@ class OptionsPage(ttk.Frame):
             ensure_space(piano, opzioni.destination, self.free_space())
         except FotoFacileError as errore:
             self.app.set_status(errore.message, hint=errore.hint, kind="errore")
-            return
-        if opzioni.delete_after and not self._conferma_eliminazione:
-            self._conferma_eliminazione = True
-            self.app.set_status(
-                "Conferma la cancellazione dal telefono.",
-                hint="Premi di nuovo «Copia le foto» per confermare, oppure togli la spunta alla cancellazione.",
-                kind="avviso",
-            )
             return
         self.app.options = opzioni
         self.app.log(f"Destinazione scelta: {opzioni.destination}")

@@ -165,10 +165,6 @@ def test_invio_preme_il_pulsante_principale_della_pagina(app, focus):
     assert chiamate == ["avanti"]
 
 
-@pytest.mark.xfail(
-    reason="serve `azione_indietro` sulla pagina «Destinazione»: si aggiunge nel Task C8",
-    strict=False,
-)
 def test_esc_torna_indietro(app, focus):
     from fotofacile.core.devices import DeviceInfo
 

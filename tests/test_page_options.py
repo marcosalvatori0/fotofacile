@@ -63,18 +63,118 @@ def test_spazio_insufficiente_blocca_spiegando_il_problema(app, tmp_path, monkey
     assert "spazio" in app.banner.message_text.lower()
 
 
-def test_cancellazione_dal_telefono_richiede_conferma(app, tmp_path):
+def test_il_riassunto_dice_cosa_succedera(app, tmp_path):
+    _prepara(app, tmp_path)
+    pagina = app.pages["options"]
+    pagina.on_show()
+    testo = str(pagina.riassunto.cget("text"))
+    assert "Copierò" in testo and str(tmp_path) in testo
+
+
+def test_le_altre_opzioni_sono_chiuse_all_inizio(app, tmp_path):
+    _prepara(app, tmp_path)
+    pagina = app.pages["options"]
+    pagina.on_show()
+    assert pagina.altre_opzioni_aperte is False
+    pagina.mostra_altre(True)
+    assert pagina.altre_opzioni_aperte is True
+    pagina.mostra_altre(False)
+    assert pagina.altre_opzioni_aperte is False
+
+
+def test_cancellare_dal_telefono_chiede_conferma_con_una_finestra(app, tmp_path, monkeypatch):
+    from fotofacile.ui import page_options
+
+    domande = []
+    opzioni_finestra = []
+
+    def finta_domanda(titolo, testo, **k):
+        domande.append(testo)
+        opzioni_finestra.append(k)
+        return False
+
+    monkeypatch.setattr(page_options.messagebox, "askyesno", finta_domanda)
+    _prepara(app, tmp_path)
+    pagina = app.pages["options"]
+    pagina.on_show()
+    pagina.elimina_dopo_copia.set(True)
+    pagina._eliminazione_cambiata()
+    assert domande, "la conferma deve comparire subito, quando si mette la spunta"
+    assert "telefono" in domande[0].lower()
+    assert opzioni_finestra[0].get("default") == "no", "mai «Sì» come risposta predefinita"
+    assert pagina.elimina_dopo_copia.get() is False  # ha risposto «No»: la spunta torna a posto
+
+
+def test_rispondere_no_non_cancella_dal_telefono(app, tmp_path, monkeypatch):
+    from fotofacile.ui import page_options
+
+    monkeypatch.setattr(page_options.messagebox, "askyesno", lambda *a, **k: False)
     _prepara(app, tmp_path)
     pagina = app.pages["options"]
     pagina.on_show()
     pagina.elimina_dopo_copia.set(True)
     pagina._eliminazione_cambiata()
     pagina.go_next()
-    assert app.current_page == "options"
-    assert "conferma" in app.banner.message_text.lower()
+    assert app.current_page == "transfer"
+    assert app.options.delete_after is False
+
+
+def test_rispondere_si_lascia_la_spunta(app, tmp_path, monkeypatch):
+    from fotofacile.ui import page_options
+
+    monkeypatch.setattr(page_options.messagebox, "askyesno", lambda *a, **k: True)
+    _prepara(app, tmp_path)
+    pagina = app.pages["options"]
+    pagina.on_show()
+    pagina.elimina_dopo_copia.set(True)
+    pagina._eliminazione_cambiata()
+    assert pagina.elimina_dopo_copia.get() is True
     pagina.go_next()
     assert app.current_page == "transfer"
     assert app.options.delete_after is True
+
+
+def test_invio_con_il_pulsante_spento_non_parte(app, tmp_path):
+    _prepara(app, tmp_path)
+    pagina = app.pages["options"]
+    pagina.on_show()
+    pagina.bottone_avanti.state(["disabled"])
+    try:
+        pagina.azione_principale()
+        assert app.current_page == "options"
+    finally:
+        pagina.bottone_avanti.state(["!disabled"])
+
+
+def test_invio_con_il_pulsante_attivo_copia(app, tmp_path):
+    _prepara(app, tmp_path)
+    pagina = app.pages["options"]
+    pagina.on_show()
+    pagina.azione_principale()
+    assert app.current_page == "transfer"
+
+
+def test_esc_torna_al_passo_precedente(app, tmp_path):
+    _prepara(app, tmp_path)
+    app.pages["options"].on_show()
+    app.go_to("options")
+    app.pages["options"].azione_indietro()
+    assert app.current_page == "select"
+
+
+def test_i_suggerimenti_parlano_di_cambia_cartella(app):
+    import inspect
+
+    from fotofacile.ui import page_options
+
+    assert "Sfoglia" not in inspect.getsource(page_options)
+
+
+def test_lo_stato_dello_spazio_ha_un_simbolo(app, tmp_path):
+    _prepara(app, tmp_path)
+    pagina = app.pages["options"]
+    pagina.on_show()
+    assert str(pagina.spazio.cget("text")).startswith(("✔", "✖"))
 
 
 def test_secondo_giro_non_ricopia_nulla(app, tmp_path):
