@@ -104,11 +104,13 @@ def download_file_stream(
 ) -> int:
     """Scrive un file dal telefono su disco passando da un temporaneo ``.part`` (modo diretto)."""
     destinazione = Path(dest_path)
-    destinazione.parent.mkdir(parents=True, exist_ok=True)
     temporaneo = percorso_temporaneo(destinazione)
     flusso = adb.stream_file(serial, remote_path, chunk_size=chunk_size)
     scritti = 0
     try:
+        # Dentro il `try`: una cartella impossibile da creare è un errore del disco come gli
+        # altri, da spiegare con `traduci_errore_file` (D21, come D11 per gli altri copiatori).
+        destinazione.parent.mkdir(parents=True, exist_ok=True)
         with open(temporaneo, "wb") as uscita:
             for blocco in flusso:
                 if cancel is not None and cancel.is_set():

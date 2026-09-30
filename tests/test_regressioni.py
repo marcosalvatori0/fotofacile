@@ -1223,3 +1223,19 @@ def test_d20_un_guaio_imprevisto_resta_riconoscibile(monkeypatch, capsys):
     monkeypatch.setitem(ptp_mac.COMANDI, "elenca", rotto)
     assert ptp_mac.main(["elenca"]) == 2
     assert capsys.readouterr().err.startswith("KeyError")
+
+
+# ── D21 ────────────────────────────────────────────────────────────────────
+# Prima: `download_file_stream` (il copiatore della riga di comando e dei test) creava la
+# cartella di destinazione fuori dal `try`, come i copiatori corretti in D11. Se non si
+# poteva creare (disco staccato, cartella protetta, un file con lo stesso nome) usciva un
+# OSError grezzo: `transfer` lo lasciava passare e l'intera copia si fermava.
+def test_d21_la_copia_interna_traduce_la_cartella_impossibile_da_creare(tmp_path):
+    from fotofacile.core.transfer import transfer
+
+    piano, opzioni, telefono = _piano_singolo(tmp_path)
+    (tmp_path / "out").write_text("un file, non una cartella", encoding="utf-8")
+    esiti = transfer(telefono, "S1", piano, opzioni, retries=0)
+    assert esiti.copied == []
+    assert len(esiti.failed) == 1
+    assert "a.jpg" in esiti.failed[0][1]
