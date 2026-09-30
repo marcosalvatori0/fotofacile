@@ -88,6 +88,8 @@ def azzera(applicazione, tmp_path) -> None:
     seleziona._scansione_fatta = False
     seleziona._scansione_in_corso = False
     seleziona.data_minima.set("")
+    seleziona.periodo.set("Tutte le foto")
+    seleziona.mostra_rumore.set(False)
     seleziona.sto_scegliendo_video.set(True)
     seleziona.riepilogo.configure(text="")
     seleziona.bottone_avanti.state(["disabled"])
