@@ -265,6 +265,9 @@ def start_gui(demo: bool = False) -> int:
         )
         avviso_visibile(messaggio)
         return 1
+    from .core.osutil import rendi_consapevole_dpi
+
+    rendi_consapevole_dpi()
     try:
         applicazione = App(demo_mode=demo)
     except tk.TclError as errore:

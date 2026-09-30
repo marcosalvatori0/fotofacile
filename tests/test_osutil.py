@@ -121,3 +121,49 @@ def test_i_comandi_esterni_usano_il_flag_nascosta(monkeypatch, tmp_path):
     processo = modulo_ops.ProcessoEsterno(["finto-comando"], timeout=5)
     processo.avvia()
     assert raccolti and raccolti[0].get("creationflags") == 134217728
+
+
+def test_dpi_non_fa_nulla_fuori_da_windows():
+    from fotofacile.core.osutil import rendi_consapevole_dpi
+
+    assert rendi_consapevole_dpi(sistema="darwin") is False
+    assert rendi_consapevole_dpi(sistema="linux") is False
+
+
+def test_dpi_su_windows_chiede_la_consapevolezza_per_monitor():
+    from fotofacile.core.osutil import rendi_consapevole_dpi
+
+    chiamate = []
+
+    class Shcore:
+        def SetProcessDpiAwareness(self, valore):
+            chiamate.append(valore)
+            return 0
+
+    class Windll:
+        shcore = Shcore()
+
+    assert rendi_consapevole_dpi(sistema="win32", windll=Windll()) is True
+    assert chiamate == [2]  # 2 = per-monitor
+
+
+def test_dpi_ripiega_sulla_vecchia_funzione():
+    from fotofacile.core.osutil import rendi_consapevole_dpi
+
+    chiamate = []
+
+    class Shcore:
+        def SetProcessDpiAwareness(self, _valore):
+            raise OSError("non disponibile")
+
+    class User32:
+        def SetProcessDPIAware(self):
+            chiamate.append("vecchia")
+            return 1
+
+    class Windll:
+        shcore = Shcore()
+        user32 = User32()
+
+    assert rendi_consapevole_dpi(sistema="win32", windll=Windll()) is True
+    assert chiamate == ["vecchia"]

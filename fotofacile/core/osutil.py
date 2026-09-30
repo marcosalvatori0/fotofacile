@@ -130,3 +130,27 @@ def comando_se_stesso(*argomenti: str) -> list[str]:
 def cartella_progetto() -> Path:
     """Cartella che contiene il pacchetto: serve a far ritrovare i moduli al processo figlio."""
     return Path(__file__).resolve().parent.parent.parent
+
+
+def rendi_consapevole_dpi(sistema: str | None = None, windll=None) -> bool:
+    """Su Windows dichiara che il programma gestisce da sé la scala dello schermo.
+
+    Senza questo, con lo schermo al 125 % o più Windows ingrandisce la finestra come una
+    figura e il testo diventa sfocato: un problema serio per chi vede poco. Va chiamata
+    **prima** di creare la finestra. Fuori da Windows non fa niente.
+    """
+    if (sistema or sys.platform) != "win32":
+        return False
+    try:
+        if windll is None:
+            import ctypes
+
+            windll = ctypes.windll  # type: ignore[attr-defined]
+        try:
+            windll.shcore.SetProcessDpiAwareness(2)  # per-monitor
+            return True
+        except (AttributeError, OSError):
+            windll.user32.SetProcessDPIAware()
+            return True
+    except (AttributeError, OSError, ImportError):
+        return False
