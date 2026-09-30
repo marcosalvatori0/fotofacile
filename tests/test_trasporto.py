@@ -578,6 +578,26 @@ def test_aiutante_linux_senza_telefono_esce_con_3(monkeypatch, capsys):
     assert "telefono" in capsys.readouterr().err.lower()
 
 
+def test_aiutante_linux_nomi_con_a_capo_restano_una_riga(tmp_path, monkeypatch, capsys):
+    """Audit G3: un a-capo (o un separatore Unicode che `splitlines` taglierebbe) nel nome
+    viaggia dentro il JSON come sequenza di escape: una riga per file, nome intatto."""
+    from fotofacile.aiutanti import mtp_linux
+    from fotofacile.core.trasporto_aiutante import leggi_elenco
+
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    cartella = tmp_path / "gvfs" / "mtp:host=S1" / "DCIM"
+    cartella.mkdir(parents=True)
+    nomi = ["a\nb.jpg", "c\u2028d.jpg", "e\x85f.jpg", "g\rh.jpg"]
+    for nome in nomi:
+        (cartella / nome).write_bytes(b"x")
+    assert mtp_linux.main(["elenca", "--seriale", "S1"]) == 0
+    uscita = capsys.readouterr().out
+    assert len(uscita.splitlines()) == len(nomi) + 1  # più la riga di fine
+    assert sorted(file.remote_path for file in leggi_elenco(uscita)) == sorted(
+        f"/DCIM/{nome}" for nome in nomi
+    )
+
+
 # ── aiutante Windows: la parte Python (PowerShell non è provabile qui) ───
 
 
