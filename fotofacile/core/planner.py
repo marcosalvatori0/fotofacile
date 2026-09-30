@@ -224,6 +224,11 @@ def build_plan(
                 continue
             destinazione = esistenza.nome_libero(destinazione, options.destination)
         esistenza.registra(destinazione)
+        if convertito:
+            # La conversione può dare un .png (trasparenza) o lasciare un .webp (animato):
+            # si riservano anche questi nomi, così un file successivo non ci finisce sopra.
+            esistenza.registra(destinazione.with_suffix(".png"))
+            esistenza.registra(destinazione.with_suffix(".webp"))
         piano.files.append(PlannedFile(media=file, rel_path=relativo, dest_path=destinazione))
         piano.total_bytes += file.size
     return piano

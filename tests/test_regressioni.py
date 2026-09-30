@@ -1754,3 +1754,30 @@ def test_conversione_fallita_conserva_il_file_come_webp(tmp_path, monkeypatch):
     assert [p.name for p in esiti.copied] == ["a.webp"]  # estensione corretta, foto salva
     assert esiti.copied[0].read_bytes() == dati
     assert any("a.webp" in avviso for avviso in esiti.warnings)
+
+
+def test_webp_trasparente_e_png_omonimo_non_si_sovrascrivono(tmp_path):
+    """Il WebP trasparente diventa a.png: il vero a.png di un'altra cartella non lo cancella."""
+    pytest.importorskip("PIL")
+    import io
+
+    from PIL import Image
+
+    from fotofacile.core.transfer import transfer
+
+    webp = _webp_bytes("RGBA", (200, 10, 10, 0))
+    scarico = io.BytesIO()
+    Image.new("RGB", (7, 7), (1, 2, 3)).save(scarico, "PNG")
+    png = scarico.getvalue()
+    primo = MediaFile("/sdcard/Pictures/a.webp", size=len(webp), mtime=1_500_000_000, kind="photo")
+    secondo = MediaFile("/sdcard/Download/a.png", size=len(png), mtime=1_500_000_100, kind="photo")
+    opzioni = TransferOptions(destination=tmp_path / "out", preserve_structure=False, converti_webp=True)
+    telefono = _TelefonoFinto({primo.remote_path: webp, secondo.remote_path: png})
+    esiti = transfer(telefono, "S1", build_plan([primo, secondo], opzioni), opzioni)
+    assert not esiti.failed
+    assert len(esiti.copied) == 2 and len(set(esiti.copied)) == 2
+    contenuti = sorted(p.read_bytes() for p in (tmp_path / "out").iterdir())
+    assert png in contenuti  # il PNG originale è intatto
+    convertito = [dati for dati in contenuti if dati != png]
+    assert len(convertito) == 1 and convertito[0][:8] == b"\x89PNG\r\n\x1a\n"
+    assert {p.suffix for p in (tmp_path / "out").iterdir()} == {".png"}

@@ -228,3 +228,26 @@ def test_webp_convertito_non_si_scambia_per_gia_presente(tmp_path):
     piano = build_plan(file, TransferOptions(destination=tmp_path, converti_webp=True))
     assert [f.dest_path.name for f in piano.files] == ["a (1).jpg"]
     assert piano.skipped_existing == 0
+
+
+def test_webp_da_convertire_riserva_anche_png_e_webp(tmp_path):
+    # Il WebP trasparente può diventare a.png (o restare a.webp se animato): un file
+    # successivo con quel nome non deve finirci sopra.
+    file = [foto("/sdcard/Pictures/a.webp"), foto("/sdcard/Download/a.png"), foto("/sdcard/Music/a.webp")]
+    opzioni = TransferOptions(destination=tmp_path, preserve_structure=False, converti_webp=True)
+    piano = build_plan(file, opzioni)
+    assert [f.dest_path.name for f in piano.files] == ["a.jpg", "a (1).png", "a (1).jpg"]
+
+
+def test_webp_riserva_png_e_webp_senza_distinzione_di_maiuscole(tmp_path):
+    file = [foto("/sdcard/Pictures/a.webp"), foto("/sdcard/Download/A.PNG")]
+    opzioni = TransferOptions(destination=tmp_path, preserve_structure=False, converti_webp=True)
+    piano = build_plan(file, opzioni, case_insensitive=True)
+    assert [f.dest_path.name for f in piano.files] == ["a.jpg", "A (1).PNG"]
+
+
+def test_senza_conversione_il_piano_dei_webp_non_cambia(tmp_path):
+    file = [foto("/sdcard/Pictures/a.webp"), foto("/sdcard/Download/a.png"), foto("/sdcard/Music/a.webp")]
+    opzioni = TransferOptions(destination=tmp_path, preserve_structure=False)
+    piano = build_plan(file, opzioni)
+    assert [f.dest_path.name for f in piano.files] == ["a.webp", "a.png", "a (1).webp"]
