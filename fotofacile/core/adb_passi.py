@@ -404,7 +404,11 @@ class AdbDemoAPassi:
         remoto_dimensione: int | None = None,
     ) -> Generator[float, None, int]:
         destinazione = Path(destinazione)
-        destinazione.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            destinazione.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as errore:
+            # Come per il telefono vero: un OSError grezzo fermerebbe l'intera copia.
+            raise traduci_errore_file(errore, destinazione) from errore
         _controlla_spazio(destinazione, _dimensione_prevista(remoto_dimensione))
         temporaneo = percorso_temporaneo(destinazione)
         scritti = 0

@@ -661,3 +661,55 @@ def test_d5_ricerca_fallita_spiega_il_motivo(app):
     assert attendi(app, lambda: not pagina._scansione_in_corso)
     assert app.banner.message_text == "Il telefono è bloccato."
     assert "Sblocca" in app.banner.hint_text
+
+
+# ── D11 ────────────────────────────────────────────────────────────────────
+# Prima: nel collegamento diretto (macOS, Linux) e nella demo la cartella di destinazione
+# veniva creata fuori dal `try`. Se non si poteva creare (disco esterno staccato, cartella
+# protetta, un file con lo stesso nome) usciva un OSError grezzo: `transfer` lo lasciava
+# passare, l'intera copia si fermava e restava solo «Qualcosa non ha funzionato».
+@pytest.mark.parametrize("quale", ["aiutante", "demo"])
+def test_d11_cartella_impossibile_da_creare_da_un_errore_comprensibile(tmp_path, quale):
+    from fotofacile.core.trasporto_aiutante import TrasportoAiutante
+
+    class AiutanteFinto(TrasportoAiutante):
+        def base(self) -> list[str]:
+            return ["/bin/echo"]
+
+    (tmp_path / "occupato").write_text("un file, non una cartella", encoding="utf-8")
+    destinazione = tmp_path / "occupato" / "foto.jpg"
+    if quale == "aiutante":
+        copiatore = AiutanteFinto(intervallo=0.0)
+    else:
+        copiatore = AdbDemoAPassi(DemoAdbBackend(file_count=1), intervallo=0.0)
+    with pytest.raises(FotoFacileError) as errore:
+        esegui_fino_alla_fine(copiatore.copia("S1", "/DCIM/foto.jpg", destinazione))
+    assert "foto.jpg" in errore.value.message
+    assert errore.value.hint
+
+
+
+def test_d11_errore_del_sistema_durante_la_copia_diretta_da_un_errore_comprensibile(
+    tmp_path, monkeypatch
+):
+    """Stesso difetto più avanti: il blocco principale della copia diretta non traduceva gli
+    OSError (per esempio il disco di sistema pieno quando si prepara il file degli errori),
+    a differenza di `AdbAPassi.copia`."""
+    import errno
+
+    from fotofacile.core import ops
+    from fotofacile.core.trasporto_aiutante import TrasportoAiutante
+
+    class AiutanteFinto(TrasportoAiutante):
+        def base(self) -> list[str]:
+            return ["/bin/echo"]
+
+    def pieno(*_args, **_kwargs):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(ops.tempfile, "mkstemp", pieno)
+    destinazione = tmp_path / "uscita" / "foto.jpg"
+    with pytest.raises(FotoFacileError) as errore:
+        esegui_fino_alla_fine(AiutanteFinto(intervallo=0.0).copia("S1", "/DCIM/foto.jpg", destinazione))
+    assert "spazio" in errore.value.message.lower()
+    assert list(destinazione.parent.glob("*.part")) == []

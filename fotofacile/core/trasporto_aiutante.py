@@ -250,7 +250,12 @@ class TrasportoAiutante:
         remoto_dimensione: int | None = None,
     ) -> Generator[float, None, int]:
         destinazione = Path(destinazione)
-        destinazione.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            destinazione.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as errore:
+            # Un OSError grezzo fermerebbe l'intera copia: `transfer` intercetta solo
+            # FotoFacileError (e l'annullamento).
+            raise traduci_errore_file(errore, destinazione) from errore
         _controlla_spazio(destinazione, _dimensione_prevista(remoto_dimensione))
         temporaneo = percorso_temporaneo(destinazione)
         scritti = 0
@@ -277,11 +282,12 @@ class TrasportoAiutante:
             scritti = _dimensione(temporaneo, scritti, on_scritti)
             _esito_di_copia(processo, destinazione)
             _rallenta_scrittura(temporaneo)
-            try:
-                os.replace(temporaneo, destinazione)
-            except OSError as errore:
-                raise traduci_errore_file(errore, destinazione) from errore
+            os.replace(temporaneo, destinazione)
             completato = True
+        except OSError as errore:
+            # Come in `AdbAPassi.copia`: qualunque OSError (file, disco, file di appoggio del
+            # comando) diventa una frase comprensibile invece di fermare l'intera copia.
+            raise traduci_errore_file(errore, destinazione) from errore
         finally:
             if processo is not None:
                 processo.termina()
