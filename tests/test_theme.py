@@ -154,3 +154,36 @@ def test_tema_in_modalita_chiara_ha_colori_chiari():
         assert COLORI["pannello"] == PALETTE["chiaro"]["pannello"]
     finally:
         finestra.destroy()
+
+
+def test_la_scala_ingrandisce_i_font():
+    from fotofacile.ui import theme
+
+    try:
+        theme.imposta_scala(1.0)
+        base = theme.font(14)[1]
+        theme.imposta_scala(1.5)
+        assert theme.font(14)[1] == round(base * 1.5)
+        assert theme.scala_attuale() == 1.5
+    finally:
+        theme.imposta_scala(1.0)
+
+
+def test_scala_fuori_dai_limiti_viene_riportata():
+    from fotofacile.ui import theme
+
+    try:
+        theme.imposta_scala(9)
+        assert theme.scala_attuale() == 1.5
+        theme.imposta_scala(0.1)
+        assert theme.scala_attuale() == 1.0
+    finally:
+        theme.imposta_scala(1.0)
+
+
+def test_nessun_testo_sotto_14_punti_a_scala_normale():
+    from fotofacile.ui import theme
+
+    theme.imposta_scala(1.0)
+    for usato in (theme.font(14), theme.font(14, bold=True), theme.font(28, bold=True)):
+        assert usato[1] >= 14

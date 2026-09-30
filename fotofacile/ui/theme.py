@@ -16,6 +16,8 @@ import tkinter.font as tkfont
 from tkinter import ttk
 from typing import Callable
 
+from ..core.impostazioni import SCALE_AMMESSE
+
 FONT_PREFERITI = ("Segoe UI", "Helvetica Neue", "DejaVu Sans", "Liberation Sans", "Arial")
 
 PALETTE: dict[str, dict[str, str]] = {
@@ -55,6 +57,17 @@ PALETTE: dict[str, dict[str, str]] = {
 COLORI: dict[str, str] = dict(PALETTE["chiaro"])
 _FAMIGLIA = FONT_PREFERITI[-1]
 _SCURO = False
+_SCALA = 1.0
+
+
+def imposta_scala(valore: float) -> None:
+    """Sceglie la dimensione del testo (1.0 normale, 1.25 grande, 1.5 molto grande)."""
+    global _SCALA
+    _SCALA = min(max(float(valore), SCALE_AMMESSE[0]), SCALE_AMMESSE[-1])
+
+
+def scala_attuale() -> float:
+    return _SCALA
 
 
 def _canale(valore: float) -> float:
@@ -116,20 +129,24 @@ def pick_font_family(available: set[str] | None = None) -> str:
     return FONT_PREFERITI[-1]
 
 
-def font(size: int = 12, bold: bool = False) -> tuple:
-    """Tupla (famiglia, dimensione[, stile]) usabile da Tkinter."""
-    return (_FAMIGLIA, size, "bold") if bold else (_FAMIGLIA, size)
+def font(size: int = 14, bold: bool = False) -> tuple:
+    """Tupla (famiglia, dimensione[, stile]): la dimensione segue la scala scelta dall'utente."""
+    punti = max(1, round(size * _SCALA))
+    return (_FAMIGLIA, punti, "bold") if bold else (_FAMIGLIA, punti)
 
 
 def apply_theme(
     root: tk.Misc,
     available_families: set[str] | None = None,
     scuro: bool | None = None,
+    scala: float | None = None,
 ) -> None:
     """Applica la tavolozza (chiara o scura) e lo stile a tutta la finestra."""
     global _FAMIGLIA, _SCURO
     modalita = sistema_scuro() if scuro is None else scuro
     _SCURO = modalita
+    if scala is not None:
+        imposta_scala(scala)
     tavolozza = PALETTE["scuro" if modalita else "chiaro"]
     COLORI.clear()
     COLORI.update(tavolozza)
@@ -139,39 +156,59 @@ def apply_theme(
     stile.theme_use("clam")  # unico tema che rispetta i colori su tutti i sistemi
     root.configure(background=COLORI["sfondo"])
 
-    stile.configure(".", background=COLORI["sfondo"], foreground=COLORI["testo"], font=font(12))
+    stile.configure(".", background=COLORI["sfondo"], foreground=COLORI["testo"], font=font(14))
     for stile_base in ("TFrame", "TLabelframe", "TLabelframe.Label"):
         stile.configure(stile_base, background=COLORI["sfondo"], foreground=COLORI["testo"])
     stile.configure("TLabel", background=COLORI["sfondo"], foreground=COLORI["testo"])
     stile.configure(
-        "Titolo.TLabel", font=font(22, bold=True), background=COLORI["sfondo"], foreground=COLORI["testo"]
+        "Titolo.TLabel", font=font(28, bold=True), background=COLORI["sfondo"], foreground=COLORI["testo"]
     )
-    stile.configure("Sottotitolo.TLabel", font=font(14), background=COLORI["sfondo"], foreground=COLORI["tenue"])
-    stile.configure("Tenue.TLabel", background=COLORI["sfondo"], foreground=COLORI["tenue"])
+    stile.configure("Sottotitolo.TLabel", font=font(16), background=COLORI["sfondo"], foreground=COLORI["tenue"])
+    stile.configure("Passo.TLabel", font=font(14), background=COLORI["sfondo"], foreground=COLORI["tenue"])
+    stile.configure("Tenue.TLabel", background=COLORI["sfondo"], foreground=COLORI["tenue"], font=font(14))
     stile.configure(
-        "Successo.TLabel", background=COLORI["sfondo"], foreground=COLORI["successo"], font=font(14, bold=True)
+        "Successo.TLabel", background=COLORI["sfondo"], foreground=COLORI["successo"], font=font(16, bold=True)
     )
-    stile.configure("Avviso.TLabel", background=COLORI["sfondo"], foreground=COLORI["avviso"])
-    stile.configure("Errore.TLabel", background=COLORI["sfondo"], foreground=COLORI["errore"])
+    stile.configure("Avviso.TLabel", background=COLORI["sfondo"], foreground=COLORI["avviso"], font=font(14))
+    stile.configure("Errore.TLabel", background=COLORI["sfondo"], foreground=COLORI["errore"], font=font(14))
 
     stile.configure(
         "Big.TButton",
-        font=font(14, bold=True),
-        padding=(18, 12),
+        font=font(18, bold=True),
+        padding=(round(28 * _SCALA), round(16 * _SCALA)),
         background=COLORI["primario"],
         foreground=COLORI["pannello"] if not modalita else COLORI["sfondo"],
     )
     stile.map("Big.TButton", background=[("active", COLORI["primario_attivo"])])
-    stile.configure("Secondary.TButton", font=font(12), padding=(10, 6))
+    stile.configure("Secondary.TButton", font=font(14), padding=(round(16 * _SCALA), round(10 * _SCALA)))
     stile.map("Secondary.TButton", background=[("active", COLORI["selezione"])])
-    stile.configure("TCheckbutton", background=COLORI["sfondo"], foreground=COLORI["testo"])
+    stile.configure(
+        "Link.TButton",
+        font=font(13),
+        padding=(6, 4),
+        background=COLORI["sfondo"],
+        foreground=COLORI["primario"],
+        borderwidth=0,
+    )
+    stile.map(
+        "Link.TButton",
+        foreground=[("active", COLORI["primario_attivo"])],
+        background=[("active", COLORI["sfondo"])],
+    )
+    stile.configure(
+        "TCheckbutton", background=COLORI["sfondo"], foreground=COLORI["testo"], font=font(15), padding=(4, 6)
+    )
     stile.map("TCheckbutton", background=[("active", COLORI["sfondo"])])
+    # anello di messa a fuoco ben visibile per chi usa la tastiera
+    for nome in ("Big.TButton", "Secondary.TButton", "Link.TButton", "TCheckbutton"):
+        stile.map(nome, focuscolor=[("focus", COLORI["primario"])])
     stile.configure(
         "TEntry",
         fieldbackground=COLORI["campo"],
         foreground=COLORI["testo"],
         insertcolor=COLORI["testo"],
         bordercolor=COLORI["bordo"],
+        font=font(14),
     )
     stile.configure(
         "TCombobox",
@@ -179,6 +216,7 @@ def apply_theme(
         background=COLORI["campo"],
         foreground=COLORI["testo"],
         arrowcolor=COLORI["testo"],
+        font=font(14),
     )
     stile.map("TCombobox", fieldbackground=[("readonly", COLORI["campo"])])
     stile.configure(
