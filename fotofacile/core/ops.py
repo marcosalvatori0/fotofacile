@@ -11,6 +11,7 @@ di comunicazione: così un comando molto loquace non riempie il tubo e non blocc
 
 from __future__ import annotations
 
+import http.client
 import os
 import subprocess
 import tempfile
@@ -326,7 +327,8 @@ class ScaricatoreAPassi:
             completato = True
         except FotoFacileError:
             raise
-        except OSError as errore:
+        except (OSError, http.client.HTTPException) as errore:
+            # `HTTPException` non è un OSError: risposta troncata, risposta non HTTP (D22).
             raise FotoFacileError(
                 "Non sono riuscito a scaricare il componente di collegamento.",
                 hint="Controlla la connessione a internet e riprova.",

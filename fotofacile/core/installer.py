@@ -11,6 +11,7 @@ qualcosa va storto a metà, sul computer non resta un componente rotto a metà.
 from __future__ import annotations
 
 import hashlib
+import http.client
 import platform
 import shutil
 import subprocess
@@ -84,7 +85,7 @@ def catalogo_platform_tools(system: str | None = None, opener: Callable | None =
     try:
         with apri(CATALOGO_URL, timeout=TIMEOUT_CATALOGO) as risposta:
             contenuto = risposta.read()
-    except OSError as errore:
+    except (OSError, http.client.HTTPException) as errore:  # D22: non tutte sono OSError
         raise FotoFacileError(
             "Non riesco a leggere il catalogo ufficiale di Android.",
             hint="Controlla la connessione a internet e riprova.",
@@ -272,7 +273,7 @@ def download_file(
         completato = True
     except FotoFacileError:
         raise
-    except OSError as errore:
+    except (OSError, http.client.HTTPException) as errore:  # D22: non tutte sono OSError
         raise FotoFacileError(
             "Non sono riuscito a scaricare il componente di collegamento.",
             hint="Controlla la connessione a internet e riprova.",

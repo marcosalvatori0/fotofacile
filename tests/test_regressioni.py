@@ -1239,3 +1239,54 @@ def test_d21_la_copia_interna_traduce_la_cartella_impossibile_da_creare(tmp_path
     assert esiti.copied == []
     assert len(esiti.failed) == 1
     assert "a.jpg" in esiti.failed[0][1]
+
+
+# ── D22 ────────────────────────────────────────────────────────────────────
+# Prima: il download del componente e la lettura del catalogo intercettavano solo gli
+# OSError. Ma `http.client` segnala una risposta troncata a metà (`IncompleteRead`, per
+# esempio con il Wi-Fi che cade durante un trasferimento «a pezzi») o una risposta non HTTP
+# di un proxy o di una rete con pagina di accesso (`BadStatusLine`) con eccezioni che **non**
+# sono OSError (verificato con un server locale e `urllib.request.urlopen`). Uscivano
+# grezze: «Qualcosa non ha funzionato», e siccome `run_task` chiama `on_error` solo per i
+# FotoFacileError, il pulsante «Installa componente mancante» restava disattivato.
+def _risposta_http(leggi):
+    class Risposta:
+        headers = {"Content-Length": "2000000"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self, *_args):
+            return leggi()
+
+        read1 = read
+
+    return Risposta()
+
+
+def _troncata():
+    import http.client
+
+    raise http.client.IncompleteRead(b"")
+
+
+@pytest.mark.parametrize("guasto", ["troncata", "non_http"])
+def test_d22_una_risposta_di_rete_anomala_da_un_errore_comprensibile(tmp_path, guasto):
+    import http.client
+
+    from fotofacile.core.installer import installa_a_passi
+
+    def apri(*_args, **_kwargs):
+        if guasto == "non_http":
+            raise http.client.BadStatusLine("CIAO MONDO")
+        return _risposta_http(_troncata)
+
+    cartella = tmp_path / "casa" / ".fotofacile" / "platform-tools"
+    # Senza `url` si passa anche dal catalogo ufficiale, che usa lo stesso `opener`.
+    with pytest.raises(FotoFacileError) as errore:
+        esegui_fino_alla_fine(installa_a_passi(target_dir=cartella, opener=apri, system="linux"))
+    assert "connessione" in errore.value.hint
+    assert list(cartella.parent.iterdir()) == [], "niente pacchetto né file a metà"
