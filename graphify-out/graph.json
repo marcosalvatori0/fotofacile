@@ -19776,7 +19776,7 @@
       "node_kind": "heading",
       "norm_label": "code context",
       "source_file": "HANDOFF.md",
-      "source_location": "L304"
+      "source_location": "L313"
     },
     {
       "id": "handoff_completed",
@@ -19788,7 +19788,7 @@
       "node_kind": "heading",
       "norm_label": "completed",
       "source_file": "HANDOFF.md",
-      "source_location": "L26"
+      "source_location": "L32"
     },
     {
       "id": "handoff_current_state",
@@ -19800,7 +19800,7 @@
       "node_kind": "heading",
       "norm_label": "current state",
       "source_file": "HANDOFF.md",
-      "source_location": "L250"
+      "source_location": "L259"
     },
     {
       "id": "handoff_edge_cases_error_handling",
@@ -19812,7 +19812,7 @@
       "node_kind": "heading",
       "norm_label": "edge cases & error handling",
       "source_file": "HANDOFF.md",
-      "source_location": "L459"
+      "source_location": "L468"
     },
     {
       "id": "handoff_failed_approaches_don_t_repeat_these",
@@ -19824,7 +19824,7 @@
       "node_kind": "heading",
       "norm_label": "failed approaches (don't repeat these)",
       "source_file": "HANDOFF.md",
-      "source_location": "L147"
+      "source_location": "L156"
     },
     {
       "id": "handoff_files_to_know",
@@ -19836,7 +19836,7 @@
       "node_kind": "heading",
       "norm_label": "files to know",
       "source_file": "HANDOFF.md",
-      "source_location": "L269"
+      "source_location": "L278"
     },
     {
       "id": "handoff_goal",
@@ -19848,7 +19848,7 @@
       "node_kind": "heading",
       "norm_label": "goal",
       "source_file": "HANDOFF.md",
-      "source_location": "L17"
+      "source_location": "L23"
     },
     {
       "id": "handoff_handoff_fotofacile_app_desktop_per_copiare_foto_da_android",
@@ -19872,7 +19872,7 @@
       "node_kind": "heading",
       "norm_label": "key decisions",
       "source_file": "HANDOFF.md",
-      "source_location": "L221"
+      "source_location": "L230"
     },
     {
       "id": "handoff_not_yet_done_serve_marco",
@@ -19884,7 +19884,7 @@
       "node_kind": "heading",
       "norm_label": "not yet done \u2014 serve marco",
       "source_file": "HANDOFF.md",
-      "source_location": "L89"
+      "source_location": "L95"
     },
     {
       "id": "handoff_parte_a_correzioni_dell_audit_d1_d31",
@@ -19896,7 +19896,7 @@
       "node_kind": "heading",
       "norm_label": "parte a \u2014 correzioni dell'audit (d1\u2013d31)",
       "source_file": "HANDOFF.md",
-      "source_location": "L28"
+      "source_location": "L34"
     },
     {
       "id": "handoff_parte_b_webp",
@@ -19908,7 +19908,7 @@
       "node_kind": "heading",
       "norm_label": "parte b \u2014 webp",
       "source_file": "HANDOFF.md",
-      "source_location": "L37"
+      "source_location": "L43"
     },
     {
       "id": "handoff_parte_c_nuova_interfaccia_4_passi_pensata_per_chi_non_\u00e8_pratico",
@@ -19920,7 +19920,7 @@
       "node_kind": "heading",
       "norm_label": "parte c \u2014 nuova interfaccia (4 passi, pensata per chi non e pratico)",
       "source_file": "HANDOFF.md",
-      "source_location": "L43"
+      "source_location": "L49"
     },
     {
       "id": "handoff_parte_d_installatore_windows",
@@ -19932,7 +19932,7 @@
       "node_kind": "heading",
       "norm_label": "parte d \u2014 installatore windows",
       "source_file": "HANDOFF.md",
-      "source_location": "L65"
+      "source_location": "L71"
     },
     {
       "id": "handoff_prima_della_revisione_v0_1_sempre_valido",
@@ -19944,7 +19944,7 @@
       "node_kind": "heading",
       "norm_label": "prima della revisione (v0.1, sempre valido)",
       "source_file": "HANDOFF.md",
-      "source_location": "L77"
+      "source_location": "L83"
     },
     {
       "id": "handoff_resume_instructions",
@@ -19956,7 +19956,7 @@
       "node_kind": "heading",
       "norm_label": "resume instructions",
       "source_file": "HANDOFF.md",
-      "source_location": "L389"
+      "source_location": "L398"
     },
     {
       "id": "handoff_setup_per_windows",
@@ -19968,7 +19968,7 @@
       "node_kind": "heading",
       "norm_label": "setup per windows",
       "source_file": "HANDOFF.md",
-      "source_location": "L377"
+      "source_location": "L386"
     },
     {
       "id": "handoff_setup_required",
@@ -19980,7 +19980,7 @@
       "node_kind": "heading",
       "norm_label": "setup required",
       "source_file": "HANDOFF.md",
-      "source_location": "L447"
+      "source_location": "L456"
     },
     {
       "id": "handoff_warnings",
@@ -19992,7 +19992,7 @@
       "node_kind": "heading",
       "norm_label": "warnings",
       "source_file": "HANDOFF.md",
-      "source_location": "L491"
+      "source_location": "L500"
     },
     {
       "id": "tests_test_page_options",
@@ -62612,7 +62612,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L28",
+      "source_location": "L34",
       "weight": 1.0
     },
     {
@@ -62623,7 +62623,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L37",
+      "source_location": "L43",
       "weight": 1.0
     },
     {
@@ -62634,7 +62634,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L43",
+      "source_location": "L49",
       "weight": 1.0
     },
     {
@@ -62645,7 +62645,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L65",
+      "source_location": "L71",
       "weight": 1.0
     },
     {
@@ -62656,7 +62656,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L77",
+      "source_location": "L83",
       "weight": 1.0
     },
     {
@@ -62667,7 +62667,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L147",
+      "source_location": "L156",
       "weight": 1.0
     },
     {
@@ -62678,7 +62678,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L17",
+      "source_location": "L23",
       "weight": 1.0
     },
     {
@@ -62689,7 +62689,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L221",
+      "source_location": "L230",
       "weight": 1.0
     },
     {
@@ -62700,18 +62700,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L250",
-      "weight": 1.0
-    },
-    {
-      "source": "handoff_handoff_fotofacile_app_desktop_per_copiare_foto_da_android",
-      "target": "handoff_completed",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "HANDOFF.md",
-      "source_location": "L26",
+      "source_location": "L259",
       "weight": 1.0
     },
     {
@@ -62722,7 +62711,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L269",
+      "source_location": "L278",
       "weight": 1.0
     },
     {
@@ -62733,7 +62722,18 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L304",
+      "source_location": "L313",
+      "weight": 1.0
+    },
+    {
+      "source": "handoff_handoff_fotofacile_app_desktop_per_copiare_foto_da_android",
+      "target": "handoff_completed",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "HANDOFF.md",
+      "source_location": "L32",
       "weight": 1.0
     },
     {
@@ -62744,7 +62744,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L377",
+      "source_location": "L386",
       "weight": 1.0
     },
     {
@@ -62755,7 +62755,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L389",
+      "source_location": "L398",
       "weight": 1.0
     },
     {
@@ -62766,7 +62766,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L447",
+      "source_location": "L456",
       "weight": 1.0
     },
     {
@@ -62777,7 +62777,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L459",
+      "source_location": "L468",
       "weight": 1.0
     },
     {
@@ -62788,7 +62788,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L491",
+      "source_location": "L500",
       "weight": 1.0
     },
     {
@@ -62799,7 +62799,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "HANDOFF.md",
-      "source_location": "L89",
+      "source_location": "L95",
       "weight": 1.0
     },
     {
@@ -81875,5 +81875,5 @@
       "source_file": "docs/superpowers/specs/2026-09-28-fotofacile-design.md"
     }
   ],
-  "built_at_commit": "684cc71a5410e2ad8773acdada76e8f90cd4b59b"
+  "built_at_commit": "9a4b900a3427c3dd1e768183e7e692b1b35d1466"
 }

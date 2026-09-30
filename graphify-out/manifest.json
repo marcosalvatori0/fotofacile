@@ -336,9 +336,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1790774433.584102,
-    "seen": 1790774505.147433,
-    "ast_hash": "f56fb763662ebced1d97b08bf5f4106a",
+    "mtime": 1790776478.9248695,
+    "seen": 1790776541.330474,
+    "ast_hash": "68a20d602fcbeb47d52cd2f16fc53403",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-09-28-fotofacile.md": {
@@ -354,8 +354,8 @@
     "semantic_hash": ""
   },
   "requirements-dev.txt": {
-    "mtime": 1790757425.977993,
-    "seen": 1790757494.2709801,
+    "mtime": 1790776485.5948422,
+    "seen": 1790776541.3304791,
     "ast_hash": "7442d13fe299c6c714f4c46f88d6876a",
     "semantic_hash": ""
   },
@@ -372,9 +372,9 @@
     "semantic_hash": ""
   },
   "HANDOFF.md": {
-    "mtime": 1790774460.2557404,
-    "seen": 1790774505.1474319,
-    "ast_hash": "daf1aa5ed35dd18ee34b4f46ee22e0aa",
+    "mtime": 1790776539.6817694,
+    "seen": 1790776541.330473,
+    "ast_hash": "ef2b88a63cb4a926d4f1ab89f39c7aed",
     "semantic_hash": ""
   },
   "assets/FotoFacile.iconset/icon_128x128.png": {
@@ -473,12 +473,6 @@
     "ast_hash": "ff74b732a95e1516179ad47b2889595a",
     "semantic_hash": ""
   },
-  "LEGGIMI - Installazione.txt": {
-    "mtime": 1790773700.3736424,
-    "seen": 1790773741.673217,
-    "ast_hash": "dd65e5a0f6e78a8a18cb4e50624dbdf7",
-    "semantic_hash": ""
-  },
   "fotofacile/aiutanti/__init__.py": {
     "mtime": 1790752965.7830448,
     "seen": 1790753335.458315,
@@ -570,8 +564,8 @@
     "semantic_hash": ""
   },
   "requirements.txt": {
-    "mtime": 1790757425.9780536,
-    "seen": 1790757494.270981,
+    "mtime": 1790776485.5951164,
+    "seen": 1790776541.3304791,
     "ast_hash": "bc40365b2c67d804b158bc8d49c60c5b",
     "semantic_hash": ""
   },
@@ -654,8 +648,8 @@
     "semantic_hash": ""
   },
   "installer/windows/Benvenuto.txt": {
-    "mtime": 1790773454.8449047,
-    "seen": 1790773494.595583,
+    "mtime": 1790776485.5935178,
+    "seen": 1790776541.3304782,
     "ast_hash": "bcd360302536f55bc0cb5abb958951fa",
     "semantic_hash": ""
   },
@@ -666,15 +660,15 @@
     "semantic_hash": ""
   },
   "installer/windows/prova-installazione.ps1": {
-    "mtime": 1790773958.2458146,
-    "seen": 1790774120.613434,
+    "mtime": 1790776485.5942502,
+    "seen": 1790776541.330444,
     "ast_hash": "2df7afebcc4c36263b529f0186b389fc",
     "semantic_hash": ""
   },
   "installer/windows/verifica-eseguibile.ps1": {
-    "mtime": 1790773958.2456641,
-    "seen": 1790774120.6134348,
-    "ast_hash": "def86e03612778e3d8517a86cab83f60",
+    "mtime": 1790776485.5945544,
+    "seen": 1790776541.330445,
+    "ast_hash": "353f0df7f909c025c3e6a04ee1aff11a",
     "semantic_hash": ""
   },
   "tests/test_build_app.py": {
