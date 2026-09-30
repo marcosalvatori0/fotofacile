@@ -12,9 +12,9 @@
     "semantic_hash": "a475900f339e67646414014953d5c811"
   },
   "fotofacile/cli.py": {
-    "mtime": 1790756486.0198376,
-    "seen": 1790756794.791241,
-    "ast_hash": "7dbb3cfc9366565fae8ecaaf4718a7a5",
+    "mtime": 1790747715.3052964,
+    "seen": 1790747759.845784,
+    "ast_hash": "db7fc20f3b0b3c1e6111eb209be13315",
     "semantic_hash": ""
   },
   "fotofacile/core/__init__.py": {
@@ -114,9 +114,9 @@
     "semantic_hash": "b4a8c8e7819a0f05004fa80c18e2646b"
   },
   "fotofacile/ui/app.py": {
-    "mtime": 1790756226.587312,
-    "seen": 1790756794.791254,
-    "ast_hash": "4294e591874c2777b3dab977f819c44f",
+    "mtime": 1790617894.5922034,
+    "seen": 1790618086.8745532,
+    "ast_hash": "89fe973fb9486510aa25414c7d78f695",
     "semantic_hash": ""
   },
   "fotofacile/ui/page_connect.py": {
@@ -204,9 +204,9 @@
     "semantic_hash": "cb8f0e4dc4888f63461dfce64f4d58ea"
   },
   "tests/test_cli.py": {
-    "mtime": 1790755729.3807073,
-    "seen": 1790756794.7912672,
-    "ast_hash": "ff20b4d223eb1a1a221cb2f436276865",
+    "mtime": 1790615948.8661945,
+    "seen": 1790618086.8745651,
+    "ast_hash": "93ac8fe286873c3c9979747b722260e5",
     "semantic_hash": ""
   },
   "tests/test_demo.py": {
@@ -324,9 +324,9 @@
     "semantic_hash": "5229c0946a2bbe7e893b1ce93d229661"
   },
   "tests/test_ui_app.py": {
-    "mtime": 1790756135.5424373,
-    "seen": 1790756794.791281,
-    "ast_hash": "a26ff07d9249df02d79253d9e0d5c20d",
+    "mtime": 1790606529.751232,
+    "seen": 1790606874.5984929,
+    "ast_hash": "da504d7942cffa63e38e091c7f5cb23d",
     "semantic_hash": ""
   },
   "tests/test_widgets.py": {
@@ -576,9 +576,9 @@
     "semantic_hash": ""
   },
   "docs/PIANO-REVISIONE.md": {
-    "mtime": 1790756793.3868086,
-    "seen": 1790756794.791284,
-    "ast_hash": "a9ef7816046628510d5dee198867209a",
+    "mtime": 1790618035.8339434,
+    "seen": 1790618086.874582,
+    "ast_hash": "5f1963f9ce16d825a8e53955f93c1e61",
     "semantic_hash": ""
   },
   "fotofacile/__main__.py": {
@@ -588,9 +588,9 @@
     "semantic_hash": ""
   },
   "tests/test_regressioni.py": {
-    "mtime": 1790756478.4022753,
-    "seen": 1790756794.7912772,
-    "ast_hash": "c0ab3f6c0bdd80dedd0da8a17a5002a6",
+    "mtime": 1790755024.2791362,
+    "seen": 1790755076.3798778,
+    "ast_hash": "af11e61a54eb79c0afb438cd413cd2e4",
     "semantic_hash": ""
   },
   "requirements.txt": {
@@ -606,9 +606,9 @@
     "semantic_hash": ""
   },
   "docs/REVISIONE-v0.2.md": {
-    "mtime": 1790756713.9785552,
-    "seen": 1790756794.791284,
-    "ast_hash": "b420322fdb87c79d94572d5e5ca81958",
+    "mtime": 1790754764.8465655,
+    "seen": 1790754809.906362,
+    "ast_hash": "9657e6f15ba1613754cf952caaa9e929",
     "semantic_hash": ""
   }
 }
