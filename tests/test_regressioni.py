@@ -1574,3 +1574,36 @@ def test_d28_l_avviso_compare_anche_se_il_registro_non_si_scrive(registro_non_sc
     )
     assert chiamate and chiamate[0][0] == "osascript"
     assert "Non riesco ad aprire la finestra" in capsys.readouterr().out
+
+
+# ── D29 ────────────────────────────────────────────────────────────────────
+# Prima: `App.go_to` chiamava `on_show` della pagina e **dopo** aggiornava `current_page`,
+# l'indicatore dei passi e chiudeva l'avviso. Ogni messaggio scritto da `on_show` spariva
+# subito («Sto copiando le foto: non scollegare il telefono.», «Ultimo passo prima della
+# copia…»), e quando `on_show` rimandava a un'altra pagina (telefono scollegato, informazioni
+# mancanti) la finestra mostrava quella pagina ma restava convinta di essere nell'altra: passo
+# sbagliato in alto, avviso del motivo nascosto, e «Indietro» che non si muoveva.
+# Le pagine qui sono sostituite da versioni minime: conta solo quello che fa `go_to`.
+def test_d29_il_messaggio_scritto_all_ingresso_resta_visibile(app, monkeypatch):
+    pagina = app.pages["options"]
+    monkeypatch.setattr(pagina, "on_show", lambda: app.set_status("Controlla la cartella.", kind="info"))
+    app.go_to("options")
+    assert app.banner.visible is True
+    assert app.banner.message_text == "Controlla la cartella."
+
+
+def test_d29_una_pagina_che_rimanda_altrove_lascia_la_finestra_coerente(app, monkeypatch):
+    for chiave in ("select", "options"):
+        monkeypatch.setattr(app.pages[chiave], "on_show", lambda: None)
+
+    def telefono_scollegato():
+        app.go_to("options")
+        app.set_status("Il telefono non è più collegato.", kind="avviso")
+
+    monkeypatch.setattr(app.pages["transfer"], "on_show", telefono_scollegato)
+    app.go_to("transfer")
+    assert app.current_page == "options"
+    assert app.step_indicator.current == 2
+    assert app.banner.visible and app.banner.message_text == "Il telefono non è più collegato."
+    app.go_to("prev")
+    assert app.current_page == "select", "«Indietro» deve portare al passo prima di quello mostrato"

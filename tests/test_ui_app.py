@@ -41,7 +41,16 @@ def test_pagine_registrate(app):
         assert pagina.winfo_exists()
 
 
+def _telefono_demo(app) -> None:
+    """La pagina «Scegli le foto» accoglie solo con un telefono collegato (altrimenti rimanda
+    al passo 1, e dal D29 la finestra lo dice anche in `current_page`)."""
+    from fotofacile.core.devices import DeviceInfo
+
+    app.device = DeviceInfo(serial="DEMO12345", state="device", model="Pixel_7_demo", product="demo")
+
+
 def test_navigazione_avanti_indietro(app):
+    _telefono_demo(app)
     app.go_to("select")
     assert app.current_page == "select"
     app.go_to("prev")
@@ -50,7 +59,10 @@ def test_navigazione_avanti_indietro(app):
     assert app.current_page == "select"
 
 
-def test_navigazione_non_esce_dai_limiti(app):
+def test_navigazione_non_esce_dai_limiti(app, monkeypatch):
+    # Senza opzioni la pagina «Copia» rimanda giustamente a «Destinazione» (D29): qui conta
+    # solo che «Avanti» dall'ultimo passo non esca dall'elenco.
+    monkeypatch.setattr(app.pages["transfer"], "on_show", lambda: None)
     app.go_to("connect")
     app.go_to("prev")
     assert app.current_page == "connect"
@@ -81,7 +93,9 @@ def test_registro_e_stato(app):
     assert "Telefono collegato" in app.banner.message_text
     assert "Tutto pronto" in app.banner.hint_text
     app.go_to("select")
-    assert app.banner.visible is False
+    # il messaggio della pagina precedente si chiude (quello che la nuova pagina scrive
+    # entrando, qui l'avviso del telefono scollegato, resta visibile: D29)
+    assert "Telefono collegato" not in app.banner.message_text
 
 
 def test_task_eseguito_a_passi_senza_thread(app):

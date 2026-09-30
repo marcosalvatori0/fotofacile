@@ -245,11 +245,14 @@ class App(tk.Tk):
         if key not in self.pages:
             key = ORDINE[0]
         pagina = self.pages[key]
-        pagina.tkraise()
-        pagina.on_show()
+        # Prima si aggiorna lo stato della finestra, poi si chiama `on_show`: quello che la
+        # pagina fa all'ingresso (scrivere un avviso, rimandare a un'altra pagina) deve
+        # restare, non essere cancellato subito dopo.
         self.current_page = key
         self.step_indicator.set_step(ORDINE.index(key))
         self.banner.hide()
+        pagina.tkraise()
+        pagina.on_show()
 
     def stop_all_polling(self) -> None:
         for pagina in self.pages.values():
