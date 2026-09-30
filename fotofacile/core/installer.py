@@ -22,7 +22,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Callable, Generator, Mapping
 
-from .errors import FotoFacileError
+from .errors import FotoFacileError, errore_disco_componente
 from .osutil import app_dir, flag_nascosta
 
 BASE_URL = "https://dl.google.com/android/repository/"
@@ -141,6 +141,14 @@ def extract_component(zip_path: Path, target_dir: Path, system: str | None = Non
     era prima.
     """
     cartella = Path(target_dir)
+    try:
+        return _estrai_e_sostituisci(zip_path, cartella, system)
+    except OSError as errore:
+        # Disco pieno, cartella protetta: prima usciva un OSError grezzo (D23).
+        raise errore_disco_componente(errore, cartella.parent) from errore
+
+
+def _estrai_e_sostituisci(zip_path: Path, cartella: Path, system: str | None) -> Path:
     cartella.parent.mkdir(parents=True, exist_ok=True)
     nome_eseguibile = _nome_eseguibile(system or sys.platform)
     with tempfile.TemporaryDirectory(prefix="fotofacile-estrai-", dir=str(cartella.parent)) as appoggio:

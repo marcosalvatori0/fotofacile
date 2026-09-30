@@ -53,3 +53,18 @@ def traduci_errore_file(errore: Exception, destinazione: Path) -> FotoFacileErro
         f"Non sono riuscito a copiare {destinazione.name}.",
         hint="Il telefono potrebbe essersi scollegato: controlla il cavo e riprova.",
     )
+
+
+def errore_disco_componente(errore: Exception, cartella: Path) -> FotoFacileError:
+    """Guaio del disco mentre si scarica o si installa il componente di collegamento (D23)."""
+    codice = getattr(errore, "errno", None)
+    testo = str(errore).lower()
+    if "no space" in testo or "disk full" in testo or codice == 28:
+        return FotoFacileError(
+            "Non c'è abbastanza spazio sul disco per installare il componente di collegamento.",
+            hint="Libera un po' di spazio (ne bastano circa 100 MB) e riprova.",
+        )
+    return FotoFacileError(
+        f"Non riesco a salvare il componente di collegamento nella cartella {cartella}.",
+        hint="Controlla che la cartella non sia protetta o in sola lettura, poi riprova.",
+    )

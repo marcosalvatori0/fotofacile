@@ -16,11 +16,12 @@ import os
 import subprocess
 import tempfile
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Generator, Iterator, Sequence
 
-from .errors import FotoFacileError
+from .errors import FotoFacileError, errore_disco_componente
 from .osutil import flag_nascosta
 
 INTERVALLO_PRECEDENTE = 0.02  # secondi fra un controllo e il successivo
@@ -271,6 +272,15 @@ class ProcessoEsterno:
             pass
 
 
+@contextmanager
+def _sul_disco(cartella: Path) -> Iterator[None]:
+    """Gli OSError di questo blocco sono guai del disco, non della rete (D23)."""
+    try:
+        yield
+    except OSError as errore:
+        raise errore_disco_componente(errore, cartella) from errore
+
+
 class ScaricatoreAPassi:
     """Scarica un file da internet a piccoli blocchi, senza bloccare la grafica."""
 
@@ -299,15 +309,19 @@ class ScaricatoreAPassi:
         import urllib.request
 
         apri = self.opener or urllib.request.urlopen
-        self.destinazione.parent.mkdir(parents=True, exist_ok=True)
+        cartella = self.destinazione.parent
         temporaneo = self.destinazione.with_name(self.destinazione.name + ".scarico")
         completato = False
         try:
+            with _sul_disco(cartella):
+                cartella.mkdir(parents=True, exist_ok=True)
             with apri(self.url, timeout=self.timeout) as risposta:
                 intestazioni = getattr(risposta, "headers", None)
                 totale = int((intestazioni or {}).get("Content-Length") or 0)
                 ricevuti = 0
-                with open(temporaneo, "wb") as uscita:
+                with _sul_disco(cartella):
+                    uscita = open(temporaneo, "wb")
+                with uscita:
                     while True:
                         if self.annulla is not None and self.annulla.is_set():
                             raise FotoFacileError(
@@ -316,11 +330,14 @@ class ScaricatoreAPassi:
                         blocco = risposta.read(self.blocco)
                         if not blocco:
                             break
-                        uscita.write(blocco)
+                        with _sul_disco(cartella):
+                            uscita.write(blocco)
                         ricevuti += len(blocco)
                         if self.on_progress is not None:
                             self.on_progress({"ricevuti": ricevuti, "totale": totale})
                         yield 0.0
+                    with _sul_disco(cartella):
+                        uscita.flush()
             if self.validatore is not None:
                 self.validatore(temporaneo)
             temporaneo.replace(self.destinazione)
@@ -337,5 +354,8 @@ class ScaricatoreAPassi:
             # Vale anche se il download viene abbandonato (chiusura della finestra o cambio
             # idea): il file a metà non deve restare sul disco dell'utente.
             if not completato:
-                temporaneo.unlink(missing_ok=True)
+                try:
+                    temporaneo.unlink(missing_ok=True)
+                except OSError:  # per esempio la cartella non è mai esistita (D23)
+                    pass
         return self.destinazione

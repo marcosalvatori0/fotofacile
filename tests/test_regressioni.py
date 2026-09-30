@@ -1290,3 +1290,94 @@ def test_d22_una_risposta_di_rete_anomala_da_un_errore_comprensibile(tmp_path, g
         esegui_fino_alla_fine(installa_a_passi(target_dir=cartella, opener=apri, system="linux"))
     assert "connessione" in errore.value.hint
     assert list(cartella.parent.iterdir()) == [], "niente pacchetto né file a metà"
+
+
+# ── D23 ────────────────────────────────────────────────────────────────────
+# Prima: i guai del **disco** durante l'installazione del componente non erano detti come
+# tali. Se la cartella `.fotofacile` non si poteva creare (un file con lo stesso nome, cartella
+# personale protetta) o il disco si riempiva durante l'estrazione, usciva un OSError grezzo:
+# «Qualcosa non ha funzionato» e pulsante «Installa» disattivato (vedi D22). Se il disco si
+# riempiva durante il download, il messaggio diceva di controllare la connessione a internet.
+def _zip_del_componente(tmp_path: Path) -> bytes:
+    percorso = tmp_path / "pt.zip"
+    with zipfile.ZipFile(percorso, "w") as archivio:
+        archivio.writestr("platform-tools/adb", b"#!/bin/sh\nexit 0\n")
+    return percorso.read_bytes()
+
+
+def _opener_con(dati: bytes):
+    import io
+
+    class Risposta(io.BytesIO):
+        headers = {"Content-Length": str(len(dati))}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    return lambda *_a, **_k: Risposta(dati)
+
+
+def test_d23_cartella_dei_dati_impossibile_da_creare(tmp_path, monkeypatch):
+    from fotofacile.core import installer
+
+    monkeypatch.setattr(installer, "MIN_DIMENSIONE_ARCHIVIO", 1)
+    casa = tmp_path / "casa"
+    casa.mkdir()
+    (casa / ".fotofacile").write_text("un file, non una cartella", encoding="utf-8")
+    with pytest.raises(FotoFacileError) as errore:
+        esegui_fino_alla_fine(
+            installer.installa_a_passi(
+                target_dir=casa / ".fotofacile" / "platform-tools",
+                url="https://esempio/pt.zip",
+                opener=_opener_con(_zip_del_componente(tmp_path)),
+                system="linux",
+            )
+        )
+    assert ".fotofacile" in errore.value.message
+    assert "connessione" not in errore.value.hint
+
+
+@pytest.mark.parametrize("quando", ["download", "estrazione"])
+def test_d23_disco_pieno_durante_l_installazione_del_componente(tmp_path, monkeypatch, quando):
+    import errno
+    import io
+
+    from fotofacile.core import installer, ops
+
+    monkeypatch.setattr(installer, "MIN_DIMENSIONE_ARCHIVIO", 1)
+    dati = _zip_del_componente(tmp_path)
+    if quando == "download":
+        vero_open = open
+
+        class Pieno(io.RawIOBase):
+            def writable(self):
+                return True
+
+            def write(self, _dati):
+                raise OSError(errno.ENOSPC, "No space left on device")
+
+        def apri_file(percorso, modo="r", *args, **kwargs):
+            if str(percorso).endswith(".scarico"):
+                vero_open(percorso, modo).close()  # il file a metà esiste davvero
+                return Pieno()
+            return vero_open(percorso, modo, *args, **kwargs)
+
+        monkeypatch.setattr(ops, "open", apri_file, raising=False)
+    else:
+
+        def pieno(*_args, **_kwargs):
+            raise OSError(errno.ENOSPC, "No space left on device")
+
+        monkeypatch.setattr(installer.shutil, "copyfileobj", pieno)
+    cartella = tmp_path / "casa" / ".fotofacile" / "platform-tools"
+    with pytest.raises(FotoFacileError) as errore:
+        esegui_fino_alla_fine(
+            installer.installa_a_passi(
+                target_dir=cartella, url="https://esempio/pt.zip", opener=_opener_con(dati), system="linux"
+            )
+        )
+    assert "spazio" in errore.value.message.lower()
+    assert list(cartella.parent.iterdir()) == [], "niente pacchetto, file a metà o cartelle di appoggio"
