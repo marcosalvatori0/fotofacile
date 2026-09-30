@@ -954,3 +954,81 @@ def test_d17_lo_script_windows_resta_ben_formato():
     testo = dati.decode("utf-8-sig")
     for apertura, chiusura in ("{}", "()", "[]"):
         assert testo.count(apertura) == testo.count(chiusura), f"{apertura}{chiusura} sbilanciate"
+
+
+# ── D18 ────────────────────────────────────────────────────────────────────
+# Prima: l'aiutante macOS ricordava le voci già viste solo con `id(voce)`. Ogni voce è un
+# «proxy» PyObjC che viene liberato quando la cartella è finita, e il proxy di un file di
+# un'altra cartella riusa la stessa memoria, quindi lo stesso `id`: quel file veniva
+# **saltato in silenzio**. Misurato con PyObjC vero su questo Mac: 48 proxy su 50 della
+# seconda cartella riusavano un `id` della prima. Con più cartelle di foto (Camera,
+# Screenshots, Pictures...) sparivano dall'elenco tutte quelle dopo la prima, e la copia di
+# quei file diceva «non trovo più il file». Qui il riuso della memoria è reso certo.
+class _VocePtpFinta:
+    """Come un proxy PyObjC: un oggetto Python che rappresenta un file o una cartella."""
+
+    def __init__(self, nome: str = "", figli: dict | None = None) -> None:
+        self.nome_voce, self.figli = nome, figli
+
+    def name(self) -> str:
+        return self.nome_voce
+
+    def isKindOfClass_(self, _classe) -> bool:
+        return self.figli is not None
+
+
+class _ProxyPtpFinto(_VocePtpFinta):
+    """Un file: quando nessuno lo tiene più, la sua «memoria» torna libera, come quella di
+    un proxy PyObjC, e il prossimo file la riusa (stesso ``id``)."""
+
+    liberi: list = []
+
+    def __del__(self) -> None:
+        _ProxyPtpFinto.liberi.append(self)
+
+
+class _CartellaPtpFinta(_VocePtpFinta):
+    def contents(self):
+        voci = []
+        for nome, figli in self.figli.items():
+            if figli is not None:
+                voci.append(_CartellaPtpFinta(nome, figli))
+                continue
+            voce = _ProxyPtpFinto.liberi.pop() if _ProxyPtpFinto.liberi else _ProxyPtpFinto()
+            voce.nome_voce, voce.figli = nome, None
+            voci.append(voce)
+        return voci
+
+
+def test_d18_l_elenco_macos_non_salta_i_file_delle_cartelle_successive(monkeypatch):
+    from types import SimpleNamespace
+
+    from fotofacile.aiutanti import ptp_mac
+
+    monkeypatch.setattr(_ProxyPtpFinto, "liberi", [])
+    albero = {
+        "DCIM": {
+            "Camera": {f"c{numero}.jpg": None for numero in range(5)},
+            "Screenshots": {f"s{numero}.png": None for numero in range(5)},
+        }
+    }
+    telefono = _CartellaPtpFinta("telefono", albero)
+    percorsi = [percorso for _, percorso in ptp_mac.cammina(telefono, SimpleNamespace(ICCameraFolder=None))]
+    assert len(percorsi) == 10, percorsi
+    assert "/DCIM/Screenshots/s4.png" in percorsi
+
+
+def test_d18_una_voce_ripetuta_si_elenca_una_volta_sola():
+    """Guardia: la difesa contro gli elenchi che ripetono la stessa voce resta."""
+    from types import SimpleNamespace
+
+    from fotofacile.aiutanti import ptp_mac
+
+    foto = _VocePtpFinta("a.jpg")
+
+    class CartellaCheRipete(_VocePtpFinta):
+        def contents(self):
+            return [foto, foto]
+
+    percorsi = [p for _, p in ptp_mac.cammina(CartellaCheRipete("t", {}), SimpleNamespace(ICCameraFolder=None))]
+    assert percorsi == ["/a.jpg"]

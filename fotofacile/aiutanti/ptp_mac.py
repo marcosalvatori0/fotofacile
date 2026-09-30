@@ -228,7 +228,7 @@ def _e_cartella(voce, ic) -> bool:
 def cammina(device, ic) -> Iterator[tuple[object, str]]:
     """Percorre tutto il contenuto del telefono restituendo coppie ``(file, percorso)``."""
 
-    def scendi(nodo, prefisso: str, visti: set) -> Iterator[tuple[object, str]]:
+    def scendi(nodo, prefisso: str, visti: dict) -> Iterator[tuple[object, str]]:
         try:
             voci = list(nodo.contents() or [])
         except Exception:  # pragma: no cover - cartella illeggibile
@@ -237,7 +237,10 @@ def cammina(device, ic) -> Iterator[tuple[object, str]]:
             chiave = id(voce)
             if chiave in visti:  # difesa contro elenchi che si ripetono
                 continue
-            visti.add(chiave)
+            # Si tiene la voce, non solo il suo numero: un proxy PyObjC liberato lascia la
+            # sua memoria (e quindi lo stesso `id`) al proxy di un altro file, che
+            # altrimenti verrebbe saltato.
+            visti[chiave] = voce
             try:
                 etichetta = str(voce.name() or "")
             except Exception:  # pragma: no cover - difensivo
@@ -248,7 +251,7 @@ def cammina(device, ic) -> Iterator[tuple[object, str]]:
             else:
                 yield voce, percorso
 
-    yield from scendi(device, "", set())
+    yield from scendi(device, "", {})
 
 
 def genere_per_nome(percorso: str) -> str | None:
