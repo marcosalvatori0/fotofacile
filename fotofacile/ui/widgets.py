@@ -53,21 +53,44 @@ class StepIndicator(ttk.Frame):
         self.steps = list(steps)
         self.current = 0
         self._etichette: list[ttk.Label] = []
+        self.riga_passo = ttk.Label(self, text="", style="Passo.TLabel")
+        self.riga_passo.grid(
+            row=0, column=0, columnspan=len(self.steps) + 1, sticky="w", pady=(0, 4)
+        )
         for indice, nome in enumerate(self.steps, start=1):
             etichetta = ttk.Label(self, text=f"{indice}. {nome}", padding=(8, 4))
-            etichetta.grid(row=0, column=indice, padx=6)
+            etichetta.grid(row=1, column=indice, padx=6)
             self._etichette.append(etichetta)
         self.set_step(0)
 
     def set_step(self, index: int) -> None:
         self.current = max(0, min(index, len(self.steps) - 1))
+        self.riga_passo.configure(
+            text=f"Passo {self.current + 1} di {len(self.steps)}: {self.steps[self.current]}"
+        )
         for posizione, etichetta in enumerate(self._etichette):
             if posizione == self.current:
-                etichetta.configure(foreground=COLORI["primario"], font=font(12, bold=True))
+                etichetta.configure(foreground=COLORI["primario"], font=font(14, bold=True))
             elif posizione < self.current:
-                etichetta.configure(foreground=COLORI["successo"], font=font(12))
+                etichetta.configure(foreground=COLORI["successo"], font=font(14))
             else:
-                etichetta.configure(foreground=COLORI["tenue"], font=font(12))
+                etichetta.configure(foreground=COLORI["tenue"], font=font(14))
+
+
+class TestoAdattivo(ttk.Label):
+    """Etichetta a più righe con ritorno a capo legato allo spazio disponibile."""
+
+    MARGINE = 8
+
+    def __init__(self, parent: tk.Misc, **opzioni) -> None:
+        opzioni.setdefault("justify", "left")
+        super().__init__(parent, **opzioni)
+        self.bind("<Configure>", self._adatta)
+
+    def _adatta(self, evento: tk.Event) -> None:
+        nuovo = max(1, evento.width - self.MARGINE)
+        if int(str(self.cget("wraplength")) or 0) != nuovo:
+            self.configure(wraplength=nuovo)
 
 
 class LogPane(ttk.Frame):
@@ -75,7 +98,7 @@ class LogPane(ttk.Frame):
 
     def __init__(self, parent: tk.Misc, height: int = 8) -> None:
         super().__init__(parent)
-        self.text = tk.Text(self, height=height, wrap="word", state="disabled", font=font(11))
+        self.text = tk.Text(self, height=height, wrap="word", state="disabled", font=font(14))
         tema_testo(self.text)  # senza questo, in modalità scura il testo resta nero su nero
         self.text.grid(row=0, column=0, sticky="nsew")
         barra = ttk.Scrollbar(self, orient="vertical", command=self.text.yview)
@@ -102,18 +125,18 @@ class LogPane(ttk.Frame):
 class Banner(ttk.Frame):
     """Messaggio grande con suggerimento: è il modo principale con cui l'app parla all'utente."""
 
+    SIMBOLI = {"info": "ℹ", "successo": "✔", "avviso": "⚠", "errore": "✖"}
+
     def __init__(self, parent: tk.Misc) -> None:
         super().__init__(parent)
         self.message_text = ""
         self.hint_text = ""
         self.kind = "info"
         self.visible = False
-        self._messaggio = ttk.Label(
-            self, text="", font=font(15, bold=True), wraplength=860, justify="left"
-        )
-        self._suggerimento = ttk.Label(self, text="", font=font(12), wraplength=860, justify="left")
-        self._messaggio.grid(row=0, column=0, sticky="w")
-        self._suggerimento.grid(row=1, column=0, sticky="w")
+        self._messaggio = TestoAdattivo(self, text="", font=font(18, bold=True))
+        self._suggerimento = TestoAdattivo(self, text="", font=font(14))
+        self._messaggio.grid(row=0, column=0, sticky="ew")
+        self._suggerimento.grid(row=1, column=0, sticky="ew")
         self.columnconfigure(0, weight=1)
 
     def show(self, message: str, hint: str = "", kind: str = "info") -> None:
@@ -124,7 +147,8 @@ class Banner(ttk.Frame):
             "avviso": COLORI["avviso"],
             "errore": COLORI["errore"],
         }.get(kind, COLORI["testo"])
-        self._messaggio.configure(text=message, foreground=colore)
+        simbolo = self.SIMBOLI.get(kind, "ℹ")
+        self._messaggio.configure(text=f"{simbolo}  {message}", foreground=colore)
         self._suggerimento.configure(text=hint, foreground=COLORI["tenue"])
         self.visible = True
         self.grid()
@@ -135,15 +159,17 @@ class Banner(ttk.Frame):
 
 
 class PathChooser(ttk.Frame):
-    """Riquadro con il percorso scelto e il pulsante «Sfoglia…»."""
+    """Riquadro con il percorso scelto e il pulsante per cambiarlo."""
 
     def __init__(self, parent: tk.Misc, on_change: Callable[[str], None] | None = None) -> None:
         super().__init__(parent)
         self._on_change = on_change
         self._variabile = tk.StringVar()
-        self.campo = ttk.Entry(self, textvariable=self._variabile, font=font(12))
+        self.campo = ttk.Entry(self, textvariable=self._variabile, font=font(14))
         self.campo.grid(row=0, column=0, sticky="ew")
-        self.bottone = ttk.Button(self, text="Sfoglia…", style="Secondary.TButton", command=self.browse)
+        self.bottone = ttk.Button(
+            self, text="Cambia cartella…", style="Secondary.TButton", command=self.browse
+        )
         self.bottone.grid(row=0, column=1, padx=6)
         self.columnconfigure(0, weight=1)
 
@@ -157,7 +183,9 @@ class PathChooser(ttk.Frame):
 
     def browse(self) -> None:
         scelta = filedialog.askdirectory(
-            initialdir=self.get() or None, title="Scegli dove salvare le foto"
+            initialdir=self.get() or None,
+            title="Scegli dove salvare le foto",
+            parent=self.winfo_toplevel(),
         )
         if scelta:
             self.set(scelta)

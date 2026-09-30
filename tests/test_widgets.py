@@ -75,3 +75,48 @@ def test_scelta_cartella_senza_callback(root, tmp_path):
         assert chooser.get() == str(tmp_path)
     finally:
         chooser.destroy()
+
+
+def test_banner_mette_un_simbolo_oltre_al_colore(root):
+    banner = Banner(root)
+    try:
+        banner.show("Tutto bene.", kind="successo")
+        assert banner._messaggio.cget("text").startswith("✔")
+        assert banner.message_text == "Tutto bene."
+        banner.show("Attenzione.", kind="avviso")
+        assert banner._messaggio.cget("text").startswith("⚠")
+        banner.show("Errore.", kind="errore")
+        assert banner._messaggio.cget("text").startswith("✖")
+    finally:
+        banner.destroy()
+
+
+def test_step_indicator_dice_a_che_punto_si_e(root):
+    indicatore = StepIndicator(root, ("Uno", "Due", "Tre", "Quattro"))
+    try:
+        indicatore.set_step(1)
+        assert indicatore.riga_passo.cget("text") == "Passo 2 di 4: Due"
+    finally:
+        indicatore.destroy()
+
+
+def test_testo_adattivo_segue_la_larghezza(root):
+    from tkinter import ttk
+
+    from fotofacile.ui.widgets import TestoAdattivo
+
+    root.deiconify()
+    try:
+        root.geometry("500x200")
+        contenitore = ttk.Frame(root)
+        contenitore.pack(fill="both", expand=True)
+        contenitore.columnconfigure(0, weight=1)
+        etichetta = TestoAdattivo(contenitore, text="parola " * 60)
+        etichetta.grid(row=0, column=0, sticky="ew")
+        root.update()
+        largo = int(str(etichetta.cget("wraplength")))
+        root.geometry("900x200")
+        root.update()
+        assert int(str(etichetta.cget("wraplength"))) > largo > 0
+    finally:
+        root.withdraw()
