@@ -32,6 +32,16 @@
    corrispondenti sono in `tests/test_robustezza.py` (errori di disco, abbandono a metà copia,
    cronologia non scrivibile, ritentativi inutili, maiuscole, stato `no permissions`, apertura
    cartella multipiattaforma).
+5. **Seconda revisione (dopo la prima consegna):** vedi `docs/PIANO-REVISIONE.md`. Il
+   trasporto non è più solo ADB: `core/trasporto.py` sceglie da sé fra collegamento diretto
+   (PTP/ImageCaptureCore su macOS, WPD su Windows, MTP/`gio` su Linux, tramite
+   `fotofacile/aiutanti/`) e ADB, che resta solo come scorciatoia se il Debug USB è già
+   attivo. La copia è **piatta** per impostazione predefinita (`preserve_structure=False`) e i
+   difetti B1–B24 sono corretti (suite a 373 test).
+
+> **Nota:** le attività con le caselle qui sotto sono il piano della **prima** versione: dove
+> parlano di Debug USB obbligatorio o di cartelle del telefono mantenute descrivono il
+> comportamento di allora, non quello attuale. Lo stato corrente è in `HANDOFF.md`.
 
 ## Global Constraints
 

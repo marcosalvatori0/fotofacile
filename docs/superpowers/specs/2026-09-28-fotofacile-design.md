@@ -3,6 +3,15 @@
 **Data:** 2026-09-28
 **Stato:** approvata per l'implementazione (l'utente ha richiesto esplicitamente "crea il piano ed eseguilo")
 
+> **Aggiornamento del 28/09/2026 — il comportamento visibile è cambiato.** Questa specifica
+> descrive il progetto originale (trasporto ADB obbligatorio, copia con le cartelle del
+> telefono). Due scelte sono state poi cambiate: il collegamento al telefono **non richiede
+> più il Debug USB** (viene scelto da sé fra collegamento diretto e ADB, vedi
+> `fotofacile/core/trasporto.py` e `docs/PIANO-REVISIONE.md`) e la copia è **piatta** per
+> impostazione predefinita (`preserve_structure=False`), con le cartelle del telefono
+> ricreabili a richiesta. Le sezioni sotto sono state aggiornate dove descrivevano il
+> comportamento vecchio; il §10-bis elenca anche i limiti ora risolti.
+
 ## 1. Obiettivo
 
 Un programma desktop con interfaccia grafica che permetta a **persone non tecniche** di
@@ -22,14 +31,14 @@ lo spiega e propone il rimedio in un pulsante.
 
 | Decisione | Scelta | Motivazione |
 |---|---|---|
-| Trasporto dati | **ADB** (Android platform-tools) via USB | Unico metodo affidabile e multipiattaforma; MTP non esiste su macOS e MTP/libmtp è instabile. Supporta qualsiasi Android 5+. |
+| Trasporto dati | **Collegamento diretto** scelto da sé (PTP/ImageCaptureCore su macOS, WPD su Windows, MTP/gio su Linux), con **ADB come scorciatoia opzionale** | Non serve attivare il Debug USB; ADB resta il più veloce (e l'unico che cancella i file dal telefono) quando è già attivo. Vedi §3 e `docs/PIANO-REVISIONE.md`. |
 | Linguaggio/UI | **Python 3.9+ con Tkinter** (solo libreria standard) | Zero dipendenze da installare per l'utente finale: `python3 fotofacile.py` (o `py fotofacile.py` su Windows). Tkinter è già presente su macOS/Windows/Linux. |
 | Piattaforme | **Windows 10/11, macOS 11+, Linux (Ubuntu/Fedora/Debian)** — nessuna funzione esclusiva di un sistema | Richiesta esplicita dell'utente: software multi-piattaforma. Ogni differenza di sistema è isolata in `core/osutil.py`, `core/adb.py`, `core/installer.py`, `ui/theme.py`. |
 | Installazione componente mancante | **Auto-download di platform-tools ufficiali Google** in `~/.fotofacile/platform-tools`, fallback `brew` (macOS) / istruzioni manuali (Windows/Linux) | L'utente non deve mai aprire un terminale. Su Windows si estraggono anche `AdbWinApi.dll` e `AdbWinUsbApi.dll` (obbligatorie per far funzionare `adb.exe`). |
 | Lingua UI | **Italiano semplice**, niente gergo (mai la parola "ADB" a schermo) | Pubblico non tecnico. |
 | Privacy | Nessuna rete in uscita, nessun upload, nessuna telemetria; l'unica connessione di rete è il download di platform-tools da dl.google.com su richiesta | Fiducia: le foto non escono dal computer. |
 | Modo demo | Backend finto (`FakeAdbBackend`) attivabile dall'UI e usato nei test | Consente di provare tutta la procedura, e di testare la GUI, senza un telefono collegato. |
-| Sistema di test | `pytest` in venv di sviluppo; **runtime senza dipendenze** | Suite veloce e isolata. |
+| Sistema di test | `pytest` in venv di sviluppo; **nessuna dipendenza obbligatoria** per l'uso (su macOS il collegamento diretto aggiunge PyObjC, vedi §7) | Suite veloce e isolata. |
 
 **Fuori ambito (YAGNI):** trasferimento via Wi-Fi/ADB wireless, sincronizzazione automatica,
 upload cloud, Android come destinazione (computer → telefono), gestione contatti/chat,
@@ -48,12 +57,21 @@ fotofacile/
     adb_passi.py               # le operazioni adb a passi: dispositivi, ricerca, copia, cancella
     osutil.py                  # differenze di sistema: apri cartella, sensibilità maiuscole, cartelle utente
     devices.py                 # scoperta dispositivi e stati (device/unauthorized/...)
+    trasporto.py               # scelta automatica del modo di collegamento (diretto / ADB / demo)
+    trasporto_aiutante.py      # dialogo a righe JSON con i programmi aiutanti e copia .part
+    trasporto_mac.py           # collegamento diretto macOS (ImageCaptureCore, tramite aiutante)
+    trasporto_win.py           # collegamento diretto Windows (WPD, tramite PowerShell)
+    trasporto_linux.py         # collegamento diretto Linux (gio/gvfs, ripiego jmtpfs)
     scanner.py                 # elenco file multimediali presenti sul telefono
     planner.py                 # costruzione piano di copia (filtri, dedup, percorsi)
     transfer.py                # esecuzione copia con avanzamento, annulla, retry, verifica
     history.py                 # archivio JSON dei file già copiati (per dispositivo)
     installer.py               # download/estrazione platform-tools
     demo.py                    # backend finto per test e modalità demo
+  aiutanti/                    # processi separati per il collegamento diretto (mai importati dal main)
+    ptp_mac.py                 # macOS: ImageCaptureCore (PyObjC)
+    wpd_win.py, wpd_win.ps1    # Windows: WPD con Shell.Application (PowerShell)
+    mtp_linux.py               # Linux: gio/gvfs (ripiego jmtpfs)
   ui/                          # solo presentazione, strato sottile
     app.py                     # finestra principale + controllo procedura guidata
     theme.py                   # font, colori, stile ttk
@@ -83,21 +101,26 @@ tests/                         # test unitari della logica + smoke test GUI
   programma che non può bloccarsi e test deterministici. L'output lungo dei comandi esterni
   viene scritto su file temporanei, così i processi non si bloccano mai sul tubo di
   comunicazione.
-- Interfaccia unica verso il telefono (`AdbBackend`) implementata da `RealAdbBackend`,
-  `FakeAdbBackend` (demo/test) e iniettabile: nessun test tocca un dispositivo reale.
+- Interfaccia unica verso il telefono: la grafica parla solo tramite il protocollo `Trasporto`
+  (`core/trasporto.py`), implementato da `TrasportoAdb` (Debug USB), `TrasportoAiutante` +
+  aiutanti di sistema (collegamento diretto) e `TrasportoDemo` (telefono finto): nessun test
+  tocca un dispositivo reale.
 
 ## 4. Flusso utente (procedura guidata)
 
 **Passo 1 — Collega il telefono.** Istruzioni grandi e chiare ("Collega il telefono al
-computer con il cavo, sbloccalo e tocca 'Consenti'"). Rilevamento **live** ogni 2 secondi
-con messaggi umani per ogni stato:
+computer con il cavo e tieni lo schermo sbloccato. Non devi attivare nessuna impostazione").
+Il programma sceglie da sé il collegamento migliore disponibile (diretto; ADB solo se già
+attivo) e rileva **live** ogni 2 secondi con messaggi umani per ogni stato:
 - nessun telefono → "Non vedo ancora nessun telefono…"
-- `unauthorized` → "Telefono trovato! Sbloccalo e tocca **Consenti** sullo schermo"
+- `unauthorized` (solo con ADB) → "Telefono trovato! Sbloccalo e tocca **Consenti** sullo schermo"
 - `device` → "Perfetto! Telefono collegato: <modello>"
-- `offline`/errore → pulsante "Riavvia collegamento".
-Pulsanti: **Come attivare il Debug USB** (dialogo con istruzioni per marca: Samsung, Xiaomi,
-Google/Pixel, Huawei, Oppo/Realme, Altro), **Installa componente mancante** (solo se assente,
-con download ed esito), **Ricarica**, e link discreto **Prova senza telefono (demo)**.
+- `offline`/errore → pulsante "Riprova il collegamento".
+Pulsanti: **Il telefono non viene riconosciuto?** (prima i rimedi semplici — cavo, porta USB,
+schermo sbloccato — e solo alla fine le istruzioni per il «Debug USB» per marca, come ultima
+possibilità), **Installa componente mancante** (solo se sul computer non esiste nessun
+collegamento diretto, con download ed esito), **Riprova il collegamento**, e link discreto
+**Prova senza telefono (demo)**.
 
 **Passo 2 — Scegli cosa copiare.** Scansione automatica delle cartelle multimediali note
 (DCIM/Camera, DCIM/Screenshots, Pictures e sottocartelle, Download, WhatsApp/Telegram media
@@ -106,8 +129,9 @@ totale in basso; filtro "solo foto a partire dal …" (opzionale); casella **Inc
 Scansione in background con barra di avanzamento e pulsante Annulla.
 
 **Passo 3 — Dove e come.** Cartella di destinazione con scelta guidata (predefinita:
-`~/Pictures/FotoFacile/<Modello>_<AAAA-MM-GG>`), casella **Mantieni le cartelle del
-telefono** (predefinita: sì), **Salta i file già copiati** (predefinita: sì), **Cancella le
+`~/Pictures/FotoFacile/<Modello>/<AAAA-MM-GG>`), casella **Ricrea anche le cartelle del
+telefono (di solito non serve)** (predefinita: no: i file finiscono direttamente nella
+cartella scelta), **Salta i file già copiati** (predefinita: sì), **Cancella le
 foto dal telefono dopo la copia** (predefinita: no, con avviso rosso esplicito), controllo
 dello spazio libero su disco ("Servono 3,4 GB, disponibili 120 GB" oppure avviso bloccante).
 
@@ -127,7 +151,7 @@ class MediaFile:       remote_path: str; size: int; mtime: int; kind: str  # "ph
 @dataclass(frozen=True)
 class MediaFolder:     remote_path: str; label: str; file_count: int; total_size: int
 @dataclass(frozen=True)
-class TransferOptions: destination: Path; preserve_structure: bool; skip_existing: bool
+class TransferOptions: destination: Path; preserve_structure: bool = False; skip_existing: bool
                        delete_after: bool; include_videos: bool = True
                        date_from: int | None = None      # epoch: copia solo file più recenti
                        overwrite_renames: bool = True    # collisione → "nome (1).jpg"
@@ -187,16 +211,21 @@ Scrittura atomica (file temporaneo + `os.replace`); file corrotto → copiato in
 
 ## 7. Dipendenze e compatibilità
 
-- Runtime: **Python 3.9+** con Tkinter, solo libreria standard (`subprocess`, `threading`,
-  `queue`, `zipfile`, `urllib`, `json`, `shutil`, `pathlib`, `dataclasses`).
-- Esterno: eseguibile `adb` (`adb.exe` su Windows), scaricato automaticamente dall'app
-  oppure già presente nel sistema.
+- Runtime: **Python 3.9+** con Tkinter. Tutta la logica e la grafica usano la sola libreria
+  standard (`subprocess`, `zipfile`, `urllib`, `json`, `shutil`, `pathlib`, `dataclasses`…).
+  L'unica eccezione è il collegamento diretto su macOS, che usa
+  `pyobjc-framework-ImageCaptureCore` (`requirements.txt`): è **opzionale** e se manca il
+  programma ripiega su ADB.
+- Esterno (opzionale): eseguibile `adb` (`adb.exe` su Windows), scaricato automaticamente
+dall'app solo se non esiste nessun collegamento diretto (oppure già presente nel sistema).
+Serve al collegamento rapido con Debug USB e alla cancellazione dei file dal telefono.
 - Sviluppo: `pytest` in `.venv`.
 
 | Aspetto | Windows | macOS | Linux |
 |---|---|---|---|
 | Avvio | `py fotofacile.py` | `python3 fotofacile.py` | `python3 fotofacile.py` |
-| Eseguibile componente | `adb.exe` (+ `AdbWinApi.dll`, `AdbWinUsbApi.dll`) | `adb` | `adb` |
+| Collegamento diretto (senza Debug USB) | WPD via PowerShell (di sistema) | PTP via ImageCaptureCore (PyObjC, `requirements.txt`) | MTP via `gio`/gvfs (ripiego `jmtpfs`) |
+| Eseguibile componente (scorciatoia opzionale, Debug USB) | `adb.exe` (+ `AdbWinApi.dll`, `AdbWinUsbApi.dll`) | `adb` | `adb` |
 | URL platform-tools | `…-windows.zip` | `…-darwin.zip` | `…-linux.zip` |
 | Percorsi cercati | `%LOCALAPPDATA%\Android\Sdk\platform-tools`, `%USERPROFILE%\AppData\Local\Android\Sdk\platform-tools`, PATH | `~/.fotofacile/platform-tools`, `/opt/homebrew/bin`, `/usr/local/bin`, `~/Library/Android/sdk/platform-tools`, PATH | `~/.fotofacile/platform-tools`, `/usr/bin`, `/usr/local/bin`, PATH |
 | Cartella dati app | `%USERPROFILE%\.fotofacile` | `~/.fotofacile` | `~/.fotofacile` |
@@ -213,6 +242,7 @@ TDD su tutto `core/` (test scritto prima, visto fallire, poi implementazione):
 |---|---|
 | `adb.py` | quotazione comandi difficili, ordine di ricerca dell'eseguibile, errori con messaggi umani, timeout |
 | `devices.py` | `adb devices -l` vuoto/uno/molti/unauthorized/offline, modello assente, righe spurie |
+| `trasporto*.py` / `aiutanti/` | scelta automatica del collegamento, contratto degli aiutanti (righe JSON, `dispositivi`/`elenca`/`copia`/`cancella`), copie `.part` e annullamento, cartella di appoggio di Windows, parsing degli elenchi, montaggi Linux isolati |
 | `scanner.py` | parsing flusso size/mtime/nome, filtro estensioni, file con `|` nel nome, righe corrotte, cartelle inesistenti |
 | `osutil.py` | comando di apertura cartella per sistema, sensibilità maiuscole simulata, percorsi utente, fallback quando il file manager non è disponibile |
 | `ops.py` | comando esterno a passi (avvio, attesa, termine, output su file, errori umani), download a blocchi, annullamento |
@@ -250,7 +280,7 @@ TDD su tutto `core/` (test scritto prima, visto fallire, poi implementazione):
 
 | Rischio | Mitigazione |
 |---|---|
-| L'utente non trova il "Debug USB" | Istruzioni per marca nel Passo 1 + rilevamento live che conferma il successo |
+| L'utente non trova il "Debug USB" | Non è più necessario: il collegamento è scelto da sé e le istruzioni per il Debug USB compaiono solo come ultima possibilità nel dialogo «Il telefono non viene riconosciuto?» |
 | Cavo solo-ricarica | Messaggio dedicato: "Prova un altro cavo USB (alcuni cavi ricaricano soltanto)" |
 | Autorizzazione non data | Stato `unauthorized` spiegato con le parole dello schermo del telefono |
 | Dispositivo in stato `offline` | Pulsante "Riavvia collegamento" (`adb kill-server`/`start-server`) |
@@ -276,11 +306,19 @@ TDD su tutto `core/` (test scritto prima, visto fallire, poi implementazione):
 | Chiusura senza conferma durante la copia e testo di «Interrompi» non veritiero | conferma esplicita e testo corretto ("mi fermo subito") |
 | Destinazione relativa scritta a mano, metodo morto `salva_note`, cartella di lavoro mai rimossa | destinazione assoluta obbligatoria, codice morto rimosso, cartella di lavoro rimossa alla chiusura |
 | Componente presente ma guasto: pulsante di installazione disabilitato per sempre | se il controllo fallisce per colpa del componente, il pulsante di installazione torna attivo |
+| Estrazione del componente non atomica (interruzione a metà → reinstallazione) | si scarica su file provvisorio, si verifica l'impronta ufficiale e si estrae in una cartella di appoggio; si controlla che `adb` parta e solo allora si sostituisce l'installazione (quella vecchia resta fino all'ultimo istante) |
+| «Disco pieno» non riconosciuto nel percorso reale | `errors.traduci_errore_file` riconosce lo spazio esaurito e mostra il messaggio dedicato, senza ritentativi inutili |
+| Barra di avanzamento del singolo file non distinta da quella generale | due barre distinte: il totale e il file in corso |
+| Download del componente non verificato | impronta ufficiale di Google dal catalogo `repository2-3.xml` (SHA-256/SHA-1) + controllo della struttura dello zip; il pacchetto scaricato viene sempre rimosso alla fine |
 
-**Limiti noti e dichiarati** (non corretti in questa versione): estrazione del componente non
-atomica (un'interruzione a metà può richiedere di reinstallare), messaggi non differenziati per
-«disco pieno» nel percorso reale, barra di avanzamento del singolo file non distinta da quella
-generale, download non verificato con l'hash.
+**Limiti noti e dichiarati (dopo la revisione):** i collegamenti diretti di Windows e Linux
+non sono mai stati provati su hardware reale (non c'era una macchina Windows né un desktop
+Linux con `gio`/gvfs); su macOS il collegamento diretto è stato verificato solo fino a «nessun
+telefono collegato» (`dispositivi` restituisce `{"dispositivi": []}` e `elenca` risponde
+«Non vedo nessun telefono collegato.») e un telefono Android vero non è mai stato collegato. Con il collegamento
+diretto di Windows la cancellazione dal telefono non è disponibile (si fa dalla Galleria,
+oppure con il Debug USB). Gli altri limiti della prima versione sono stati corretti (vedi
+tabella qui sopra); il dettaglio onesto è in `HANDOFF.md` → «Not Yet Done».
 
 ## 11. Estensioni future (non in questa versione)
 

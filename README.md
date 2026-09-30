@@ -1,17 +1,29 @@
 # FotoFacile
 
 Copia le foto dal telefono Android al computer in pochi clic: niente gestore file, niente
-cartelle difficili da trovare, niente parole tecniche.
+cartelle difficili da trovare, niente parole tecniche. **Non serve attivare il Debug USB**:
+il programma trova da sé il modo di leggere il telefono.
 
-Funziona su **Windows**, **macOS** e **Linux** e non richiede di installare nulla di strano:
-usa solo programmi già presenti nel computer (il linguaggio **Python** con la sua grafica).
+Funziona su **Windows**, **macOS** e **Linux**. Nei pacchetti pronti non c'è nulla da
+installare; chi usa il programma dal sorgente ha solo bisogno di Python con la sua grafica.
 
 ## Cosa serve
 
 - Un computer con **Python 3.9 o più recente** (su Windows va bene anche la versione del
   Microsoft Store; su Linux serve il pacchetto della grafica, per esempio `python3-tk`).
 - Il cavo USB del telefono.
-- Un minuto la prima volta, per autorizzare il telefono: lo fa il programma guidandoti.
+- Nient'altro: collega il cavo e sblocca lo schermo. Il Debug USB serve solo come ultima
+  spiaggia, se il telefono non viene riconosciuto in nessun altro modo.
+
+Su macOS, chi usa il programma **dal sorgente** (non il pacchetto `.app`) aggiunge una volta
+sola il componente di sistema del collegamento diretto:
+
+```
+python3 -m pip install -r requirements.txt
+```
+
+I pacchetti costruiti con la procedura qui sotto lo contengono già; Windows e Linux non hanno
+bisogno di nulla.
 
 ## Avvio
 
@@ -24,17 +36,20 @@ usa solo programmi già presenti nel computer (il linguaggio **Python** con la s
 Si apre una finestra con quattro passi. Premi **Avanti** per andare avanti e **Indietro** per
 tornare: non si perde nulla, e le foto già copiate non vengono copiate di nuovo.
 
-## La prima volta: autorizza il telefono
+## La prima volta: collega il telefono
 
 1. Collega il telefono con il cavo e **sblocca lo schermo**.
-2. Nella prima schermata premi **«Come si attiva il Debug USB?»** e segui i passaggi della tua
-   marca (Samsung, Xiaomi, Google, Huawei, Oppo…). È una procedura da fare **una volta sola**.
-3. Quando il telefono chiede *«Consentire il debug USB?»*, tocca **Consenti**.
-4. Il programma scrive **«Perfetto! Telefono collegato»**: premi **Avanti**.
+2. Il programma scrive **«Perfetto! Telefono collegato»**: premi **Avanti**.
 
-Se il collegamento non riesce, prova un altro cavo USB (alcuni servono solo per ricaricare),
-un'altra porta del computer, oppure premi **«Riavvia collegamento»**. Su Windows a volte serve
-il driver USB del produttore del telefono.
+Non c'è nessuna impostazione da attivare, per nessuna marca: Samsung, Xiaomi, Google,
+Huawei, Oppo e tutti gli altri funzionano subito. Se compare una richiesta sullo schermo del
+telefono, tocca **Consenti**.
+
+Se il telefono non viene riconosciuto, premi **«Il telefono non viene riconosciuto?»**: il
+programma elenca prima le cose semplici (un altro cavo USB, un'altra porta del computer, lo
+schermo sbloccato), e solo alla fine le istruzioni per attivare il Debug USB della tua
+marca, come ultima possibilità. Prova anche **«Riprova il collegamento»**. Su Windows a
+volte serve il driver USB del produttore del telefono.
 
 Non hai un telefono a portata di mano? Premi **«Prova il programma senza telefono (demo)»**:
 viene usato un telefono finto e puoi vedere tutta la procedura.
@@ -45,7 +60,9 @@ viene usato un telefono finto e puoi vedere tutta la procedura.
    Screenshot, WhatsApp…). Puoi includere o escludere i video e copiare solo le foto più
    recenti di una certa data.
 2. **Destinazione**: va bene la cartella proposta (per esempio *Immagini → FotoFacile → nome
-   del telefono → data*). Le sottocartelle del telefono vengono mantenute.
+   del telefono → data*). Le foto e i video finiscono **direttamente lì**, senza ricreare le
+   cartelle del telefono. Se preferisci ritrovare la stessa struttura di cartelle del
+   telefono, spunta **«Ricrea anche le cartelle del telefono (di solito non serve)»**.
 3. **Copia**: vedi quante foto restano, a che velocità e quanto tempo manca. Puoi interrompere
    quando vuoi: le foto già copiate restano al sicuro e i file mezzi copiati vengono eliminati.
 4. Alla fine puoi **aprire la cartella delle foto** e **salvare un resoconto** di quello che è
@@ -57,8 +74,9 @@ viene usato un telefono finto e puoi vedere tutta la procedura.
 |---|---|
 | «Non vedo ancora nessun telefono» | Controlla il cavo, sblocca lo schermo, prova un'altra porta USB |
 | «Sbloccalo e tocca Consenti» | Guarda lo schermo del telefono: c'è una richiesta da approvare |
-| «Il telefono non risponde» | Scollega e ricollega il cavo, poi premi «Riavvia collegamento» |
-| «Manca il componente di collegamento» | Premi «Installa componente mancante» (serve internet) |
+| «Il telefono non risponde» | Scollega e ricollega il cavo, poi premi «Riprova il collegamento» |
+| «Non riesco a collegarmi al telefono» | Premi «Installa componente mancante» (serve internet): compare solo se il computer non offre nessun collegamento normale |
+| «Con il collegamento di Windows non riesco a cancellare i file dal telefono» | Con il collegamento normale di Windows la cancellazione non è disponibile: cancella dalla Galleria, oppure attiva il Debug USB e riprova |
 | «Non c'è abbastanza spazio» | Scegli un'altra cartella o libera spazio sul disco |
 | «Non riesco ad aprire la finestra» | Su Linux installa «python3-tk»; poi esegui la diagnosi sotto |
 
@@ -97,6 +115,10 @@ Per dare il programma a qualcuno che **non ha Python** si crea un pacchetto che 
 python3 scripts/build_app.py            # crea dist/FotoFacile.app e l'archivio .zip
 python3 scripts/build_app.py --verify   # crea e verifica subito il pacchetto
 ```
+
+Su macOS, prima di creare il pacchetto: `python3 -m pip install -r requirements.txt` (serve
+al collegamento diretto; la pipeline GitHub lo installa da sé). Windows e Linux non hanno
+bisogno di niente.
 
 | Sistema | Cosa viene creato | Come si apre |
 |---|---|---|
@@ -158,14 +180,23 @@ procedura completa funzioni.
 
 ## Per chi sviluppa
 
-- `fotofacile/core/` — logica pura e testabile (nessuna dipendenza dalla grafica):
-  collegamento al telefono, ricerca delle foto, piano di copia, copia, cronologia, resoconto.
+- `fotofacile/core/` — logica pura e testabile (nessuna dipendenza dalla grafica): scelta
+  automatica del modo di collegamento, ricerca delle foto, piano di copia, copia, cronologia,
+  resoconto.
+- `fotofacile/aiutanti/` — i programmi che parlano con il telefono **senza Debug USB**, uno
+  per sistema (ImageCaptureCore su macOS, PowerShell su Windows, `gio`/gvfs su Linux). Il
+  processo principale non li importa mai: li avvia come processi separati e legge le loro
+  risposte.
 - `fotofacile/ui/` — interfaccia Tkinter: quattro schermate, nessuna logica di business.
 - **Scelta importante:** il programma **non usa thread**. Le operazioni lunghe sono
   generatori che avanzano a piccoli passi dentro il ciclo della grafica
-  (`fotofacile/core/ops.py`, `fotofacile/core/adb_passi.py`). Così l'interfaccia resta
+  (`fotofacile/core/ops.py`, `fotofacile/core/adb_passi.py`,
+  `fotofacile/core/trasporto_aiutante.py`). Così l'interfaccia resta
   reattiva anche su combinazioni in cui la grafica non è sicura con i thread
   (per esempio macOS con Tk 9).
 - Specifica: `docs/superpowers/specs/2026-09-28-fotofacile-design.md`
 - Piano di lavoro: `docs/superpowers/plans/2026-09-28-fotofacile.md`
-- Dipendenze: nessuna per l'uso; `pytest` solo per lo sviluppo (`requirements-dev.txt`).
+- Revisione e correzioni: `docs/PIANO-REVISIONE.md`
+- Dipendenze: per l'uso nessuna obbligatoria; su macOS il collegamento diretto usa
+  `pyobjc-framework-ImageCaptureCore` (`requirements.txt`); `pytest` solo per lo sviluppo
+  (`requirements-dev.txt`).

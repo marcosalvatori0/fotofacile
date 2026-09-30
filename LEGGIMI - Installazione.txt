@@ -25,15 +25,19 @@ Ogni installatore ha accanto il proprio file di istruzioni dettagliate:
   Windows  ->  Windows\LEGGIMI - Windows.txt
 
 
-PRIMA VOLTA: fai autorizzare il telefono (una volta sola)
+PRIMA VOLTA: collega il telefono (non serve il Debug USB)
 ---------------------------------------------------------
 1. Collega il telefono con il cavo USB e sblocca lo schermo.
-2. Nel programma premi «Come si attiva il Debug USB?» e segui i passaggi della tua marca
-   (Samsung, Xiaomi, Google, Huawei, Oppo, ...).
-3. Quando il telefono chiede «Consentire il debug USB?», tocca «Consenti».
-4. Il programma scrive «Perfetto! Telefono collegato»: premi Avanti e scegli le foto.
+2. Il programma trova da se' il modo di leggere le foto e scrive «Perfetto! Telefono
+   collegato»: premi Avanti e scegli le foto.
+3. Se compare una richiesta sullo schermo del telefono, tocca «Consenti».
 
-Se il telefono non viene riconosciuto: prova un altro cavo USB (alcuni ricaricano soltanto),
+Non c'e' nessuna impostazione da attivare: vale per Samsung, Xiaomi, Google, Huawei, Oppo
+e per tutti gli altri telefoni.
+
+Se il telefono non viene riconosciuto: premi «Il telefono non viene riconosciuto?» dentro il
+programma (elenca prima i rimedi semplici e solo alla fine le istruzioni per il Debug USB,
+come ultima possibilità). Prova anche un altro cavo USB (alcuni ricaricano soltanto),
 un'altra porta del computer, oppure installa il driver USB del produttore del telefono.
 
 
@@ -49,8 +53,8 @@ Il registro di avvio (dice sempre perche' il programma non si e' aperto):
   macOS    ~/.fotofacile/avvio.log
   Windows  %USERPROFILE%\.fotofacile\avvio.log
 
-Il programma non invia nulla su internet: la usa solo, una volta e se manca, per scaricare
-il componente di collegamento ufficiale di Google.
+Il programma non invia nulla su internet: la usa solo, e solo se il collegamento normale non
+e' disponibile, per scaricare il componente ufficiale di Google (platform-tools).
 
 
 DOVE SONO GLI INSTALLATORI AGGIORNATI
