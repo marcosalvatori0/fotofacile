@@ -200,6 +200,44 @@ function Genere-File([string]$NomeFile) {
     return ""
 }
 
+function Nome-File($Voce) {
+    # Il nome **completo** del file, con l'estensione. «Name» è il nome mostrato da Esplora
+    # file: con l'opzione di Windows «Nascondi le estensioni per i tipi di file conosciuti»
+    # (attiva da subito) può arrivare «IMG_001» invece di «IMG_001.jpg», e senza estensione
+    # la foto verrebbe scartata. Se il nome mostrato è già quello di una foto o di un video
+    # si usa quello (nessuna domanda in più al telefono); altrimenti si chiede il nome vero.
+    $mostrato = Nome-Voce $Voce
+    if (Genere-File $mostrato) { return $mostrato }
+    $nome = ""
+    try {
+        $valore = $Voce.ExtendedProperty("System.FileName")
+        if ($null -ne $valore) { $nome = [string]$valore }
+    } catch { $nome = "" }
+    if ($nome) { return $nome }
+    # Ultimo ripiego: il nome mostrato più l'estensione, se il telefono la dichiara.
+    $estensione = ""
+    try {
+        $valore = $Voce.ExtendedProperty("System.FileExtension")
+        if ($null -ne $valore) { $estensione = [string]$valore }
+    } catch { $estensione = "" }
+    if (-not $mostrato -or -not $estensione) { return $mostrato }
+    if (-not $estensione.StartsWith(".")) { $estensione = "." + $estensione }
+    if ($mostrato.EndsWith($estensione, [System.StringComparison]::OrdinalIgnoreCase)) { return $mostrato }
+    return $mostrato + $estensione
+}
+
+function Test-StessoNome($Voce, [string]$Voluto) {
+    # Stesso confronto dell'elenco: il nome mostrato va bene se coincide; se le estensioni
+    # sono nascoste il nome mostrato è l'inizio di quello vero («IMG_001» per
+    # «IMG_001.jpg») e solo allora si chiede il nome completo, così una cartella con
+    # migliaia di foto non costa migliaia di domande in più al telefono.
+    $mostrato = Nome-Voce $Voce
+    if ($mostrato -eq $Voluto) { return $true }
+    if (-not $mostrato) { return $false }
+    if (-not $Voluto.StartsWith($mostrato + ".", [System.StringComparison]::OrdinalIgnoreCase)) { return $false }
+    return ((Nome-File $Voce) -eq $Voluto)
+}
+
 function Elenca-Cartella($Cartella, [string]$Prefisso, [bool]$SoloFoto) {
     $voci = @()
     try { $voci = @($Cartella.Items()) } catch {
@@ -229,6 +267,10 @@ function Elenca-Cartella($Cartella, [string]$Prefisso, [bool]$SoloFoto) {
             if ($null -ne $sotto) { Elenca-Cartella $sotto $cammino $SoloFoto }
             continue
         }
+        # Per i file serve il nome completo: quello mostrato può non avere l'estensione.
+        $nome = Nome-File $voce
+        if (-not $nome) { continue }
+        $cammino = "$Prefisso/$nome"
         $genere = Genere-File $nome
         if (-not $genere) { continue }
         if ($SoloFoto -and $genere -eq "video") { continue }
@@ -259,7 +301,7 @@ function Trova-Voce([string]$Cammino, $Dispositivo) {
             if (($script:VociVisitate % 200) -eq 0 -and -not (Test-Supervisione $PidSupervisionato)) {
                 throw "Il collegamento è stato interrotto."
             }
-            if ((Nome-Voce $figlio) -eq $parti[$indice]) { $voce = $figlio; break }
+            if (Test-StessoNome $figlio $parti[$indice]) { $voce = $figlio; break }
         }
         if ($null -eq $voce) { return $null }
         if ($indice -lt ($parti.Count - 1)) {
@@ -369,7 +411,7 @@ function Comando-Copia($Shell) {
     $dispositivo = Trova-Dispositivo $Shell $Seriale
     $voce = Trova-Voce $Percorso $dispositivo
     if ($null -eq $voce) { throw "Sul telefono non trovo più il file $Percorso." }
-    $nomeFile = Nome-Voce $voce
+    $nomeFile = Nome-File $voce
     $dimensioneAttesa = Dimensione-Voce $voce
     if ($dimensioneAttesa -le 0) {
         # CopyHere è asincrono e non dice quando ha finito: senza sapere quanto deve

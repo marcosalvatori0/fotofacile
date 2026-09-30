@@ -903,3 +903,54 @@ def test_d16_gli_aiutanti_scrivono_righe_leggibili_con_ogni_codifica(modulo, cap
     uscita = capsys.readouterr().out
     assert uscita.isascii()
     assert [file.remote_path for file in leggi_elenco(uscita)] == [f"/DCIM/{NOME_STRANO}"]
+
+
+# ── D17 ────────────────────────────────────────────────────────────────────
+# Prima: lo script Windows usava `FolderItem.Name` come nome dei file. È il nome **mostrato**
+# da Esplora file: con l'opzione predefinita di Windows «Nascondi le estensioni per i tipi
+# di file conosciuti» può arrivare «IMG_001» invece di «IMG_001.jpg», e `Genere-File` scarta
+# i nomi senza punto: il collegamento diretto su Windows non avrebbe trovato nessuna foto.
+# PowerShell non si può eseguire su questo Mac: il test legge lo script (contratto), la
+# correzione **non è verificata su un Windows vero**.
+SCRIPT_WINDOWS = Path(__file__).resolve().parent.parent / "fotofacile" / "aiutanti" / "wpd_win.ps1"
+
+
+def _funzione_powershell(testo: str, nome: str) -> str:
+    """Il testo di una funzione dello script, dalla firma alla graffa che la chiude."""
+    inizio = testo.index(f"function {nome}(")
+    profondita = 0
+    for posizione in range(testo.index("{", inizio), len(testo)):
+        if testo[posizione] == "{":
+            profondita += 1
+        elif testo[posizione] == "}":
+            profondita -= 1
+            if profondita == 0:
+                return testo[inizio : posizione + 1]
+    raise AssertionError(f"la funzione {nome} non si chiude")
+
+
+def test_d17_lo_script_windows_usa_il_nome_completo_dei_file():
+    testo = SCRIPT_WINDOWS.read_text(encoding="utf-8-sig")
+    nome_file = _funzione_powershell(testo, "Nome-File")
+    assert 'ExtendedProperty("System.FileName")' in nome_file, "il nome vero, con l'estensione"
+    assert 'ExtendedProperty("System.FileExtension")' in nome_file, "ultimo ripiego: l'estensione"
+    assert "Nome-Voce" in nome_file, "se le proprietà mancano si usa il nome mostrato"
+    # L'elenco decide foto/video sul nome completo...
+    elenca = _funzione_powershell(testo, "Elenca-Cartella")
+    assert elenca.index("Nome-File") < elenca.index("Genere-File"), "il genere va deciso sul nome completo"
+    # ...e la copia ritrova il file con lo stesso nome che l'elenco ha stampato.
+    trova = _funzione_powershell(testo, "Trova-Voce")
+    assert "Test-StessoNome" in trova
+    assert "(Nome-Voce $figlio) -eq" not in trova
+    assert "Nome-File" in _funzione_powershell(testo, "Test-StessoNome")
+    assert "$nomeFile = Nome-File $voce" in _funzione_powershell(testo, "Comando-Copia")
+
+
+def test_d17_lo_script_windows_resta_ben_formato():
+    """Guardia: BOM UTF-8 e parentesi bilanciate dopo la modifica (PowerShell 5.1 non si può
+    avviare qui: è il controllo più vicino a «lo script si legge»)."""
+    dati = SCRIPT_WINDOWS.read_bytes()
+    assert dati.startswith(b"\xef\xbb\xbf")
+    testo = dati.decode("utf-8-sig")
+    for apertura, chiusura in ("{}", "()", "[]"):
+        assert testo.count(apertura) == testo.count(chiusura), f"{apertura}{chiusura} sbilanciate"
