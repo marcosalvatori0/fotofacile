@@ -1693,3 +1693,21 @@ def test_d31_l_autocollaudo_esce_anche_con_la_codifica_di_windows(monkeypatch):
     dati = json.loads(grezzo.getvalue().decode("cp1252"))
     uscita.detach()
     assert dati["ok"] is False and dati["motivo"].startswith("TclError: impossibile leggere")
+
+
+def test_d31_l_avviso_di_avvio_non_si_ferma_sulla_codifica(tmp_path, monkeypatch):
+    from fotofacile import cli
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    grezzo, uscita = _uscita_cp1252(monkeypatch)
+    chiamate = []
+    cli.avviso_visibile(
+        "Non riesco ad aprire la finestra.\nMotivo tecnico: C:\\Users\\Иван\\tcl",
+        system="darwin",
+        runner=lambda comando, **_k: chiamate.append(comando),
+    )
+    uscita.flush()
+    assert "Non riesco ad aprire la finestra." in grezzo.getvalue().decode("cp1252")
+    uscita.detach()
+    assert chiamate, "l'avviso visibile deve comparire lo stesso"

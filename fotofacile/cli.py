@@ -268,7 +268,7 @@ def avviso_visibile(
 
     sistema = system or sys.platform
     scrivi_log_avvio(testo.replace("\n", " | "), env)
-    print(testo)
+    _stampa(testo)
     if sistema == "darwin":
         esegui = runner or subprocess.run
         script = f'display alert "FotoFacile" message {json.dumps(testo)} as critical'
