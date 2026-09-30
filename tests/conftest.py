@@ -20,6 +20,16 @@ from fotofacile.core.planner import TransferPlan
 from fotofacile.ui.widgets import tk_available
 
 
+@pytest.fixture(autouse=True)
+def scala_testo_normale():
+    """La scala del testo è globale: ogni test riparte dalla dimensione normale (1.0)."""
+    from fotofacile.ui import theme
+
+    theme.imposta_scala(1.0)
+    yield
+    theme.imposta_scala(1.0)
+
+
 @pytest.fixture(scope="session")
 def casa_temporanea():
     """Cartella utente finta: i test non devono mai toccare i file reali dell'utente."""
@@ -43,7 +53,7 @@ def finestra_condivisa(casa_temporanea):
         pytest.skip("serve un ambiente grafico", allow_module_level=False)
     from fotofacile.ui.app import App
 
-    applicazione = App(backend=DemoAdbBackend(file_count=54), demo_mode=True)
+    applicazione = App(backend=DemoAdbBackend(file_count=54), demo_mode=True, scala=1.0)
     applicazione.withdraw()
     applicazione.stop_all_polling()
     yield applicazione
@@ -114,7 +124,7 @@ def azzera(applicazione, tmp_path) -> None:
     applicazione.step_indicator.set_step(0)
     applicazione.banner.hide()
     applicazione.log_pane.clear()
-    applicazione.area_dettagli.grid_remove()
+    applicazione.mostra_dettagli(False)
 
 
 @pytest.fixture

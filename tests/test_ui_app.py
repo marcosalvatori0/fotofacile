@@ -76,13 +76,78 @@ def test_indicatore_passi_segue_la_pagina(app):
     assert app.step_indicator.current == 2
 
 
-def test_i_dettagli_si_mostrano_solo_quando_servono(app):
-    """Un'area vuota sempre presente confonde: compare al primo messaggio."""
-    assert app.area_dettagli.grid_info() == {}
-    app.log("qualcosa da raccontare")
-    app.update_idletasks()
-    assert app.area_dettagli.grid_info() != {}
-    assert "qualcosa da raccontare" in app.log_pane.get_text()
+def test_i_dettagli_restano_chiusi_finche_l_utente_non_li_apre(app):
+    app.log("riga tecnica")
+    assert app.dettagli_visibili is False
+    assert "riga tecnica" in app.log_pane.get_text()  # il registro si riempie comunque
+    app.mostra_dettagli(True)
+    assert app.dettagli_visibili is True
+    app.mostra_dettagli(False)
+    assert app.dettagli_visibili is False
+
+
+def test_cambia_scala_ingrandisce_salva_e_rispetta_i_limiti(app, casa_temporanea):
+    from fotofacile.core.impostazioni import Impostazioni
+    from fotofacile.ui import theme
+
+    try:
+        app.cambia_scala(-1)
+        app.cambia_scala(-1)
+        app.cambia_scala(-1)
+        assert theme.scala_attuale() == 1.0
+        assert app.cambia_scala(-1) is False  # già al minimo
+        assert app.cambia_scala(+1) is True
+        assert theme.scala_attuale() == 1.25
+        assert Impostazioni.carica().scala_testo == 1.25  # è stato salvato
+    finally:
+        theme.imposta_scala(1.0)
+
+
+@pytest.fixture
+def focus(app):
+    """I tasti generati arrivano solo alla finestra col focus: quella dei test è nascosta."""
+    app.deiconify()
+    app.update()
+    app.focus_force()
+    app.update()
+    yield app
+    app.withdraw()
+
+
+def test_invio_preme_il_pulsante_principale_della_pagina(app, focus):
+    chiamate = []
+    app.pages["connect"].azione_principale = lambda: chiamate.append("avanti")
+    app.go_to("connect")
+    app.event_generate("<Return>")
+    app.update()
+    assert chiamate == ["avanti"]
+
+
+@pytest.mark.xfail(
+    reason="serve `azione_indietro` sulla pagina «Destinazione»: si aggiunge nel Task C8",
+    strict=False,
+)
+def test_esc_torna_indietro(app, focus):
+    from fotofacile.core.devices import DeviceInfo
+
+    app.device = DeviceInfo(serial="S1", state="device", model="Prova", product="")
+    app.go_to("options")
+    app.event_generate("<Escape>")
+    app.update()
+    assert app.current_page == "select"
+
+
+def test_la_finestra_non_supera_lo_schermo(app):
+    larghezza, altezza = (int(n) for n in app.geometry().split("+")[0].split("x"))
+    assert larghezza <= app.winfo_screenwidth() - 60
+    assert altezza <= app.winfo_screenheight() - 100
+
+
+def test_ricostruisci_pagine_mantiene_una_pagina_corrente_valida(app):
+    app.go_to("connect")
+    app.ricostruisci_pagine()
+    assert app.current_page == "connect"
+    assert set(app.pages) == {"connect", "select", "options", "transfer"}
 
 
 def test_registro_e_stato(app):

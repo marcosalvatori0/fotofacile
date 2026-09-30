@@ -17,8 +17,9 @@ from typing import Any, Callable, Generator
 from ..core.adb import RealAdbBackend, find_adb
 from ..core.errors import FotoFacileError
 from ..core.history import History
+from ..core.impostazioni import SCALE_AMMESSE, Impostazioni
 from ..core.trasporto import Trasporto, TrasportoAdb, TrasportoDemo, trasporti_disponibili
-from .theme import apply_theme
+from .theme import apply_theme, imposta_scala, scala_attuale
 from .widgets import Banner, LogPane, StepIndicator
 
 PASSI = ("Collega il telefono", "Scegli le foto", "Destinazione", "Copia")
@@ -35,12 +36,14 @@ class App(tk.Tk):
         backend: Any | None = None,
         demo_mode: bool = False,
         adb_path: str | None = None,
+        scuro: bool | None = None,
+        scala: float | None = None,
     ) -> None:
         super().__init__()
+        self._scala_iniziale = scala if scala is not None else Impostazioni.carica().scala_testo
         self.title("FotoFacile — copia le foto dal telefono al computer")
-        self.geometry("1020x780")
-        self.minsize(920, 700)
-        apply_theme(self)
+        apply_theme(self, scuro=scuro, scala=self._scala_iniziale)
+        self._dimensiona_finestra()
 
         self.adb_path = adb_path or find_adb()
         self.backend: Any = None
@@ -76,17 +79,22 @@ class App(tk.Tk):
         self.container = ttk.Frame(self)
         self.container.grid(row=2, column=0, sticky="nsew", padx=18, pady=6)
 
-        # I «Dettagli» restano nascosti finché non c'è davvero qualcosa da raccontare:
-        # una grande area vuota confonde chi usa il programma.
+        # I «Dettagli» restano chiusi finché l'utente non li apre: il registro si riempie
+        # comunque, ma non deve mai comparire da solo davanti a chi non ne ha bisogno.
         self.area_dettagli = ttk.Frame(self)
         self.area_dettagli.grid(row=3, column=0, sticky="ew", padx=18, pady=(0, 14))
-        ttk.Label(self.area_dettagli, text="Dettagli delle operazioni", style="Tenue.TLabel").grid(
-            row=0, column=0, sticky="w", pady=(0, 2)
+        self.bottone_dettagli = ttk.Button(
+            self.area_dettagli,
+            text="Mostra i dettagli",
+            style="Link.TButton",
+            command=lambda: self.mostra_dettagli(not self.dettagli_visibili),
         )
+        self.bottone_dettagli.grid(row=0, column=0, sticky="w")
         self.log_pane = LogPane(self.area_dettagli, height=6)
         self.log_pane.grid(row=1, column=0, sticky="ew")
+        self.log_pane.grid_remove()
+        self.dettagli_visibili = False
         self.area_dettagli.columnconfigure(0, weight=1)
-        self.area_dettagli.grid_remove()
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)  # solo il contenuto si allarga
@@ -101,9 +109,19 @@ class App(tk.Tk):
         self.pages: dict[str, ttk.Frame] = {}
         self._costruisci_pagine()
 
+        self.bind("<Return>", self._tasto_invio)
+        self.bind("<Escape>", self._tasto_esc)
         self.protocol("WM_DELETE_WINDOW", self._chiusura)
         self.go_to("connect")
         self._porta_in_primo_piano()
+
+    def _dimensiona_finestra(self) -> None:
+        """Dimensione iniziale proporzionata al testo, ma mai più grande dello schermo."""
+        scala = scala_attuale() if hasattr(self, "_scala_iniziale") else 1.0
+        larghezza = min(int(1000 * max(scala, 1.0)), self.winfo_screenwidth() - 60)
+        altezza = min(int(760 * max(scala, 1.0)), self.winfo_screenheight() - 100)
+        self.geometry(f"{larghezza}x{altezza}")
+        self.minsize(min(820, larghezza), min(620, altezza))
 
     def _porta_in_primo_piano(self) -> None:
         """Mette la finestra davanti alle altre: avviata dal Terminale resterebbe dietro."""
@@ -262,10 +280,42 @@ class App(tk.Tk):
 
     # ── messaggi e registro ───────────────────────────────────────────────
     def log(self, testo: str) -> None:
-        # grid_info() è vuoto quando l'area è nascosta: funziona anche a finestra non ancora mostrata
-        if not self.area_dettagli.grid_info():
-            self.area_dettagli.grid()
         self.log_pane.append(testo)
+
+    def mostra_dettagli(self, mostra: bool) -> None:
+        """Apre o chiude il registro delle operazioni (chiuso di default)."""
+        self.dettagli_visibili = bool(mostra)
+        if mostra:
+            self.log_pane.grid()
+            self.bottone_dettagli.configure(text="Nascondi i dettagli")
+        else:
+            self.log_pane.grid_remove()
+            self.bottone_dettagli.configure(text="Mostra i dettagli")
+
+    # ── dimensione del testo e tastiera ───────────────────────────────────
+    def cambia_scala(self, direzione: int) -> bool:
+        """Ingrandisce (+1) o rimpicciolisce (-1) il testo; salva la scelta e ridisegna."""
+        indice = min(range(len(SCALE_AMMESSE)), key=lambda i: abs(SCALE_AMMESSE[i] - scala_attuale()))
+        nuovo = indice + (1 if direzione > 0 else -1)
+        if not 0 <= nuovo < len(SCALE_AMMESSE):
+            return False
+        imposta_scala(SCALE_AMMESSE[nuovo])
+        Impostazioni(scala_testo=SCALE_AMMESSE[nuovo]).salva()
+        apply_theme(self, scala=SCALE_AMMESSE[nuovo])
+        self._dimensiona_finestra()
+        self.ricostruisci_pagine()
+        return True
+
+    def _tasto_invio(self, _evento=None) -> None:
+        self._chiama_azione("azione_principale")
+
+    def _tasto_esc(self, _evento=None) -> None:
+        self._chiama_azione("azione_indietro")
+
+    def _chiama_azione(self, nome: str) -> None:
+        azione = getattr(self.pages.get(self.current_page), nome, None)
+        if callable(azione):
+            azione()
 
     def set_status(self, text: str, hint: str = "", kind: str = "info") -> None:
         self.banner.show(text, hint=hint, kind=kind)
