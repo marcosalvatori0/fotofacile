@@ -534,3 +534,38 @@ def test_una_cartella_non_scrivibile_produce_un_errore_comprensibile(tmp_path):
     finally:
         cartella.chmod(0o700)
     assert errore.value.hint
+
+
+# ── D1 ─────────────────────────────────────────────────────────────────────
+# Prima: le foto copiate avevano la data di «adesso»; la data di scatto andava persa e
+# in Esplora file / Foto tutto risultava di oggi.
+class _TelefonoFinto:
+    """Il minimo che serve a `transfer`: due metodi."""
+
+    def __init__(self, contenuti: dict[str, bytes]) -> None:
+        self.contenuti = contenuti
+        self.cancellati: list[str] = []
+
+    def stream_file(self, serial, remote_path, chunk_size=65536):
+        yield self.contenuti[remote_path]
+
+    def delete_file(self, serial, remote_path):
+        self.cancellati.append(remote_path)
+
+
+def _piano_singolo(tmp_path, percorso="/sdcard/DCIM/Camera/a.jpg", dati=b"x" * 10, mtime=1_500_000_000):
+    from fotofacile.core.planner import TransferOptions, build_plan
+    from fotofacile.core.scanner import MediaFile
+
+    media = MediaFile(remote_path=percorso, size=len(dati), mtime=mtime, kind="photo")
+    opzioni = TransferOptions(destination=tmp_path / "out")
+    return build_plan([media], opzioni), opzioni, _TelefonoFinto({percorso: dati})
+
+
+def test_d1_la_copia_conserva_la_data_di_scatto(tmp_path):
+    from fotofacile.core.transfer import transfer
+
+    piano, opzioni, telefono = _piano_singolo(tmp_path)
+    esiti = transfer(telefono, "S1", piano, opzioni)
+    assert len(esiti.copied) == 1
+    assert int(esiti.copied[0].stat().st_mtime) == 1_500_000_000

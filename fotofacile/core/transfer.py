@@ -76,6 +76,20 @@ def _chiudi(generatore) -> None:
             pass
 
 
+def _applica_data(percorso: Path, mtime: int) -> None:
+    """Rimette sul file copiato la data originale della foto (se il telefono la conosce).
+
+    Serve a chi ordina per data in Esplora file, Foto o Finder. Un errore qui non deve mai
+    far fallire una copia già riuscita.
+    """
+    if not mtime or mtime < 0:
+        return
+    try:
+        os.utime(percorso, (mtime, mtime))
+    except OSError:  # pragma: no cover - file di rete o permessi particolari
+        pass
+
+
 _trasforma = traduci_errore_file  # un unico posto dove si traducono gli errori di file
 
 
@@ -258,6 +272,7 @@ def transfer_steps(
             continue
 
         esiti.copied.append(pianificato.dest_path)
+        _applica_data(pianificato.dest_path, pianificato.media.mtime)
         if history is not None:
             history.record(
                 serial,
