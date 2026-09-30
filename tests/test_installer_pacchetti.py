@@ -20,7 +20,9 @@ def test_windows_ha_solo_il_setup_e_nessuno_script_da_lanciare_a_mano():
     """Nel repository non restano `.bat`/`.ps1` d'installazione né lo script del pacchetto."""
     cartella = RADICE / "installer" / "windows"
     assert not list(cartella.glob("*.bat")), "i .bat d'installazione non ci sono più"
-    assert not list(cartella.glob("*.ps1")), "i .ps1 d'installazione non ci sono più"
+    # gli unici .ps1 ammessi sono quelli che usa la pipeline GitHub (D4), mai l'utente
+    solo_ci = {"prova-installazione.ps1", "verifica-eseguibile.ps1"}
+    assert {p.name for p in cartella.glob("*.ps1")} <= solo_ci, "i .ps1 d'installazione non ci sono più"
     assert (cartella / "FotoFacile.iss").is_file()
     assert not (RADICE / "scripts" / "crea_pacchetto_windows.py").exists()
 

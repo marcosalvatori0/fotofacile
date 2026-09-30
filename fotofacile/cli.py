@@ -105,6 +105,11 @@ def emetti(
         percorso.write_text(testo, encoding="utf-8")
     except OSError:
         return None
+    ambiente = env if env is not None else os.environ
+    if ambiente.get("FOTOFACILE_NO_OPEN"):
+        # La pipeline GitHub prova «doctor» sul programma installato: il Blocco note
+        # non deve aprirsi (potrebbe tenere l'attesa bloccata). Il file resta scritto.
+        return percorso
     if apri is None and sys.platform == "win32":  # pragma: no cover - solo su Windows
         apri = os.startfile  # type: ignore[attr-defined]
     if apri is not None:

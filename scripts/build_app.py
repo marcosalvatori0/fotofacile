@@ -127,10 +127,13 @@ def crea_archivio(pacchetto: Path) -> Path:
         )
         return archivio
     archivio = RADICE / "dist" / f"{nome}.zip"
+    # Su Windows e Linux «pacchetto» è l'eseguibile: lo zip deve contenere tutta la sua
+    # cartella (prima, sfogliando il solo file, l'archivio usciva vuoto).
+    cartella = pacchetto if pacchetto.is_dir() else pacchetto.parent
     with zipfile.ZipFile(archivio, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        for file in pacchetto.rglob("*"):
+        for file in cartella.rglob("*"):
             if file.is_file():
-                zip_file.write(file, file.relative_to(pacchetto.parent))
+                zip_file.write(file, file.relative_to(cartella.parent))
     return archivio
 
 

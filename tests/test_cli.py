@@ -389,3 +389,17 @@ def test_autocollaudo_senza_terminale_scrive_selftest_txt_anche_se_ok(monkeypatc
     assert cli.main(["--selftest"], env={}) == 0
     assert '"ok": true' in (tmp_path / ".fotofacile" / "selftest.txt").read_text(encoding="utf-8")
     assert aperti == []
+
+
+def test_emetti_non_apre_il_file_se_l_ambiente_lo_vieta(monkeypatch, tmp_path):
+    """Sulla pipeline (FOTOFACILE_NO_OPEN) il Blocco note non deve aprirsi e bloccare l'attesa."""
+    import sys
+
+    from fotofacile.cli import emetti
+
+    monkeypatch.setattr(sys, "stdout", None)
+    aperti = []
+    env = {"HOME": str(tmp_path), "USERPROFILE": str(tmp_path), "FOTOFACILE_NO_OPEN": "1"}
+    percorso = emetti("rapporto", env=env, apri=lambda p: aperti.append(p))
+    assert percorso is not None and percorso.read_text(encoding="utf-8") == "rapporto"
+    assert aperti == []  # il file c'è, ma nessuno lo apre
