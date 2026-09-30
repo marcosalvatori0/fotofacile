@@ -279,7 +279,9 @@ riprodotti con un test. PowerShell non si può eseguire su questo Mac: quello ch
   «Nascondi le estensioni per i tipi di file conosciuti» potrebbe arrivare `IMG_001` invece
   di `IMG_001.jpg`, e allora `Genere-File` (`:194-201`) scarterebbe **tutte** le foto. Va
   provato su un Windows vero con un telefono; se confermato, il nome va letto da
-  `ExtendedProperty("System.FileName")`.
+  `ExtendedProperty("System.FileName")`. **Passato a G3**: rischio giudicato fondato e
+  corretto in modo difensivo come **D17** (vedi «G3 — Aiutanti»); la correzione **non è
+  verificata su un Windows vero**.
 - *Sospetto non verificato (Windows):* un nome valido su Android ma non su Windows
   (`a|b.jpg`, `a:b.jpg`) va copiato con `CopyHere` nella cartella di appoggio; se Windows lo
   rifiuta (errori soppressi dal flag `0x400`, `wpd_win.ps1:105`) lo script aspetta 120 s
@@ -300,3 +302,183 @@ riprodotti con un test. PowerShell non si può eseguire su questo Mac: quello ch
   script (che pretende il doppio della dimensione più 4 MB, `wpd_win.ps1:298-306`) con un
   messaggio che si riconosce come disco pieno. Passare la dimensione (e quanto: una o due
   volte) è una scelta di progetto: non corretto.
+
+---
+
+## G3 — Aiutanti
+
+File rivisti: `fotofacile/aiutanti/__init__.py`, `ptp_mac.py`, `mtp_linux.py`, `wpd_win.py`,
+`wpd_win.ps1`, con quello che li avvia, li ferma e ne legge l'uscita: `cli.py:esegui_aiutante`,
+`core/trasporto_aiutante.py` (`leggi_elenco`, `_generatore`, `copia`),
+`core/trasporto_linux.py:pulisci`, `core/ops.py` (`termina`, `_suggerimento`). Due revisioni
+(lettura diretta + revisore `caveman:cavecrew-reviewer`, che non ha trovato altri difetti
+oltre a quelli già corretti); tenuti solo i difetti confermati leggendo il codice e
+riprodotti con un test. PowerShell non si può eseguire su questo Mac:
+quello che riguarda `wpd_win.ps1` è ragionato sul codice e dichiarato come tale. Dopo D17 i
+numeri di riga di `wpd_win.ps1` citati nel G2 oltre la riga 201 sono scalati di 38–42 righe.
+
+### Ogni uscita di errore ha codice 2/3 e messaggio umano su `stderr`?
+
+**ok** per i codici, con il difetto **D20** corretto nel messaggio dell'aiutante macOS e il
+difetto **D19** corretto nell'uscita per interruzione.
+
+- `ptp_mac.main` (`ptp_mac.py:534-556`): comando mancante o sconosciuto → 2 con una frase;
+  `NessunTelefono` → 3; tutto il resto → 2 (c'è un `except Exception`: nessuna eccezione esce
+  da `main`). Anche `cli.esegui_aiutante` (`cli.py:288-310`) risponde 2 con una frase se
+  l'aiutante non esiste o non si lascia importare.
+- **difetto D20 (bassa, macOS)** — corretto. I guai previsti dell'aiutante macOS (file
+  sparito, sessione che non si apre, file incompleto, argomento mancante) sono frasi italiane
+  sollevate come `OSError`/`ValueError`, ma `main` le stampava con il nome della classe: la
+  persona leggeva nel dettaglio dell'errore (`ops.py:_suggerimento`) «(dettaglio: OSError: Sul
+  telefono non trovo più il file …)». Ora `ptp_mac.py:549-553` scrive solo la frase; gli
+  errori imprevisti dicono ancora il loro tipo. Test:
+  `test_d20_l_aiutante_macos_scrive_frasi_senza_nomi_tecnici` (rosso prima),
+  `test_d20_un_guaio_imprevisto_resta_riconoscibile` (guardia).
+- `mtp_linux.main` (`mtp_linux.py:703-724`): `GuaioMtp` porta il suo codice (2, oppure 3 per
+  `NessunTelefono`, `:59-79`) e scrive motivo e suggerimento; gli errori imprevisti → 2 con
+  `Tipo: messaggio`. *Nota:* con Python < 3.12 `Path.is_file()`/`exists()` su un montaggio gvfs
+  che risponde `EIO`/`EACCES` solleva invece di dire `False` (`comando_copia`,
+  `comando_cancella`) e il dettaglio mostrato sarebbe tecnico («PermissionError: …»), sempre
+  con codice 2. Con il Python del progetto (3.14) non succede.
+- `wpd_win.py` (`:110-124`, `:127-173`): i codici di PowerShell diversi da 0/2/3 (per esempio 1
+  per un errore di sintassi o di parametri) diventano 2 con una frase italiana; tempo scaduto
+  e PowerShell mancante → 2 con una frase.
+- `wpd_win.ps1` (ragionato, non eseguito): con `$ErrorActionPreference = "Stop"` (`:44`) ogni
+  errore e ogni `throw` finiscono nel `catch` finale → messaggio + `exit 2` (`:470-481`);
+  `Esci-SenzaTelefono` → `exit 3` (`:66-69`); la cancellazione → `exit 2` con due frasi
+  (`:457-466`). `exit` dentro una funzione non è un'eccezione: il `catch` non trasforma il 3 in 2.
+- **difetto D19 (bassa, macOS e Linux)** — corretto. Il programma principale ferma l'aiutante
+  con SIGTERM (`ops.py:153-168`) quando si annulla, scade il tempo o si chiude la finestra.
+  Senza un gestore Python moriva all'istante e **nessun `finally` scattava**: su macOS restava
+  in `$TMPDIR` la cartella `fotofacile-ptp-*` con la foto scaricata (il ripiego per i telefoni
+  che non consegnano a blocchi, `ptp_mac.py:352-390`); su Linux restavano vivi e orfani i
+  comandi figli (`jmtpfs`, `gio mount`, che con un telefono bloccato può restare appeso) e la
+  cartella di montaggio vuota. Ora `aiutanti/__init__.py:44-78` trasforma SIGTERM in
+  `SystemExit(2)` per tutta la durata dell'aiutante (e poi rimette il gestore di prima, così
+  chi chiama `esegui` nello stesso processo, come i test, non cambia): le pulizie scattano,
+  `subprocess.run` uccide il comando figlio, e `_monta_jmtpfs` toglie la cartella di montaggio
+  (`mtp_linux.py:399-405`). Su Windows il segnale non arriva (l'aiutante viene chiuso di
+  netto): lì resta la sorveglianza di PowerShell (`-PidSupervisionato`, `wpd_win.ps1:71-84`).
+  Test, con l'aiutante vero in un processo a parte fermato con `terminate()`:
+  `test_d19_macos_interrotto_non_lascia_la_foto_nella_cartella_temporanea`,
+  `test_d19_linux_interrotto_non_lascia_comandi_orfani` (entrambi rossi prima).
+
+### Le righe JSON con `\n` dentro i nomi sono gestite?
+
+**ok** per gli aiutanti Python (verificato); ragionato per PowerShell.
+
+- `ptp_mac._stampa_riga` e `mtp_linux._stampa_riga` (`ptp_mac.py:396-400`,
+  `mtp_linux.py:556-560`) usano `json.dumps` con `ensure_ascii`: `\n`, `\r` e anche i
+  separatori che `str.splitlines()` taglierebbe in `leggi_elenco` (`\x85`, ` `) diventano
+  sequenze di escape, una riga per file. Verificato con l'aiutante Linux su file veri chiamati
+  `a\nb.jpg`, `c d.jpg`, `e\x85f.jpg`, `g\rh.jpg`: 4 righe più quella di fine, nomi
+  intatti dopo `leggi_elenco`. Test di guardia:
+  `test_aiutante_linux_nomi_con_a_capo_restano_una_riga` (`tests/test_trasporto.py`). Il
+  percorso torna all'aiutante come elemento di una lista di argomenti (niente shell), quindi
+  anche copia e cancellazione ricevono il nome intatto.
+- `wpd_win.ps1`: `ConvertTo-Json -Compress` (`:283`) scrive una riga sola e trasforma in escape
+  i caratteri di controllo (`\n`, `\r`). *Sospetto non verificato (Windows, bassa):* non è
+  verificato che Windows PowerShell 5.1 trasformi in escape anche `\u0085`/` `/` `;
+  se non lo fa, `leggi_elenco` (`trasporto_aiutante.py:367`, `splitlines()`) spezza la riga e
+  quel solo file viene **saltato** (nessun danno ad altri file). Per chiuderlo basterebbe
+  dividere solo su `"\n"` (fuori gruppo); non riproducibile qui.
+
+### Il `.ps1` mantiene il BOM dopo ogni modifica?
+
+**ok**. Dopo la modifica di D17 i primi tre byte di `wpd_win.ps1` sono `EF BB BF` (verificato
+con `xxd`; `file` dice «UTF-8 (with BOM)»; fine riga invariati). Lo sorvegliano tre test:
+`test_gli_script_powershell_hanno_il_bom` (`tests/test_regressioni.py:404-412`, tutti i `.ps1`
+del progetto), `test_il_pacchetto_porta_l_aiutante_per_windows`
+(`tests/test_pacchetto_windows.py:110-119`, la copia nel pacchetto per Windows) e la nuova
+guardia `test_d17_lo_script_windows_resta_ben_formato` (BOM e parentesi bilanciate).
+
+### Filtrare `.thumbnails`/`cache`/`Stickers` già qui costa meno che poi (vedi Task C4)?
+
+**Da valutare nella Parte C** (non corretto, come previsto). Costo concreto: gli aiutanti
+scendono in **ogni** cartella (`ptp_mac.cammina`, `mtp_linux.cammina`, `Elenca-Cartella`) e
+`DCIM/.thumbnails` contiene di solito una miniatura per foto, quindi l'elenco e le righe JSON
+possono raddoppiare. Pesa soprattutto su Windows, dove ogni file costa chiamate COM
+(`Dimensione-Voce`, `Data-Voce`: fino a 4 `ExtendedProperty`) e, dopo D17 con le estensioni
+nascoste, una in più per il nome. Saltare negli aiutanti le cartelle il cui nome comincia con
+«.» eviterebbe la discesa (una riga per aiutante); `cache` e `Stickers` sono rari fra le
+cartelle delle foto e si possono lasciare al filtro di pagina.
+
+### Sospetto ereditato dal G2: `FolderItem.Name` senza estensione (`wpd_win.ps1`)
+
+- **difetto D17 (alta, solo Windows)** — corretto in modo difensivo, **non verificato su un
+  Windows vero**. Rischio giudicato fondato: `FolderItem.Name` è il nome visualizzato, lo
+  stesso di Esplora file, che con «Nascondi le estensioni per i tipi di file conosciuti»
+  (attiva di default) mostra «IMG_001» anche sulle foto del telefono. Con quel nome
+  `Genere-File` (`:194-201`) non trova il punto e scarta il file: **nessuna foto elencata**
+  con il collegamento diretto di Windows. Correzione: `Nome-File` (`wpd_win.ps1:203-227`) usa il
+  nome mostrato se è già quello di una foto o di un video (nessun costo in più e comportamento
+  identico a prima quando le estensioni sono visibili), altrimenti legge
+  `ExtendedProperty("System.FileName")` e, come ultimo ripiego, aggiunge al nome mostrato
+  `System.FileExtension`. `Elenca-Cartella` decide il genere sul nome completo (`:270-274`);
+  `Trova-Voce` confronta con `Test-StessoNome` (`:229-239`, usato in `:304`), che chiede il
+  nome completo solo quando il nome mostrato è l'inizio di quello cercato (una cartella con
+  migliaia di foto non costa migliaia di domande in più per ogni copia); `Comando-Copia`
+  aspetta il file con il nome completo (`:414`). Solo sintassi di Windows PowerShell 5.1. Test:
+  `test_d17_lo_script_windows_usa_il_nome_completo_dei_file` (contratto sul testo dello
+  script, rosso prima), `test_d17_lo_script_windows_resta_ben_formato` (guardia).
+- *Da verificare su Windows vero:* (1) che `.Name` sul telefono arrivi davvero senza
+  estensione con l'opzione attiva (se non succede D17 non cambia niente: il nome mostrato ha
+  già l'estensione); (2) che `System.FileName` sia disponibile sulle voci WPD (se non lo è,
+  resta il ripiego con `System.FileExtension`); (3) i tempi dell'elenco con molte foto e le
+  estensioni nascoste. Limiti noti: se Windows mostrasse un nome che non è l'inizio del nome
+  vero (non visto con Android), il file verrebbe elencato ma la copia direbbe «non trovo più il
+  file» (prima non veniva proprio elencato); con le estensioni nascoste una cartella «X» e un
+  file «X.jpg» nella stessa cartella si confondono in `Trova-Voce`.
+
+### Altri controlli del gruppo
+
+- **difetto D18 (alta, macOS)** — corretto. `ptp_mac.cammina` evitava le voci ripetute
+  ricordando solo `id(voce)`. Ogni voce è un proxy PyObjC: quando una cartella è finita i suoi
+  proxy vengono liberati e quelli della cartella successiva ne riusano la memoria, quindi lo
+  stesso `id`. Misurato con PyObjC vero su questo Mac: **48 proxy su 50** di un secondo
+  `NSArray` riusavano un `id` del primo (0 su 50 tenendo i riferimenti). Effetto: con più
+  cartelle di foto (Camera, Screenshots, Pictures…) i file delle cartelle visitate dopo la
+  prima **sparivano in silenzio** dall'elenco, e la loro copia (`trova_file`, che usa la stessa
+  `cammina`) diceva «non trovo più il file». Ora le voci viste restano tenute
+  (`ptp_mac.py:231-243`), così il loro `id` non può passare a un'altra voce; la difesa contro
+  le voci ripetute resta. Non provato con un telefono vero. Test:
+  `test_d18_l_elenco_macos_non_salta_i_file_delle_cartelle_successive` (proxy finti che, come
+  quelli veri, riusano la memoria appena liberata; rosso prima: 6 file su 10),
+  `test_d18_una_voce_ripetuta_si_elenca_una_volta_sola` (guardia).
+- Pulizia in ogni uscita: `ptp_mac` chiude la sessione in un `finally` (`comando_elenca`,
+  `comando_copia`, `comando_cancella`) e ferma la ricerca dei dispositivi (`trova_telefoni`,
+  `:162-169`); la cartella del ripiego è un `TemporaryDirectory` (`:365`). `mtp_linux` usa solo
+  `subprocess.run` con un tempo massimo (`_esegui`, `:94-111`), che uccide il figlio anche su
+  `SystemExit` (dopo D19). `wpd_win.py` usa `subprocess.run` con un tempo massimo, che uccide
+  PowerShell; `wpd_win.ps1` chiude il file letto in un `finally` (`:452-454`) e la cartella di
+  appoggio è del programma principale. Con D19 tutto questo vale anche per l'interruzione;
+  resta fuori solo SIGKILL (dopo 3 s), che non si può intercettare. **ok**.
+- Linux, montaggi: i montaggi gvfs si indicano sempre per seriale (`gio mount
+  mtp://<seriale>/`, `mtp_linux.py:439`; `smonta`, `:464-483`); le cartelle jmtpfs si
+  cancellano solo se non sono più montate **e** sono nostre (`_smonta_percorso`,
+  `_cartella_nostra`, `:319-355`); `TrasportoMtpLinux.pulisci` smonta solo i telefoni usati in
+  questa sessione (`trasporto_linux.py:94-115`). **ok**, con tre note:
+  - *Da valutare (bassa):* se il telefono era **già** montato dal desktop prima di FotoFacile
+    (per esempio aperto in «File»), alla chiusura viene smontato lo stesso e la finestra di
+    «File» sul telefono si chiude. La docstring (`trasporto_linux.py:97-99`) dice che è
+    «quello che fa anche il gestore file», ma il gestore file non smonta quando si chiude la
+    finestra. Ricordarsi se il montaggio c'era già è una scelta di progetto; nessun file toccato.
+  - *Sospetto non confermato (bassa):* `_punto_jmtpfs` (`:357-367`) riusa come telefono
+    qualunque cartella montata scritta nel file di stato, senza il controllo `_cartella_nostra`
+    che protegge `rmtree`. Solo con un file di stato alterato a mano (lo scrive solo
+    l'aiutante, con percorsi da `mkdtemp`) si potrebbero elencare o cancellare file di un altro
+    montaggio. Non riproducibile senza alterarlo.
+  - `comando_smonta` senza `--seriale` (`:675-691`) smonterebbe tutti i telefoni visti, anche
+    quelli non nostri; oggi nessuno lo chiama così (`trasporto_linux.py:106` passa sempre il
+    seriale).
+- *Sospetto non confermato (macOS, serve un telefono):* `apri_sessione` ed `enumera`
+  (`ptp_mac.py:172-199`) non distinguono «tempo scaduto» da «riuscito»: se il telefono non
+  risponde entro 15 s / 120 s si prosegue, e un elenco vuoto o parziale verrebbe presentato
+  come «0 foto» (l'aiutante Linux invece rifiuta apposta un «0 foto» tranquillo,
+  `mtp_linux.py:516-522`). Correzione proposta: sollevare `OSError` quando `attesa.fatto` è
+  falso. Non corretta: dipende da come ImageCaptureCore si comporta con un telefono bloccato.
+- *Sospetto non confermato (macOS, serve un telefono):* `comando_cancella`
+  (`ptp_mac.py:506-523`) passa `None` come blocco `deleteFailed` e considera riuscita la
+  cancellazione se il completamento non riporta un errore, anche quando scadono i 15 s senza
+  risposta. Una cancellazione non avvenuta verrebbe contata come fatta: il file resta sul
+  telefono (direzione sicura, nessuna foto persa) ma il riepilogo sarebbe sbagliato.
