@@ -1607,3 +1607,41 @@ def test_d29_una_pagina_che_rimanda_altrove_lascia_la_finestra_coerente(app, mon
     assert app.banner.visible and app.banner.message_text == "Il telefono non è più collegato."
     app.go_to("prev")
     assert app.current_page == "select", "«Indietro» deve portare al passo prima di quello mostrato"
+
+
+# ── D30 ────────────────────────────────────────────────────────────────────
+# Prima: chiudendo la finestra con **qualunque** lavoro in corso compariva «Sto ancora
+# copiando le foto. Vuoi interrompere e chiudere?». Al passo 1 il telefono viene controllato
+# ogni 2 secondi (su macOS, senza telefono, ogni controllo dura fino a 6 s): chi chiudeva il
+# programma prima di collegare il telefono si sentiva chiedere di interrompere una copia che
+# non esisteva.
+def _lavoro_infinito():
+    while True:
+        yield 0.05
+
+
+def test_d30_chiudere_mentre_si_cerca_il_telefono_non_parla_di_copia(app, monkeypatch):
+    from fotofacile.ui import app as modulo_app
+
+    domande, chiusa = [], []
+    monkeypatch.setattr(modulo_app.messagebox, "askyesno", lambda *a, **_k: domande.append(a) or False)
+    monkeypatch.setattr(app, "destroy", lambda: chiusa.append(True))
+    app.run_task(_lavoro_infinito())
+    assert app.current_page == "connect" and app.task_in_corso
+    app._chiusura()
+    assert domande == [], "nessuna domanda su una copia che non c'è"
+    assert chiusa == [True]
+    assert app.task_in_corso is False
+
+
+def test_d30_durante_la_copia_la_domanda_resta(app, monkeypatch):
+    from fotofacile.ui import app as modulo_app
+
+    domande, chiusa = [], []
+    monkeypatch.setattr(modulo_app.messagebox, "askyesno", lambda *a, **_k: domande.append(a) or False)
+    monkeypatch.setattr(app, "destroy", lambda: chiusa.append(True))
+    monkeypatch.setattr(app.pages["transfer"], "on_show", lambda: app.run_task(_lavoro_infinito()))
+    app.go_to("transfer")
+    app._chiusura()
+    assert len(domande) == 1 and "copiando" in domande[0][1]
+    assert chiusa == [] and app.task_in_corso, "rispondendo «No» la copia continua"

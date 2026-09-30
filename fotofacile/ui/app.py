@@ -359,8 +359,13 @@ class App(tk.Tk):
 
     # ── chiusura ──────────────────────────────────────────────────────────
     def _chiusura(self) -> None:
-        """Chiude il programma; se sta copiando chiede conferma e non lascia file a metà."""
-        if self.task_in_corso:
+        """Chiude il programma; se sta copiando chiede conferma e non lascia file a metà.
+
+        La domanda vale solo per la copia (passo «Copia»): gli altri lavori (controllo del
+        telefono, ricerca delle foto, download del componente) si interrompono senza danni,
+        e chiedere di «interrompere la copia» mentre non si copia niente confonde.
+        """
+        if self.task_in_corso and self.current_page == "transfer":
             prosegui = messagebox.askyesno(
                 "Copia in corso",
                 "Sto ancora copiando le foto.\n\nVuoi interrompere e chiudere?\n"
