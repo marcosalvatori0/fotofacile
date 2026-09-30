@@ -72,3 +72,70 @@ def test_file_rovinato_solleva_e_non_tocca_l_originale(tmp_path):
         converti_webp(rotto)
     assert rotto.exists()
     assert not list(tmp_path.glob("*.conv"))
+
+
+def _immagini_in(cartella: Path) -> list[Path]:
+    return [p for p in cartella.iterdir() if p.is_file()]
+
+
+def test_webp_travestito_da_JPG_maiuscolo_non_cambia_nome(tmp_path):
+    sorgente = _webp(tmp_path / "FOTO.JPG")
+    finale = converti_webp(sorgente)
+    assert " (1)" not in finale.name
+    assert finale.name.lower() == "foto.jpg"
+    assert not list(tmp_path.glob("*.conv"))
+    # UN solo file in cartella (su FS case-sensitive FOTO.JPG è stato rimosso)
+    assert len(_immagini_in(tmp_path)) == 1
+    with Image.open(finale) as immagine:
+        assert immagine.format == "JPEG"
+
+
+def test_animazione_con_nome_webp_maiuscolo_non_cambia_nome(tmp_path):
+    fotogrammi = [Image.new("RGB", (8, 8), (i * 40, 0, 0)) for i in range(4)]
+    animata = tmp_path / "ANIM.WEBP"
+    fotogrammi[0].save(animata, "WEBP", save_all=True, append_images=fotogrammi[1:], duration=80, loop=0)
+    finale = converti_webp(animata)
+    assert " (1)" not in finale.name
+    assert finale.name.lower() == "anim.webp"
+    assert len(_immagini_in(tmp_path)) == 1
+    with Image.open(finale) as immagine:
+        assert immagine.format == "WEBP"
+
+
+def test_nome_occupato_da_un_altro_file_non_lo_sovrascrive(tmp_path):
+    sorgente = _webp(tmp_path / "a.webp")
+    altro = tmp_path / "a.jpg"
+    altro.write_bytes(b"CONTENUTO ALTRUI")
+    finale = converti_webp(sorgente)
+    assert finale == tmp_path / "a (1).jpg"
+    assert altro.read_bytes() == b"CONTENUTO ALTRUI"
+    with Image.open(finale) as immagine:
+        assert immagine.format == "JPEG"
+
+
+def test_data_non_impostabile_non_fa_fallire_la_conversione(tmp_path, monkeypatch):
+    sorgente = _webp(tmp_path / "a.webp")
+
+    def _nega(*_a, **_k):
+        raise PermissionError("utime negato")
+
+    monkeypatch.setattr("fotofacile.core.conversione.os.utime", _nega)
+    finale = converti_webp(sorgente)
+    assert finale == tmp_path / "a.jpg"
+    assert finale.exists() and not sorgente.exists()
+
+
+def test_errore_durante_la_scrittura_lascia_intatto_l_originale(tmp_path, monkeypatch):
+    sorgente = _webp(tmp_path / "a.webp")
+    prima = sorgente.read_bytes()
+
+    def _salva_male(self, uscita, *a, **k):
+        uscita.write(b"mezzo file")
+        raise OSError("disco pieno")
+
+    monkeypatch.setattr(Image.Image, "save", _salva_male)
+    with pytest.raises(OSError):
+        converti_webp(sorgente)
+    assert sorgente.read_bytes() == prima
+    assert not list(tmp_path.glob("*.conv"))
+    assert len(_immagini_in(tmp_path)) == 1

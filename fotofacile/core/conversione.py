@@ -27,15 +27,22 @@ def e_webp(percorso: Path) -> bool:
     return formato_del_file(Path(percorso)) == "webp"
 
 
+def _stesso_file(a: Path, b: Path) -> bool:
+    """True se i due percorsi indicano lo stesso file (anche su filesystem case-insensitive,
+    dove ``FOTO.JPG`` e ``FOTO.jpg`` sono lo stesso file ma stringhe diverse)."""
+    return a == b or (a.exists() and b.exists() and os.path.samefile(a, b))
+
+
 def _libero(percorso: Path, occupato_da: Path | None) -> Path:
     """Un nome non ancora usato (aggiunge « (1)», « (2)»…); ``occupato_da`` è il file stesso."""
-    if not percorso.exists() or (occupato_da is not None and percorso == occupato_da):
+    if not percorso.exists() or (occupato_da is not None and _stesso_file(percorso, occupato_da)):
         return percorso
     for contatore in range(1, 1000):
         candidato = percorso.with_name(f"{percorso.stem} ({contatore}){percorso.suffix}")
         if not candidato.exists():
             return candidato
-    return percorso
+    # mai restituire un nome occupato: si sovrascriverebbe la foto di qualcun altro
+    raise FileExistsError(f"nessun nome libero vicino a {percorso}")
 
 
 def converti_webp(percorso: Path, qualita: int = 95) -> Path:
@@ -57,6 +64,9 @@ def converti_webp(percorso: Path, qualita: int = 95) -> Path:
         with Image.open(sorgente) as immagine:
             if getattr(immagine, "is_animated", False):
                 finale = _libero(sorgente.with_suffix(".webp"), sorgente)
+                sul_posto = _stesso_file(finale, sorgente)
+                if sul_posto:
+                    finale = sorgente  # il nome non cambia (anche se differisce solo per le maiuscole)
                 temporaneo = None  # niente da scrivere: basta rinominare
             else:
                 trasparente = immagine.mode in ("RGBA", "LA", "PA") or "transparency" in immagine.info
@@ -71,6 +81,9 @@ def converti_webp(percorso: Path, qualita: int = 95) -> Path:
                     formato, estensione, pronta = "JPEG", ".jpg", immagine.convert("RGB")
                     opzioni.update(quality=qualita, subsampling=0)
                 finale = _libero(sorgente.with_suffix(estensione), sorgente)
+                sul_posto = _stesso_file(finale, sorgente)
+                if sul_posto:
+                    finale = sorgente  # il nome non cambia: niente unlink del file appena scritto
                 with open(temporaneo, "wb") as uscita:
                     pronta.save(uscita, formato, **opzioni)
                     uscita.flush()
@@ -78,13 +91,24 @@ def converti_webp(percorso: Path, qualita: int = 95) -> Path:
         # l'immagine è chiusa: ora si può rimpiazzare anche su Windows
         if temporaneo is not None:
             os.replace(temporaneo, finale)
-            if finale != sorgente:
-                sorgente.unlink()
-        elif finale != sorgente:
+            if not sul_posto:
+                # Punto di non ritorno: il file convertito c'è già. Se l'originale non si
+                # lascia togliere NON si solleva (resterebbero due file, nessuna perdita).
+                try:
+                    sorgente.unlink()
+                except OSError:
+                    pass
+        elif not sul_posto:
             os.replace(sorgente, finale)
-        os.utime(finale, (stato.st_atime, stato.st_mtime))
+        try:  # la data è best-effort (SMB/exFAT): la conversione è già completa
+            os.utime(finale, (stato.st_atime, stato.st_mtime))
+        except OSError:
+            pass
         return finale
     except BaseException:
         if temporaneo is not None:
-            temporaneo.unlink(missing_ok=True)
+            try:
+                temporaneo.unlink(missing_ok=True)
+            except OSError:
+                pass  # non mascherare l'eccezione originale
         raise
