@@ -777,3 +777,29 @@ def test_d13_file_degli_errori_impossibile_da_creare(tmp_path, monkeypatch):
         processo.avvia()
     assert errore.value.hint
     assert creati and not Path(creati[0]).exists(), "il file di output non deve restare"
+
+
+# ── D14 ────────────────────────────────────────────────────────────────────
+# Prima: `TrasportoMtpLinux.copia` non accettava `remoto_dimensione`, che `transfer` passa
+# sempre (anche attraverso `TrasportoComposto`). Su Linux, con il collegamento diretto,
+# ogni copia finiva in un TypeError: nessuna foto copiata e solo «Qualcosa non ha
+# funzionato».
+def test_d14_la_copia_diretta_su_linux_accetta_la_dimensione(tmp_path):
+    from fotofacile.core.trasporto_linux import TrasportoMtpLinux
+
+    aiutante = script(tmp_path, "aiutante", "printf 'ciao!'\n")
+
+    class LinuxFinto(TrasportoMtpLinux):
+        def base(self) -> list[str]:
+            return [aiutante]
+
+    destinazione = tmp_path / "foto" / "a.jpg"
+    copiatore = LinuxFinto(intervallo=0.0)
+    scritti = esegui_fino_alla_fine(
+        copiatore.copia(
+            "S1", "/DCIM/a.jpg", destinazione, on_scritti=None, annulla=None, remoto_dimensione=5
+        )
+    )
+    assert scritti == 5
+    assert destinazione.read_bytes() == b"ciao!"
+    assert copiatore._usati == {"S1"}

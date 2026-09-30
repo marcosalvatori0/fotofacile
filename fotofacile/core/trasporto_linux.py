@@ -73,11 +73,17 @@ class TrasportoMtpLinux(TrasportoAiutante):
         destinazione: Path,
         on_scritti: Callable[[int], None] | None = None,
         annulla=None,
+        remoto_dimensione: int | None = None,
     ) -> Generator[float, None, int]:
         self._usati.add(serial)
         return (
             yield from super().copia(
-                serial, remoto, destinazione, on_scritti=on_scritti, annulla=annulla
+                serial,
+                remoto,
+                destinazione,
+                on_scritti=on_scritti,
+                annulla=annulla,
+                remoto_dimensione=remoto_dimensione,
             )
         )
 
