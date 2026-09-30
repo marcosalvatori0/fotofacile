@@ -1,0 +1,15 @@
+﻿Benvenuto in FotoFacile
+
+FotoFacile copia le foto e i video dal tuo telefono Android al computer, con pochi
+passaggi e senza cartelle difficili da trovare.
+
+Cosa succede adesso:
+  1. Premi «Avanti» per installare il programma.
+  2. Alla fine trovi l'icona «FotoFacile» sul Desktop.
+  3. Apri il programma, collega il telefono con il cavo e segui le istruzioni.
+
+Non serve attivare nessuna impostazione speciale sul telefono: basta scegliere
+«Trasferimento file» quando il telefono lo chiede.
+
+Windows potrebbe mostrare un avviso blu «Windows ha protetto il PC» perché il
+programma è nuovo: premi «Ulteriori informazioni» e poi «Esegui comunque».
