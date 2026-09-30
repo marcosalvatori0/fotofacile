@@ -397,7 +397,12 @@ def _monta_jmtpfs(seriale: str) -> Path:
             _scrivi_stato_jmtpfs(stato)
             return percorso
     punto = Path(tempfile.mkdtemp(prefix="fotofacile-mtp-"))
-    esito = _esegui(["jmtpfs", str(punto)], timeout=TIMEOUT_JMTPFS)
+    try:
+        esito = _esegui(["jmtpfs", str(punto)], timeout=TIMEOUT_JMTPFS)
+    except BaseException:
+        # Interrotto mentre montava (annullo, chiusura): la cartella non deve restare.
+        _smonta_percorso(punto)
+        raise
     if esito is None or esito.returncode != 0 or not os.path.ismount(punto):
         _smonta_percorso(punto)  # smonta (se serve) e rimuove solo se non è più montato
         dettaglio = ""

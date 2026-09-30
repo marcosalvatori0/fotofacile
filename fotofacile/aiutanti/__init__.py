@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
-from typing import Sequence
+from typing import Callable, Sequence
 
 #: Nome dell'aiutante → modulo Python che lo implementa.
 MODULI = {
@@ -43,4 +43,34 @@ def carica(nome: str):
 
 def esegui(nome: str, argomenti: Sequence[str]) -> int:
     """Esegue un aiutante e restituisce il suo codice di uscita."""
-    return carica(nome).main(list(argomenti))
+    modulo = carica(nome)
+    ripristina = _termina_con_ordine()
+    try:
+        return modulo.main(list(argomenti))
+    finally:
+        ripristina()
+
+
+def _termina_con_ordine() -> Callable[[], object]:
+    """Trasforma la richiesta di terminare (SIGTERM) in un'uscita ordinata.
+
+    Il programma principale ferma l'aiutante con SIGTERM (annullo, tempo scaduto,
+    chiusura della finestra). Senza un gestore Python muore all'istante e nessun
+    ``finally`` scatta: restavano la cartella temporanea con la foto scaricata (macOS) e i
+    comandi figli vivi e orfani, come ``jmtpfs`` o ``gio mount`` (Linux). Con
+    ``SystemExit`` le pulizie scattano e ``subprocess.run`` uccide il comando figlio.
+    Su Windows il segnale non arriva (l'aiutante viene chiuso di netto): lì provvede la
+    sorveglianza di PowerShell (``-PidSupervisionato``).
+    """
+    import signal
+
+    def interrompi(_numero, _quadro):
+        raise SystemExit(2)
+
+    try:
+        precedente = signal.signal(signal.SIGTERM, interrompi)
+    except (AttributeError, OSError, ValueError):  # pragma: no cover - sistema senza SIGTERM
+        return lambda: None
+    if precedente is None:  # pragma: no cover - gestore installato fuori da Python
+        precedente = signal.SIG_DFL
+    return lambda: signal.signal(signal.SIGTERM, precedente)

@@ -1032,3 +1032,163 @@ def test_d18_una_voce_ripetuta_si_elenca_una_volta_sola():
 
     percorsi = [p for _, p in ptp_mac.cammina(CartellaCheRipete("t", {}), SimpleNamespace(ICCameraFolder=None))]
     assert percorsi == ["/a.jpg"]
+
+
+# ── D19 ────────────────────────────────────────────────────────────────────
+# Prima: per annullare (o allo scadere del tempo, o alla chiusura) il programma principale
+# ferma l'aiutante con SIGTERM (`ProcessoEsterno.termina`). Senza un gestore Python muore
+# all'istante e nessun `finally` scatta: su macOS restava in `$TMPDIR` la cartella
+# `fotofacile-ptp-*` con la foto scaricata (il ripiego per i telefoni che non consegnano a
+# blocchi); su Linux restavano vivi e orfani i comandi figli (`jmtpfs`, `gio mount`) e la
+# cartella di montaggio vuota. Qui l'aiutante gira davvero in un processo a parte.
+_PTP_CHE_SCARICA = r'''
+import sys, time
+from pathlib import Path
+from fotofacile import cli
+from fotofacile.aiutanti import ptp_mac
+
+segnale = Path(sys.argv[1])
+
+class Ciclo:
+    def runUntilDate_(self, _quando):
+        time.sleep(0.02)
+
+class NSRunLoop:
+    @staticmethod
+    def currentRunLoop():
+        return Ciclo()
+
+class NSDate:
+    @staticmethod
+    def dateWithTimeIntervalSinceNow_(secondi):
+        return secondi
+
+class NSURL:
+    @staticmethod
+    def fileURLWithPath_(percorso):
+        return percorso
+
+class FileLento:
+    def fileSize(self):
+        return 10
+    def name(self):
+        return "a.jpg"
+    def device(self):
+        return object()
+    def requestReadDataAtOffset_length_completion_(self, *_argomenti):
+        raise RuntimeError("questo telefono non consegna a blocchi")
+    def requestDownloadWithOptions_completion_(self, opzioni, _fatto):
+        cartella = Path(opzioni["ICDownloadsDirectoryURL"])
+        (cartella / "a.jpg").write_bytes(b"mezza foto")
+        segnale.write_text(str(cartella))  # la risposta non arriva mai: telefono lento
+
+ptp_mac._componenti = lambda: (None, NSDate, None, NSRunLoop, NSURL, None)
+ptp_mac._apri_telefono = lambda voluto="": object()
+ptp_mac.trova_file = lambda telefono, percorso, ic: FileLento()
+ptp_mac.chiudi_sessione = lambda telefono: None
+sys.exit(cli.main(["--aiutante", "ptp_mac", "copia", "--percorso", "/DCIM/a.jpg"]))
+'''
+
+_MTP_CHE_MONTA = r'''
+import sys
+from fotofacile import cli
+sys.exit(cli.main(["--aiutante", "mtp_linux", "elenca"]))
+'''
+
+
+def _aspetta_file(percorso: Path, secondi: float = 20.0) -> str:
+    import time
+
+    scadenza = time.monotonic() + secondi
+    while time.monotonic() < scadenza:
+        if percorso.exists() and percorso.read_text().strip():
+            return percorso.read_text().strip()
+        time.sleep(0.05)
+    raise AssertionError(f"l'aiutante non è arrivato al punto atteso ({percorso.name})")
+
+
+def _processo_vivo(pid: int) -> bool:
+    import os
+
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+@pytest.mark.skipif(__import__("os").name == "nt", reason="SIGTERM esiste solo su macOS e Linux")
+def test_d19_macos_interrotto_non_lascia_la_foto_nella_cartella_temporanea(tmp_path):
+    import os
+    import subprocess
+    import sys
+
+    temporanea = tmp_path / "tmp"
+    temporanea.mkdir()
+    segnale = tmp_path / "scaricando"
+    ambiente = {**os.environ, "TMPDIR": str(temporanea), "HOME": str(tmp_path)}
+    radice = Path(__file__).resolve().parent.parent
+    aiutante = subprocess.Popen(
+        [sys.executable, "-c", _PTP_CHE_SCARICA, str(segnale)],
+        cwd=radice, env=ambiente, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+    )
+    try:
+        cartella = Path(_aspetta_file(segnale))
+        assert cartella.is_dir()
+        aiutante.terminate()  # come ProcessoEsterno.termina
+        aiutante.wait(timeout=10)
+        assert not cartella.exists(), "la foto scaricata è rimasta nella cartella temporanea"
+        assert list(temporanea.glob("fotofacile-ptp-*")) == []
+    finally:
+        if aiutante.poll() is None:
+            aiutante.kill()
+            aiutante.wait()
+        aiutante.stderr.close()
+
+
+@pytest.mark.skipif(__import__("os").name == "nt", reason="SIGTERM esiste solo su macOS e Linux")
+def test_d19_linux_interrotto_non_lascia_comandi_orfani(tmp_path):
+    import os
+    import signal
+    import subprocess
+    import sys
+
+    finti = tmp_path / "bin"
+    finti.mkdir()
+    temporanea = tmp_path / "tmp"
+    temporanea.mkdir()
+    segnale = tmp_path / "jmtpfs.pid"
+    script(
+        finti,
+        "jmtpfs",
+        'if [ "$1" = "-l" ]; then echo "Device 0: Telefono finto"; exit 0; fi\n'
+        f'echo $$ > "{segnale}"\n'
+        "exec sleep 60\n",  # un telefono bloccato: il montaggio non finisce
+    )
+    ambiente = {
+        **os.environ,
+        "PATH": f"{finti}:/usr/bin:/bin",  # niente gio: si usa il ripiego jmtpfs
+        "TMPDIR": str(temporanea),
+        "HOME": str(tmp_path),
+        "XDG_RUNTIME_DIR": str(tmp_path / "run"),
+        "XDG_CACHE_HOME": str(tmp_path / "cache"),
+    }
+    radice = Path(__file__).resolve().parent.parent
+    aiutante = subprocess.Popen(
+        [sys.executable, "-c", _MTP_CHE_MONTA],
+        cwd=radice, env=ambiente, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+    )
+    pid = 0
+    try:
+        pid = int(_aspetta_file(segnale))
+        aiutante.terminate()  # come ProcessoEsterno.termina
+        aiutante.wait(timeout=10)
+        assert not _processo_vivo(pid), "jmtpfs è rimasto vivo senza nessuno ad aspettarlo"
+        assert list(temporanea.glob("fotofacile-mtp-*")) == [], "la cartella di montaggio è rimasta"
+    finally:
+        if aiutante.poll() is None:
+            aiutante.kill()
+            aiutante.wait()
+        aiutante.stderr.close()
+        if pid and _processo_vivo(pid):
+            os.kill(pid, signal.SIGKILL)
