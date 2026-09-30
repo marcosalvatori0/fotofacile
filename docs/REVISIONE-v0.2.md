@@ -132,3 +132,171 @@ processo è finito.
 - *Sospetto non confermato (dal secondo revisore):* in `_rallenta_scrittura` un `os.close`
   che fallisce solleverebbe `OSError` (`trasporto_aiutante.py:430`). Non riproducibile senza
   simularlo; in ogni caso dopo D11 verrebbe tradotto in un errore comprensibile.
+
+### Sospetto residuo D12 (aggiunto durante l'audit G2)
+
+- *Da valutare:* dopo D12 il disco pieno si riconosce solo dal **suggerimento**
+  (`adb_passi.py:96-97`), ma il suggerimento contiene l'ultima riga dell'errore del comando
+  (`ops.py:_suggerimento`), e per adb quella riga riporta di solito il **percorso remoto**
+  (per esempio `cat: /sdcard/DCIM/Spazio bimbi/a.jpg: No such file or directory`). Un file o
+  una cartella con «Spazio» nel nome può quindi ancora far credere a un disco pieno. Non
+  corretto: serve decidere come distinguere il testo del sistema dal nome del file (per
+  esempio cercare solo «no space»/«enospc» e la frase italiana esatta dell'aiutante Windows).
+
+---
+
+## G2 — Collegamenti
+
+File rivisti: `fotofacile/core/trasporto.py`, `trasporto_mac.py`, `trasporto_win.py`,
+`trasporto_linux.py`, con quello che pilotano: `core/trasporto_aiutante.py`,
+`core/scanner.py` (`build_scan_command`, `parse_stat_stream`), `core/adb.py:shell_quote`,
+`core/adb_passi.py` (righe di comando di copia e cancellazione), `aiutanti/wpd_win.py`,
+`aiutanti/wpd_win.ps1`, `aiutanti/ptp_mac.py`, `aiutanti/mtp_linux.py`, e il chiamante
+`core/transfer.py:_passi_di_copia`. Due revisioni indipendenti (lettura diretta + revisore
+`caveman:cavecrew-reviewer`); tenuti solo i difetti confermati leggendo il codice e
+riprodotti con un test. PowerShell non si può eseguire su questo Mac: quello che riguarda
+`wpd_win.ps1` è ragionato sul codice e dichiarato come tale.
+
+### `TrasportoComposto`: cosa succede con due telefoni?
+
+**ok** nel composto, con il difetto **D15** corretto nell'aiutante macOS.
+
+- `TrasportoComposto.dispositivi` (`trasporto.py:265-276`) prova i collegamenti in ordine e
+  restituisce **tutti** i telefoni del primo che ne vede almeno uno, ricordando quel
+  collegamento (`_scegli`, `:325-328`). La pagina di collegamento usa il primo telefono
+  pronto e lo annota nel registro se sono più d'uno (`ui/page_connect.py:286-293`), poi
+  smette di sondare (`:298`): da lì in avanti `app.device` non cambia.
+- Tutte le operazioni successive passano da `self.attivo` (`trasporto.py:248-250`,
+  `:282`, `:295`, `:306`): ricerca, copia e cancellazione vanno allo **stesso**
+  collegamento che ha fornito il seriale.
+- **difetto D15 (media)** — corretto. L'aiutante macOS, se il telefono indicato con
+  `--seriale` non c'era, ripiegava **in silenzio** sul primo telefono collegato
+  (`aiutanti/ptp_mac.py:_apri_telefono`). Con due telefoni, copia e cancellazione
+  potevano agire su quello non scelto. Ora con più telefoni si ferma con «Non trovo il
+  telefono indicato: forse è stato scollegato.» (`ptp_mac.py:409-424`, uscita 3 come per
+  Windows); con un telefono solo lo usa come prima, perché non è verificato su un telefono
+  vero che l'identificativo (`serialNumber`/`UUIDString`, `ptp_mac.py:202-211`) resti lo
+  stesso fra un avvio dell'aiutante e l'altro: rendere il controllo più severo potrebbe
+  rompere il caso normale. Test: `test_d15_con_due_telefoni_non_si_usa_quello_sbagliato`
+  (rosso prima), `test_d15_con_un_solo_telefono_si_usa_quello` (guardia).
+- Windows: `Trova-Dispositivo` (`wpd_win.ps1:157-168`) esce con codice 3 se il seriale non
+  corrisponde: **ok** (ragionato sul codice, non eseguito). Linux: `_monta` monta
+  esattamente `mtp://<seriale>/` (`mtp_linux.py:416-437`) e il ripiego `jmtpfs` rifiuta
+  di scegliere con più telefoni (`:380-387`): **ok**.
+- *Da valutare:* l'ordine è «collegamento diretto, poi Debug USB»
+  (`trasporto.py:349-357`), ma la docstring di `TrasportoComposto` (`:229-234`) dice che
+  chi ha il Debug USB attivo usa il collegamento veloce. In realtà adb si usa solo se il
+  collegamento diretto non vede **nessun** telefono. Conseguenze: su Windows, con il Debug
+  USB attivo e il telefono in «Trasferimento file», la cancellazione non è disponibile
+  anche se adb saprebbe farla; e un secondo telefono visibile solo via adb non compare.
+  Scelta di progetto (ordine o docstring).
+- *Sospetto non confermato:* dopo «Riavvia collegamento» `_scelto` torna `None`
+  (`trasporto.py:315`) e `attivo` diventa il primo collegamento. Se il controllo successivo
+  fallisce, `_controllo_fallito` (`ui/page_connect.py:271-283`) non azzera `app.device`:
+  si potrebbe proseguire con un seriale di adb dato al collegamento diretto. Non trovato un
+  percorso dell'interfaccia che lo permetta davvero (con un telefono solo, D15 lascia
+  comunque usare quello).
+
+### Il numero seriale è stabile fra ricerca e copia (stessa `serial` usata da `cancella`)?
+
+**ok** — e il percorso remoto è lo stesso.
+
+- Il seriale nasce una volta sola in `page_connect` (`app.device`) e viene passato uguale a
+  ricerca (`ui/page_select.py:157-158`), piano e copia (`ui/page_transfer.py:119-138`) e da
+  `transfer` sia a `copia` sia a `cancella` (`core/transfer.py:228-230`, `:285`).
+- Il **percorso remoto** di `cancella` è lo stesso oggetto passato a `copia`:
+  `pianificato.media.remote_path` (`transfer.py:230` e `:285`). Con adb entrambi passano da
+  `shell_quote` allo stesso modo (`adb_passi.py:254` `exec-out cat` e `:322` `shell rm -f`);
+  con gli aiutanti entrambi come `--percorso remoto` in un elenco di argomenti, senza shell
+  (`trasporto_aiutante.py:266`, `:303`); l'aiutante macOS usa per entrambi `trova_file` con
+  lo stesso confronto esatto (`ptp_mac.py:427-433`), quello Linux `percorso_di_filesystem`
+  (`mtp_linux.py:484-496`, `:625`, `:652`).
+- **difetto D14 (alta)** — corretto. `TrasportoMtpLinux.copia` non accettava
+  `remoto_dimensione`, che `transfer` passa **sempre** (`transfer.py:236`, anche attraverso
+  `TrasportoComposto.copia`, `trasporto.py:301`). Su Linux, con il collegamento diretto, ogni
+  copia finiva in un `TypeError`: nessuna foto copiata. Ora la firma è quella del protocollo
+  e il valore arriva a `TrasportoAiutante.copia` (`trasporto_linux.py:69-87`). Test:
+  `test_d14_la_copia_diretta_su_linux_accetta_la_dimensione`.
+- *Sospetto non confermato:* l'aiutante macOS ricava il seriale da `serialNumber`, poi
+  `UUIDString`, poi il nome (`ptp_mac.py:202-211`). Due telefoni dello stesso modello senza
+  i primi due avrebbero lo stesso seriale. Non verificabile senza telefoni veri.
+
+### Nomi di file con `'`, `$`, `"`, emoji e `|` passano intatti da `wpd_win.ps1` e da `scanner.build_scan_command`?
+
+**ok** per il quoting di shell (nessun comando eseguibile, nessuna uscita dalla cartella);
+**difetto D16** per la codifica dei caratteri.
+
+- `build_scan_command` (`scanner.py:112-126`): i nomi dei file **non** entrano mai nel
+  comando; le radici sono costanti quotate con `shell_quote`; `find` stampa i percorsi,
+  `while IFS= read -r f` li legge senza interpretarli e `stat … "$f"` li usa quotati.
+  `parse_stat_stream` separa solo i primi due `|` (`scanner.py:96-97`), quindi un `|` nel
+  nome resta. Verificato eseguendo il comando con `/bin/sh` su una cartella con
+  `a'b.jpg`, `x$(touch PWNED).jpg`, ``q"uo`te`.jpg``, `pi|pe.jpg`, `emoji 😀 città.jpg`,
+  `  spazi  .jpg`, `-meno.jpg`, `back\slash.jpg`, `$HOME.jpg`, `..jpg`, `a;rm -rf x.jpg`:
+  tutti e 11 ritrovati intatti e riletti con `cat <shell_quote(percorso)>` (come fa
+  `adb exec-out`), nessun `PWNED` creato. Un nome con un a-capo viene spezzato in due righe
+  che `stat` non trova: il file viene saltato, senza danni.
+- `shell_quote` (`adb.py:51-53`) chiude fra apici singoli e trasforma `'` in `'\''`: dentro
+  gli apici `$`, `"`, `` ` ``, `|`, `;` sono letterali. Il percorso comincia sempre con `/`,
+  quindi non può essere scambiato per un'opzione di `cat`/`rm`. Il seriale va ad adb come
+  argomento separato (`-s`, `adb_passi.py:208`, `:254`, `:322`), senza shell.
+- Gli aiutanti ricevono percorso e seriale come elementi di una lista (`subprocess`, niente
+  shell: `ops.py:103-110`); `wpd_win.py` li passa a PowerShell ancora come lista
+  (`wpd_win.py:86-107`, `:159-164`). Con `-File` PowerShell tratta gli argomenti come testo
+  letterale (niente espansione di `$`); su Windows gli argomenti viaggiano in Unicode
+  (`CreateProcessW`), quindi emoji e accenti arrivano intatti. Dentro lo script il percorso
+  si usa solo per confronti di nomi (`Trova-Voce`, `wpd_win.ps1:246-274`) e i file locali
+  solo con `-LiteralPath` (`:300`, `:311`, `:316`, `:330`, `:366`): nessun carattere jolly
+  interpretato. *Non verificato su Windows:* il caso di `"` dentro un argomento (Python lo
+  scrive come `\"`, PowerShell 5.1 dovrebbe rileggerlo come `"`).
+- Uscita dalla cartella di destinazione: il nome di destinazione passa da `_nome_sicuro`
+  (`planner.py:98-108`), che sostituisce `/`, `\` e `<>:"|?*` e trasforma `.` e `..` in
+  `senza_nome`; con la struttura delle cartelle attiva lo stesso vale per ogni cartella
+  (`planner.py:94`). Sul lato telefono l'aiutante Linux rifiuta `.` e `..`
+  (`mtp_linux.py:484-496`). **ok**.
+- **difetto D16 (media, Windows)** — corretto. L'elenco delle foto veniva riletto con la
+  **codifica di sistema** (`trasporto_aiutante.py:210`, `:239`; `ops.py:220` per adb), ma è
+  UTF-8: JSON scritto byte per byte dallo script Windows (`wpd_win.ps1:54-58`) e nomi dei
+  file così come li scrive Android. Su Windows la codifica di sistema è cp1252:
+  «Città 😀.jpg» diventava «CittÃ  ðŸ˜€.jpg», la copia chiedeva al telefono un file che non
+  esiste e **ogni foto con accenti o emoji nel nome non veniva copiata** (con adb e con il
+  collegamento diretto). Ora l'output si legge in UTF-8, e gli aiutanti Python scrivono JSON
+  solo ASCII (`ptp_mac.py:393-397`, `mtp_linux.py:551-555`), così la lettura non dipende
+  dalla loro codifica. Su questo Mac la codifica di sistema è sempre UTF-8: il test simula
+  quella di Windows. Test: `test_d16_l_elenco_del_collegamento_diretto_conserva_accenti_ed_emoji`,
+  `test_d16_la_ricerca_con_adb_conserva_accenti_ed_emoji` (rossi prima),
+  `test_d16_gli_aiutanti_scrivono_righe_leggibili_con_ogni_codifica[ptp_mac|mtp_linux]`.
+- *Da valutare (bassa, Windows):* anche il **testo degli errori** (`ops.py:228`) si legge
+  con la codifica di sistema, ma su Windows arriva misto: lo script PowerShell scrive UTF-8
+  (`wpd_win.ps1:60-64`), `wpd_win.py` scrive con la codifica di sistema (`wpd_win.py:120-123`,
+  `:166-171`). Oggi i messaggi di PowerShell compaiono nel «dettaglio» con gli accenti
+  rovinati («piÃ¹»); il disco pieno si riconosce comunque («spazio» resta leggibile). Per
+  sistemarlo bisogna far scrivere anche `wpd_win.py` in UTF-8 e poi leggere in UTF-8:
+  non verificabile qui.
+- **Sospetto non verificato (potenzialmente grave, solo Windows):** lo script usa
+  `FolderItem.Name` come nome del file (`wpd_win.ps1:113-115`, usato in `:217-233` e
+  `:262`). È il **nome mostrato** da Esplora file: con l'opzione predefinita di Windows
+  «Nascondi le estensioni per i tipi di file conosciuti» potrebbe arrivare `IMG_001` invece
+  di `IMG_001.jpg`, e allora `Genere-File` (`:194-201`) scarterebbe **tutte** le foto. Va
+  provato su un Windows vero con un telefono; se confermato, il nome va letto da
+  `ExtendedProperty("System.FileName")`.
+- *Sospetto non verificato (Windows):* un nome valido su Android ma non su Windows
+  (`a|b.jpg`, `a:b.jpg`) va copiato con `CopyHere` nella cartella di appoggio; se Windows lo
+  rifiuta (errori soppressi dal flag `0x400`, `wpd_win.ps1:105`) lo script aspetta 120 s
+  prima di dire «Il telefono non ha consegnato il file.» (`:321-324`), e la copia viene
+  ritentata. Non verificabile qui.
+- *Sospetto non verificato:* `Trova-Voce` confronta i nomi con `-eq`, che in PowerShell
+  **non** distingue maiuscole e minuscole (`wpd_win.ps1:262`): due file che differiscono solo
+  per le maiuscole verrebbero confusi. Sulla memoria interna di Android (che non le
+  distingue) non possono esistere; forse su una scheda SD.
+- *Da valutare (bassa):* `leggi_elenco` e `parse_stat_stream` tolgono gli spazi in fondo alla
+  riga (`trasporto_aiutante.py:377`, `scanner.py:93`). Un file chiamato `foto.jpg ` (con uno
+  spazio finale) viene elencato come `foto.jpg` e la sua copia fallisce con «non trovo più il
+  file»; senza la pulizia sarebbe stato ignorato (l'estensione sarebbe `jpg `). Effetto
+  trascurabile, nessun file sbagliato toccato.
+- *Da valutare (dal G1, `trasporto_win.py:109`):* il collegamento Windows controlla lo
+  spazio **senza** la dimensione del file (`_controlla_spazio(destinazione)`): una foto
+  piccola viene rifiutata sotto i 16 MB liberi. I file grandi sono comunque fermati dallo
+  script (che pretende il doppio della dimensione più 4 MB, `wpd_win.ps1:298-306`) con un
+  messaggio che si riconosce come disco pieno. Passare la dimensione (e quanto: una o due
+  volte) è una scelta di progetto: non corretto.
