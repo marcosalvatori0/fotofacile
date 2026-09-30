@@ -48,6 +48,22 @@ def format_eta(seconds: float | None) -> str:
     return f"circa {format_duration(seconds)}"
 
 
+def parole_tempo_residuo(secondi: float | None) -> str:
+    """«manca circa 2 minuti» — a parole, senza cronometri."""
+    if secondi is None or secondi < 0:
+        return "calcolo il tempo che manca…"
+    if secondi < 45:
+        return "manca meno di un minuto"
+    minuti = round(secondi / 60)
+    if minuti < 60:
+        return f"manca circa {minuti} minut{'o' if minuti == 1 else 'i'}"
+    ore, resto = divmod(minuti, 60)
+    testo = f"manca circa {ore} or{'a' if ore == 1 else 'e'}"
+    if resto:
+        testo += f" e {resto} minut{'o' if resto == 1 else 'i'}"
+    return testo
+
+
 def format_date(epoch: int) -> str:
     return datetime.fromtimestamp(epoch).strftime("%d/%m/%Y")
 

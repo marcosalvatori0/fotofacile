@@ -175,3 +175,20 @@ def test_mostrare_i_nascosti_non_cancella_le_spunte_tolte(app):
     pagina.mostra_rumore.set(True)
     pagina._ridisegna()
     assert [f.name for f in pagina.selected_files()] == ["a.jpg"]
+
+
+def test_la_ricerca_riparte_anche_se_l_interruzione_era_rimasta_accesa(app):
+    """Un «Interrompi» precedente lasciava `cancel_event` acceso e la ricerca nasceva già annullata."""
+    from fotofacile.core.devices import DeviceInfo
+
+    app.device = DeviceInfo(serial="DEMO12345", state="device", model="Pixel_7_demo", product="demo")
+    app.cancel_event.set()
+    pagina = app.pages["select"]
+    avviate = []
+    app.run_task = lambda gen, **k: avviate.append(gen)
+    try:
+        pagina.start_scan()
+    finally:
+        del app.run_task
+    assert avviate, "la ricerca doveva partire"
+    assert not app.cancel_event.is_set()

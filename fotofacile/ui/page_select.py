@@ -187,6 +187,9 @@ class SelectPage(ttk.Frame):
             )
             return
         self._scansione_in_corso = True
+        # Un «Interrompi» precedente può aver lasciato acceso il segnale: la ricerca
+        # nascerebbe già annullata.
+        self.app.cancel_event.clear()
         self.app.set_status("Sto cercando le foto sul telefono… può richiedere un momento.", kind="info")
         self.bottone_avanti.state(["disabled"])
         self.bottone_cerca.state(["disabled"])

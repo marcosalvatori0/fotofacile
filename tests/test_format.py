@@ -6,6 +6,7 @@ from fotofacile.core.format import (
     format_eta,
     format_size,
     format_speed,
+    parole_tempo_residuo,
     parse_date,
 )
 
@@ -59,3 +60,15 @@ def test_parse_date_rifiuta_input_non_validi():
     assert parse_date("   ") is None
     assert parse_date("non una data") is None
     assert parse_date("2024-13-45") is None
+
+
+def test_tempo_residuo_a_parole():
+    assert parole_tempo_residuo(None) == "calcolo il tempo che manca…"
+    assert parole_tempo_residuo(-1) == "calcolo il tempo che manca…"
+    assert parole_tempo_residuo(10) == "manca meno di un minuto"
+    assert parole_tempo_residuo(60) == "manca circa 1 minuto"
+    assert parole_tempo_residuo(125) == "manca circa 2 minuti"
+    assert parole_tempo_residuo(3600) == "manca circa 1 ora"
+    assert parole_tempo_residuo(3 * 3600) == "manca circa 3 ore"
+    assert parole_tempo_residuo(3600 + 20 * 60) == "manca circa 1 ora e 20 minuti"
+    assert parole_tempo_residuo(3600 + 60) == "manca circa 1 ora e 1 minuto"

@@ -110,12 +110,15 @@ def azzera(applicazione, tmp_path) -> None:
     trasferimento.results = None
     trasferimento.report_text = ""
     trasferimento.last_plan = TransferPlan()
+    trasferimento._in_corso = False
+    trasferimento._fermata_da_errore = False
+    trasferimento.percentuale.configure(text="0 %")
     trasferimento.barra_totale.configure(value=0)
     trasferimento.barra_file.configure(value=0)
     trasferimento.riepilogo.configure(text="")
     trasferimento.riepilogo_errori.configure(text="")
-    for bottone in (trasferimento.bottone_apri, trasferimento.bottone_salva, trasferimento.bottone_chiudi):
-        bottone.state(["disabled"])
+    trasferimento.bottone_indietro.grid_remove()
+    trasferimento.mostra_altri_pulsanti(False)
 
     pagina = applicazione.pages["connect"]
     pagina._polling = False
