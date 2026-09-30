@@ -182,23 +182,19 @@ class CopiatoreInterno:
         return None
 
 
-def transfer_steps(
+def _passi_di_copia(
+    esiti: TransferResults,
     plan: TransferPlan,
     options: TransferOptions,
     copiatore,
     serial: str,
-    history: History | None = None,
-    on_progress: Callable[[Progress], None] | None = None,
-    annulla=None,
-    retries: int = 2,
-    orologio: Callable[[], float] = time.monotonic,
+    history: History | None,
+    on_progress: Callable[[Progress], None] | None,
+    annulla,
+    retries: int,
+    orologio: Callable[[], float],
 ) -> Generator[float, None, TransferResults]:
-    """Copia il piano sul disco a piccoli passi, verificando ogni file.
-
-    ``copiatore`` deve esporre ``copia(serial, remoto, destinazione, on_scritti, annulla)``
-    come generatore (lo fanno sia :class:`CopiatoreInterno` sia ``AdbAPassi``).
-    """
-    esiti = TransferResults(skipped=plan.skipped_duplicates + plan.skipped_existing)
+    """Il corpo della copia; il salvataggio della cronologia sta nell'involucro."""
     avanzamento = Progress(total_files=plan.file_count, bytes_total=plan.total_bytes)
     inizio = orologio()
     ultimo = _pubblica(on_progress, avanzamento, orologio, 0.0, forza=True)
@@ -268,6 +264,9 @@ def transfer_steps(
         avanzamento.done_files += 1
         avanzamento.file_bytes_done = avanzamento.file_bytes_total
         if not riuscito:
+            # Il file non arriverà mai: lo si toglie dal totale, così la barra e il tempo
+            # residuo restano coerenti fino alla fine.
+            avanzamento.bytes_total = max(avanzamento.bytes_total - pianificato.media.size, 0)
             esiti.failed.append((pianificato.media, messaggio))
             continue
 
@@ -285,23 +284,59 @@ def transfer_steps(
             try:
                 yield from copiatore.cancella(serial, pianificato.media.remote_path)
                 esiti.deleted_from_phone += 1
-            except FotoFacileError:
-                pass
+            except FotoFacileError as errore:
+                esiti.warnings.append(
+                    f"Non sono riuscito a togliere {pianificato.media.name} dal telefono: "
+                    f"{errore.message}"
+                )
 
     esiti.bytes_copied = avanzamento.bytes_done
     esiti.elapsed = max(orologio() - inizio, 0.0)
     _pubblica(on_progress, avanzamento, orologio, ultimo, forza=True)
-    if history is not None:
-        try:
-            history.save()
-        except OSError:
-            # Le foto sono già al sicuro: non riuscire a ricordare cosa è stato copiato
-            # non deve rovinare il risultato (al massimo la prossima volta si ricontrolla).
-            esiti.warnings.append(
-                "Non sono riuscito a salvare l'elenco dei file copiati: "
-                "alla prossima copia il programma ricontrollerà tutto."
-            )
     return esiti
+
+
+def _salva_cronologia(history: History | None, esiti: TransferResults) -> None:
+    if history is None:
+        return
+    try:
+        history.save()
+    except OSError:
+        # Le foto sono già al sicuro: non riuscire a ricordare cosa è stato copiato
+        # non deve rovinare il risultato (al massimo la prossima volta si ricontrolla).
+        esiti.warnings.append(
+            "Non sono riuscito a salvare l'elenco dei file copiati: "
+            "alla prossima copia il programma ricontrollerà tutto."
+        )
+
+
+def transfer_steps(
+    plan: TransferPlan,
+    options: TransferOptions,
+    copiatore,
+    serial: str,
+    history: History | None = None,
+    on_progress: Callable[[Progress], None] | None = None,
+    annulla=None,
+    retries: int = 2,
+    orologio: Callable[[], float] = time.monotonic,
+) -> Generator[float, None, TransferResults]:
+    """Copia il piano sul disco a piccoli passi, verificando ogni file.
+
+    ``copiatore`` deve esporre ``copia(serial, remoto, destinazione, on_scritti, annulla)``
+    come generatore (lo fanno sia :class:`CopiatoreInterno` sia ``AdbAPassi``).
+    La cronologia si salva **sempre** (``finally``): un ``GeneratorExit`` — finestra chiusa
+    durante la copia — non è né ``OSError`` né ``FotoFacileError`` e un ``except`` non lo vede.
+    """
+    esiti = TransferResults(skipped=plan.skipped_duplicates + plan.skipped_existing)
+    interno = _passi_di_copia(
+        esiti, plan, options, copiatore, serial, history, on_progress, annulla, retries, orologio
+    )
+    try:
+        return (yield from interno)
+    finally:
+        interno.close()
+        _salva_cronologia(history, esiti)
 
 
 def transfer(

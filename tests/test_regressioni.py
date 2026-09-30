@@ -569,3 +569,68 @@ def test_d1_la_copia_conserva_la_data_di_scatto(tmp_path):
     esiti = transfer(telefono, "S1", piano, opzioni)
     assert len(esiti.copied) == 1
     assert int(esiti.copied[0].stat().st_mtime) == 1_500_000_000
+
+
+# ── D2 ─────────────────────────────────────────────────────────────────────
+# Prima: se il lavoro veniva abbandonato (finestra chiusa) la cronologia non si salvava.
+def test_d2_la_cronologia_si_salva_anche_se_il_lavoro_viene_chiuso(tmp_path):
+    from fotofacile.core.history import History
+    from fotofacile.core.planner import TransferOptions, build_plan
+    from fotofacile.core.scanner import MediaFile
+    from fotofacile.core.transfer import CopiatoreInterno, transfer_steps
+
+    file = [
+        MediaFile(f"/sdcard/DCIM/Camera/{i}.jpg", size=5, mtime=1000 + i, kind="photo") for i in range(3)
+    ]
+    telefono = _TelefonoFinto({f.remote_path: b"12345" for f in file})
+    opzioni = TransferOptions(destination=tmp_path / "out")
+    piano = build_plan(file, opzioni)
+    cronologia = History(tmp_path / "h.json")
+    cronologia.load()
+    generatore = transfer_steps(piano, opzioni, CopiatoreInterno(telefono), "S1", history=cronologia)
+    next(generatore)  # il primo passo scarica il file…
+    next(generatore)  # …il secondo lo verifica e lo annota nella cronologia, poi comincia il successivo
+    generatore.close()  # …poi la finestra si chiude
+    riletta = History(tmp_path / "h.json")
+    riletta.load()
+    assert riletta.count("S1") >= 1
+
+
+# ── D3 ─────────────────────────────────────────────────────────────────────
+# Prima: se la cancellazione dal telefono falliva non lo sapeva nessuno.
+def test_d3_cancellazione_fallita_diventa_un_avviso(tmp_path):
+    from fotofacile.core.errors import FotoFacileError
+    from fotofacile.core.planner import TransferOptions, build_plan
+    from fotofacile.core.scanner import MediaFile
+    from fotofacile.core.transfer import transfer
+
+    class Rifiuta(_TelefonoFinto):
+        def delete_file(self, serial, remote_path):
+            raise FotoFacileError("Il telefono non lo permette.", "")
+
+    media = MediaFile("/sdcard/DCIM/Camera/a.jpg", size=3, mtime=1000, kind="photo")
+    opzioni = TransferOptions(destination=tmp_path / "out", delete_after=True)
+    esiti = transfer(Rifiuta({media.remote_path: b"abc"}), "S1", build_plan([media], opzioni), opzioni)
+    assert esiti.deleted_from_phone == 0
+    assert any("a.jpg" in avviso and "telefono" in avviso for avviso in esiti.warnings)
+
+
+# ── D4 ─────────────────────────────────────────────────────────────────────
+# Prima: con un file fallito il totale restava alto e la barra non arrivava mai al 100 %.
+def test_d4_il_totale_non_conta_i_file_falliti(tmp_path):
+    from fotofacile.core.planner import TransferOptions, build_plan
+    from fotofacile.core.scanner import MediaFile
+    from fotofacile.core.transfer import Progress, transfer
+
+    buono = MediaFile("/sdcard/DCIM/Camera/ok.jpg", size=4, mtime=1, kind="photo")
+    rotto = MediaFile("/sdcard/DCIM/Camera/rotto.jpg", size=99, mtime=1, kind="photo")
+    # `rotto` dichiara 99 byte ma il telefono ne consegna 3: la verifica lo scarta
+    telefono = _TelefonoFinto({buono.remote_path: b"abcd", rotto.remote_path: b"abc"})
+    opzioni = TransferOptions(destination=tmp_path / "out")
+    viste: list[Progress] = []
+    esiti = transfer(
+        telefono, "S1", build_plan([buono, rotto], opzioni), opzioni,
+        on_progress=lambda p: viste.append(Progress(**vars(p))), retries=0,
+    )
+    assert len(esiti.failed) == 1
+    assert viste[-1].bytes_done == viste[-1].bytes_total == 4
