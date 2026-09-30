@@ -634,3 +634,30 @@ def test_d4_il_totale_non_conta_i_file_falliti(tmp_path):
     )
     assert len(esiti.failed) == 1
     assert viste[-1].bytes_done == viste[-1].bytes_total == 4
+
+
+# ── D5 ─────────────────────────────────────────────────────────────────────
+# Prima: `_scansione_fallita(_errore)` buttava via il motivo; restava «Ricerca non riuscita.»
+def test_d5_ricerca_fallita_spiega_il_motivo(app):
+    from fotofacile.core.devices import DeviceInfo
+    from fotofacile.core.errors import FotoFacileError
+    from tests.aiuto import attendi
+
+    class Bloccato:
+        nome = "prova"
+        spiegazione = ""
+
+        def cerca_media(self, serial, include_videos=True, annulla=None):
+            raise FotoFacileError("Il telefono è bloccato.", "Sblocca lo schermo e riprova.")
+            yield 0.0  # pragma: no cover - lo rende un generatore
+
+        def pulisci(self):
+            pass
+
+    app.remote = Bloccato()
+    app.device = DeviceInfo(serial="S1", state="device", model="Prova", product="")
+    pagina = app.pages["select"]
+    pagina.start_scan()
+    assert attendi(app, lambda: not pagina._scansione_in_corso)
+    assert app.banner.message_text == "Il telefono è bloccato."
+    assert "Sblocca" in app.banner.hint_text

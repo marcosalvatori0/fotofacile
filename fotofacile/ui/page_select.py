@@ -163,11 +163,13 @@ class SelectPage(ttk.Frame):
             on_error=self._scansione_fallita,
         )
 
-    def _scansione_fallita(self, _errore) -> None:
+    def _scansione_fallita(self, errore) -> None:
         self._scansione_in_corso = False
         self.bottone_cerca.state(["!disabled"])
         self.casella_video.state(["!disabled"])
         self.riepilogo.configure(text="Ricerca non riuscita.", foreground=COLORI["avviso"])
+        self.app.set_status(errore.message, hint=errore.hint, kind="errore")
+        self.app.log(f"Ricerca non riuscita: {errore.message} {errore.hint}".strip())
 
     def _scansione_finita(self, file: list[MediaFile]) -> None:
         self._scansione_fatta = True
