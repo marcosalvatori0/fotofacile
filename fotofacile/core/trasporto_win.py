@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 from typing import Callable, Generator
 
-from .adb_passi import _controlla_spazio, _esito_di_copia, percorso_temporaneo
+from .adb_passi import _controlla_spazio, _esito_di_copia, percorso_temporaneo, rifiuta_se_esiste
 from .errors import FotoFacileError, traduci_errore_file
 from .ops import Annullato
 from .osutil import chiave_sistema
@@ -146,6 +146,7 @@ class TrasportoWpdWindows(TrasportoAiutante):
             scritti = _dimensione(temporaneo, scritti, on_scritti)
             _esito_di_copia(processo, destinazione)
             _rallenta_scrittura(temporaneo)
+            rifiuta_se_esiste(destinazione)
             try:
                 os.replace(temporaneo, destinazione)
             except OSError as errore:

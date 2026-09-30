@@ -1999,3 +1999,73 @@ def test_rimettere_l_estensione_webp_non_sceglie_nomi_riservati_e_non_gira_all_i
     assert _rimetti_estensione_webp(sorgente, evita=frozenset(riservato), avvisi=avvisi) == sorgente
     assert sorgente.read_bytes() == b"dati" and len(avvisi) == 1 and "a.jpg" in avvisi[0]
 
+
+# ── La copia non sovrascrive mai un file che c'è già ──────────────────────
+def _piano_con_destinazione_occupata(tmp_path, delete_after=True):
+    """Piano costruito a cartella vuota; poi, prima della copia, qualcuno crea il file di destinazione."""
+    media = MediaFile("/sdcard/DCIM/Camera/a.jpg", size=10, mtime=1_500_000_000, kind="photo")
+    opzioni = TransferOptions(destination=tmp_path / "out", delete_after=delete_after)
+    piano = build_plan([media], opzioni)
+    destinazione = piano.files[0].dest_path
+    destinazione.parent.mkdir(parents=True, exist_ok=True)
+    destinazione.write_bytes(b"FOTO GIA' PRESENTE")
+    return media, opzioni, piano, destinazione
+
+
+def test_la_copia_non_sovrascrive_un_file_gia_presente(tmp_path):
+    from fotofacile.core.transfer import transfer
+
+    media, opzioni, piano, destinazione = _piano_con_destinazione_occupata(tmp_path)
+    telefono = _TelefonoFinto({media.remote_path: b"x" * 10})
+    esiti = transfer(telefono, "S1", piano, opzioni)
+    assert destinazione.read_bytes() == b"FOTO GIA' PRESENTE"
+    assert not list(destinazione.parent.glob("*.part"))
+    assert len(esiti.failed) == 1 and esiti.failed[0][0] is media
+    assert "già un file" in esiti.failed[0][1]
+    assert esiti.copied == [] and telefono.cancellati == []  # e dal telefono non si cancella niente
+
+
+def test_il_flusso_diretto_rifiuta_di_sovrascrivere(tmp_path):
+    from fotofacile.core.transfer import download_file_stream
+
+    destinazione = tmp_path / "a.jpg"
+    destinazione.write_bytes(b"ORIGINALE")
+    with pytest.raises(FotoFacileError) as errore:
+        download_file_stream(_TelefonoFinto({"/r": b"NUOVO"}), "S1", "/r", destinazione)
+    assert errore.value.ritentabile is False and "già un file" in errore.value.message
+    assert destinazione.read_bytes() == b"ORIGINALE"
+    assert list(tmp_path.iterdir()) == [destinazione]  # il .part è stato tolto
+
+
+def test_il_telefono_demo_a_passi_rifiuta_di_sovrascrivere(tmp_path):
+    destinazione = tmp_path / "a.jpg"
+    destinazione.write_bytes(b"ORIGINALE")
+    backend = DemoAdbBackend(file_count=1)
+    demo = AdbDemoAPassi(backend, intervallo=0.0, cartella_lavoro=tmp_path / "lavoro")
+    remoto = next(iter(backend._files))
+    with pytest.raises(FotoFacileError) as errore:
+        esegui_fino_alla_fine(demo.copia("DEMO", remoto, destinazione))
+    assert errore.value.ritentabile is False
+    assert destinazione.read_bytes() == b"ORIGINALE"
+    assert not list(tmp_path.glob("*.part"))
+
+
+def test_la_copia_diretta_con_aiutante_rifiuta_di_sovrascrivere(tmp_path):
+    from fotofacile.core.trasporto_linux import TrasportoMtpLinux
+
+    aiutante = script(tmp_path, "aiutante", "printf 'NUOVO'\n")
+
+    class LinuxFinto(TrasportoMtpLinux):
+        def base(self) -> list[str]:
+            return [aiutante]
+
+    destinazione = tmp_path / "foto" / "a.jpg"
+    destinazione.parent.mkdir()
+    destinazione.write_bytes(b"ORIGINALE")
+    with pytest.raises(FotoFacileError) as errore:
+        esegui_fino_alla_fine(
+            LinuxFinto(intervallo=0.0).copia("S1", "/DCIM/a.jpg", destinazione, remoto_dimensione=5)
+        )
+    assert errore.value.ritentabile is False and "già un file" in errore.value.message
+    assert destinazione.read_bytes() == b"ORIGINALE"
+    assert [p.name for p in destinazione.parent.iterdir()] == ["a.jpg"]

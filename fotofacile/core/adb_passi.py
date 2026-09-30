@@ -44,6 +44,24 @@ def percorso_temporaneo(destinazione: Path) -> Path:
     return destinazione.with_name(f"{destinazione.name}.{os.getpid()}.part")
 
 
+def rifiuta_se_esiste(destinazione: Path) -> None:
+    """Ultima difesa: la copia di una foto non sostituisce **mai** un file già presente.
+
+    Il piano sceglie nomi liberi; se nonostante questo ``destinazione`` esiste (un file
+    comparso nel frattempo, un nome mal calcolato), ``os.replace`` lo cancellerebbe in
+    silenzio. Si solleva invece un errore **non ritentabile**: il file finisce fra quelli non
+    copiati e, con «cancella dal telefono», la foto resta sul telefono.
+    """
+    if destinazione.exists():
+        raise FotoFacileError(
+            f"Non copio {destinazione.name}: nella cartella c'è già un file con lo stesso nome.",
+            hint=(
+                "Il file che c'era non è stato toccato e la foto è ancora sul telefono. "
+                "Rinomina o sposta quello nella cartella e riprova."
+            ),
+        )
+
+
 def _dimensione_prevista(dimensione: int | None) -> int | None:
     """Quanti byte serviranno, se si sa: serve a non chiedere spazio a caso."""
     return dimensione if dimensione and dimensione > 0 else None
@@ -276,6 +294,7 @@ class AdbAPassi:
             scritti = self._dimensione(temporaneo, scritti, on_scritti)
             _esito_di_copia(processo, destinazione)
             self._rallenta_scrittura(temporaneo)
+            rifiuta_se_esiste(destinazione)
             os.replace(temporaneo, destinazione)
             completato = True
         except Annullato:
@@ -430,6 +449,7 @@ class AdbDemoAPassi:
                         yield self.intervallo
                 uscita.flush()
                 os.fsync(uscita.fileno())
+            rifiuta_se_esiste(destinazione)
             os.replace(temporaneo, destinazione)
             completato = True
         except Annullato:

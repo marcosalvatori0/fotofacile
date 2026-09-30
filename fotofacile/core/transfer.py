@@ -23,7 +23,7 @@ from typing import Callable, Generator
 from .adb import AdbBackend
 from .errors import FotoFacileError, traduci_errore_file
 from .history import History
-from .adb_passi import percorso_temporaneo
+from .adb_passi import percorso_temporaneo, rifiuta_se_esiste
 from .conversione import converti_webp, e_webp
 from .ops import Annullato, esegui_fino_alla_fine
 from .planner import TransferOptions, TransferPlan
@@ -156,6 +156,7 @@ def download_file_stream(
                     on_bytes(len(blocco), blocco)
             uscita.flush()
             os.fsync(uscita.fileno())
+        rifiuta_se_esiste(destinazione)
         os.replace(temporaneo, destinazione)
     except Annullato:
         _rimuovi(temporaneo)

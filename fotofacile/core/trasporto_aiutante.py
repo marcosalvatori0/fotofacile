@@ -29,7 +29,13 @@ import sys
 from pathlib import Path
 from typing import Callable, Generator, Sequence
 
-from .adb_passi import _controlla_spazio, _dimensione_prevista, _esito_di_copia, percorso_temporaneo
+from .adb_passi import (
+    _controlla_spazio,
+    _dimensione_prevista,
+    _esito_di_copia,
+    percorso_temporaneo,
+    rifiuta_se_esiste,
+)
 from .devices import DeviceInfo
 from .errors import FotoFacileError, traduci_errore_file
 from .ops import Annullato, ProcessoEsterno
@@ -282,6 +288,7 @@ class TrasportoAiutante:
             scritti = _dimensione(temporaneo, scritti, on_scritti)
             _esito_di_copia(processo, destinazione)
             _rallenta_scrittura(temporaneo)
+            rifiuta_se_esiste(destinazione)
             os.replace(temporaneo, destinazione)
             completato = True
         except OSError as errore:
