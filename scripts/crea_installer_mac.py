@@ -28,8 +28,8 @@ LEGGIMI = """FotoFacile — installazione su macOS
    «Apri» (il programma non è firmato: macOS chiede conferma solo la prima volta).
 3. Collega il telefono Android con il cavo USB, sblocca lo schermo e segui i quattro passi.
 
-Se il telefono non viene riconosciuto: nel programma premi «Come si attiva il Debug USB?» e
-segui i passaggi per la tua marca. Prova anche un altro cavo USB (alcuni ricaricano soltanto).
+Se il telefono non viene riconosciuto: sul telefono scegli «Trasferimento file» (tocca «Consenti» se lo chiede) e nel
+programma premi «Serve aiuto?». Prova anche un altro cavo USB (alcuni ricaricano soltanto).
 
 Diagnosi (dal Terminale):
     /Applications/FotoFacile.app/Contents/MacOS/FotoFacile doctor

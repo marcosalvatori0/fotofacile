@@ -105,8 +105,7 @@ il programma. I file arrivano **direttamente nella cartella scelta**.
   7. `SHA256SUMS.txt` esce solo dal job Windows (il `.dmg` non ha checksum); l'upload usa `if: always()` (pubblica anche artefatti parziali,
      solo come artefatto del run, non come Release); nessun controllo che il tag coincida con `__version__`; `doctor` sul runner
      può rallentare cercando `adb`.
-  Dopo la pubblicazione: controllare che il `.dmg` non citi più «Come si attiva il Debug USB?» (`scripts/crea_installer_mac.py`,
-  il suo LEGGIMI interno è ancora vecchio: **da correggere**) e unire `revisione-v0.2` in `main`.
+  Dopo la pubblicazione: unire `revisione-v0.2` in `main` (il LEGGIMI interno del `.dmg` è già stato corretto: non cita più «Come si attiva il Debug USB?»).
 - [ ] **(b) D6 — prove manuali su un Windows vero** (Marco): installare il `Setup.exe`, avviare, disinstallare; in particolare
   **D17** (foto riconosciute con le estensioni dei file nascoste in Esplora risorse), il collegamento **«Diagnosi»** del menu Start
   (deve aprire il Blocco note con il rapporto), l'avviso blu **SmartScreen** «Windows ha protetto il PC» → «Ulteriori informazioni»
