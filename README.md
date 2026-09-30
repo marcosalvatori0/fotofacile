@@ -147,21 +147,20 @@ Ogni versione pubblicata ha gli installer costruiti automaticamente su computer 
 
 Gli installer li costruisce la pipeline in `.github/workflows/build-installers.yml` (runner macOS e Windows) e prima di pubblicarli esegue l'autocollaudo del programma.
 
-## Cartella pronta per Windows
+## Windows: un solo file da scaricare
 
-`python3 scripts/crea_pacchetto_windows.py` crea sulla Scrivania la cartella
-**«FotoFacile per Windows»**, con dentro il programma completo, due file da doppio clic e le
-istruzioni (`LEGGIMI - Windows.txt`):
+Su Windows si scarica `FotoFacile-Setup-<versione>.exe` dalla pagina delle release, si fa
+doppio clic e si preme «Avanti» fino alla fine: procedura guidata in italiano, senza
+permessi di amministratore e senza Python da installare. Il programma finisce nel profilo
+dell'utente, con i collegamenti sul Desktop e nel menu Start.
 
-| File | Cosa fa |
-|---|---|
-| `Avvia FotoFacile.bat` | fa partire il programma subito; se Python manca lo installa (winget) o spiega come fare |
-| `Crea l'eseguibile per Windows.bat` | crea `dist\FotoFacile\FotoFacile.exe` con PyInstaller e lo verifica subito con l'autocollaudo |
+La prima volta Windows può mostrare l'avviso blu **«Windows ha protetto il PC»** (l'installer
+non è firmato): è normale, basta premere **«Ulteriori informazioni» → «Esegui comunque»**.
 
-**Perché una cartella e non un `.exe` già pronto:** un eseguibile Windows si può creare e
-collaudare **solo su Windows** (PyInstaller non compila da un sistema per un altro). Un `.exe`
-prodotto su macOS non sarebbe verificabile, quindi non è stato incluso: la cartella permette di
-ottenerlo con un doppio clic, e di usare il programma anche senza creare nulla.
+Chi non vuole installare nulla scarica `FotoFacile-portable.zip`, lo scompatta e apre
+`FotoFacile.exe`. Per il collegamento «Diagnosi» del menu Start (o `FotoFacile.exe doctor`)
+il programma, non avendo una finestra nera, scrive il rapporto in `.fotofacile\diagnosi.txt`
+nella cartella personale e lo apre nel Blocco note.
 
 ## Collaudo automatico (per chi vuole verificare)
 

@@ -4,7 +4,7 @@ FotoFacile - installazione
 FotoFacile copia le foto e i video dal telefono Android al computer con una procedura
 guidata in italiano: niente gestore file, niente cartelle difficili da trovare.
 
-In questa cartella trovi gli installatori per i due sistemi:
+Come si installa:
 
   macOS    ->  FotoFacile-<versione>.dmg
                Apri il file: si apre una finestra con l'icona del programma e la cartella
@@ -12,17 +12,16 @@ In questa cartella trovi gli installatori per i due sistemi:
                La prima volta, in Applicazioni, fai clic destro sull'icona e scegli «Apri»
                (il programma non e' firmato: macOS chiede conferma solo la prima volta).
 
-  Windows  ->  cartella «Windows»
-               - «Installa FotoFacile.bat»   installa il programma nel tuo profilo utente,
-                 crea il collegamento sul Desktop e nel menu Start, e registra la
-                 disinstallazione in Impostazioni -> App.
-               - «Avvia FotoFacile.bat»      usa il programma senza installare nulla.
-               - «Crea l'eseguibile per Windows.bat»  crea un unico FotoFacile.exe
-                 (da regalare: su quel computer non serve installare nulla).
-
-Ogni installatore ha accanto il proprio file di istruzioni dettagliate:
-  macOS    ->  LEGGIMI - macOS.txt (dentro il disco di installazione)
-  Windows  ->  Windows\LEGGIMI - Windows.txt
+  Windows  ->  FotoFacile-Setup-<versione>.exe
+               Scarica il file, fai doppio clic e premi «Avanti» fino alla fine.
+               Non servono i permessi di amministratore: il programma si installa nel tuo
+               profilo utente, crea il collegamento sul Desktop e nel menu Start, e la
+               disinstallazione e' in Impostazioni -> App.
+               La prima volta Windows puo' mostrare un avviso blu, «Windows ha protetto il
+               PC» (il programma non e' firmato). E' normale: premi «Ulteriori informazioni»
+               e poi «Esegui comunque».
+               Se preferisci non installare nulla: FotoFacile-portable.zip, da scompattare
+               e usare (apri FotoFacile.exe).
 
 
 PRIMA VOLTA: collega il telefono (non serve il Debug USB)
@@ -45,9 +44,11 @@ DIAGNOSI, SE QUALCOSA NON FUNZIONA
 ----------------------------------
   macOS    /Applications/FotoFacile.app/Contents/MacOS/FotoFacile doctor
            /Applications/FotoFacile.app/Contents/MacOS/FotoFacile --selftest
-  Windows  dal prompt dei comandi:
-           "%LOCALAPPDATA%\Programs\FotoFacile\FotoFacile.exe" doctor
-           "%LOCALAPPDATA%\Programs\FotoFacile\FotoFacile.exe" --selftest
+  Windows  menu Start -> «FotoFacile - Diagnosi»: si apre nel Blocco note un rapporto da
+           mandare a chi ti aiuta (e' salvato in %USERPROFILE%\.fotofacile\diagnosi.txt).
+           Il programma non ha finestra nera, quindi anche dal prompt dei comandi i comandi
+           «FotoFacile.exe doctor» e «FotoFacile.exe --selftest» scrivono su file
+           (diagnosi.txt e selftest.txt, nella stessa cartella).
 
 Il registro di avvio (dice sempre perche' il programma non si e' aperto):
   macOS    ~/.fotofacile/avvio.log

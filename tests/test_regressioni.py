@@ -404,20 +404,12 @@ def test_gli_aiutanti_hanno_un_nome_valido():
 def test_gli_script_powershell_hanno_il_bom():
     """Windows PowerShell 5.1 legge i file `.ps1` senza BOM con la codifica ANSI: gli accenti
     delle frasi italiane diventerebbero illeggibili e alcuni confronti smetterebbero di
-    funzionare. Il BOM serve; a cmd.exe non dà fastidio perché quello legge i `.bat`."""
+    funzionare. Il BOM serve (oggi il solo `.ps1` del progetto è l'aiutante `wpd_win.ps1`)."""
     radice = Path(__file__).resolve().parent.parent
     for percorso in radice.rglob("*.ps1"):
         if ".venv" in percorso.parts:
             continue
         assert percorso.read_bytes().startswith(b"\xef\xbb\xbf"), f"manca il BOM: {percorso}"
-
-
-def test_i_bat_generati_non_hanno_il_bom():
-    """Al contrario i `.bat` non devono averlo: cmd.exe non lo salta e la prima riga
-    diventerebbe `'ï»¿@echo' non riconosciuto`."""
-    radice = Path(__file__).resolve().parent.parent
-    for percorso in radice.rglob("*.bat"):
-        assert not percorso.read_bytes().startswith(b"\xef\xbb\xbf"), f"BOM di troppo: {percorso}"
 
 
 # ── non si riprova all'infinito lo stesso collegamento ───────────────────

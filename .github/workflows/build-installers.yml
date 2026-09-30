@@ -59,7 +59,7 @@ jobs:
           dist\FotoFacile\FotoFacile.exe --selftest
         timeout-minutes: 5
       - name: Versione portatile (zip)
-        run: python -c "import scripts.crea_pacchetto_windows as p, pathlib, shutil; shutil.make_archive('dist/FotoFacile-portable', 'zip', 'dist', 'FotoFacile')"
+        run: python -c "import shutil; shutil.make_archive('dist/FotoFacile-portable', 'zip', 'dist', 'FotoFacile')"
       - name: Installa Inno Setup
         run: choco install innosetup --no-progress -y
       - name: Crea il programma di installazione (.exe)

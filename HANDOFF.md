@@ -74,7 +74,7 @@ ricreare le cartelle del telefono se serve.
   0 `.part` residui, **nessuna sottocartella creata**.
 - [x] **Aiutante macOS avviato davvero**, dal percorso reale usato dall'app e da una cartella
   estranea: `{"dispositivi": []}` con uscita 0.
-- [x] **Pacchetto Windows ricreato sulla Scrivania**: `~/Desktop/FotoFacile per Windows/`
+- [x] **(v0.1, superato in v0.2: sostituito dal `Setup.exe`, task D3)** Pacchetto Windows ricreato sulla Scrivania: `~/Desktop/FotoFacile per Windows/`
   (51 file, 0,39 MB) — `Avvia FotoFacile.bat`, `Crea l'eseguibile per Windows.bat`,
   `Installa FotoFacile.bat`, `LEGGIMI - Windows.txt`, tutto `fotofacile/` (compreso
   `aiutanti/wpd_win.ps1`), `requirements.txt`.
@@ -140,10 +140,10 @@ ricreare le cartelle del telefono se serve.
     codice dava un falso errore. Ora su Windows non si controlla.
 12. **Cross-compilare l'eseguibile Windows da macOS**: impossibile (PyInstaller non fa
     cross-compilazione; niente Wine). Un `.exe` così prodotto sarebbe **non verificabile**.
-    **Soluzione**: la cartella con i `.bat` + la pipeline GitHub su runner Windows vero.
-13. **Caret di `cmd` dentro gli snippet Python dei `.bat`.** `sys.version_info ^>= (3, 9)`: il caret
+    **Soluzione**: la pipeline GitHub su runner Windows vero (dalla v0.2 produce il `Setup.exe`; la cartella con i `.bat` non esiste più).
+13. **(storico: i `.bat` sono stati eliminati in v0.2)** **Caret di `cmd` dentro gli snippet Python dei `.bat`.** `sys.version_info ^>= (3, 9)`: il caret
     arriva **letteralmente a Python** → `SyntaxError` → il controllo di Python falliva sempre.
-    **Soluzione**: niente caret, e `tests/test_installer_pacchetti.py` che **estrae e compila** ogni
+    **Soluzione** (poi superata dall'eliminazione dei `.bat`): niente caret e un test che compilava ogni
     snippet `-c "..."` degli script.
 14. **Workflow GitHub che non parte al primo tag.** Il tag era stato pubblicato pochi secondi dopo
     il branch. **Soluzione**: ripubblicare il tag.
@@ -159,8 +159,8 @@ ricreare le cartelle del telefono se serve.
 18. **`.ps1` senza BOM.** Sembrava una buona idea («il BOM rompe cmd.exe»), ma è **sbagliato**:
     cmd.exe non esegue i `.ps1`. Windows PowerShell 5.1 legge i file senza BOM con la codifica
     ANSI: gli accenti delle frasi italiane diventano illeggibili e `$tipo -eq "Dispositivo
-    portatile"` non trova più nulla su Windows italiano. **Soluzione**: i `.ps1` **hanno** il BOM,
-    i `.bat` **no**. C'è un test che verifica entrambe le cose.
+    portatile"` non trova più nulla su Windows italiano. **Soluzione**: i `.ps1` **hanno** il BOM
+    (oggi resta solo `wpd_win.ps1`; i `.bat` non esistono più). C'è un test che lo verifica.
 19. **Riprovare lo stesso collegamento dopo un errore.** Il confronto `self.app.remote is not
     precedente` era sempre vero (gli oggetti sono ricostruiti a ogni tentativo) → ciclo infinito
     di tentativi e messaggio d'errore mai mostrato. **Soluzione**: `App._gia_provati`, un insieme
@@ -188,7 +188,7 @@ ricreare le cartelle del telefono se serve.
 | `FotoFacileError(message, hint)` ovunque | Messaggi umani + azione suggerita, mai stack trace |
 | Il consiglio generico **più** il testo d'errore del comando | Quest'ultimo è spesso la spiegazione più precisa («il telefono è bloccato») |
 | Errori non ritentabili non vengono ritentati | Non ricopiare 3 volte un file su disco pieno |
-| Pacchetto Windows = cartella con `.bat` | Unico modo onesto di ottenere un `.exe` verificato (su Windows, con un doppio clic) |
+| Windows = `Setup.exe` (Inno Setup) costruito dalla pipeline | Unico modo onesto di ottenere un `.exe` verificato (su un runner Windows vero); niente `.bat` da lanciare a mano |
 
 ---
 
@@ -233,7 +233,6 @@ asset/icone, `.github/workflows`), i nuovi `requirements.txt`, `docs/PIANO-REVIS
 | `tests/test_trasporto.py` | Scelta automatica, contratto degli aiutanti, WPD/Linux simulati |
 | `tests/conftest.py` | Finestra condivisa + `azzera()`: capire questo file evita crash e test fragili |
 | `tests/pilota_app.py` | Collaudo end-to-end dell'app vera (`FF_DEST`, `FF_ESITO`) |
-| `scripts/crea_pacchetto_windows.py` | Crea `~/Desktop/FotoFacile per Windows` (sorgente + `.bat` + `.ps1` + LEGGIMI); ha `--force` e controlli prima di cancellare |
 | `scripts/build_app.py` | Build multipiattaforma + icona + `--add-data` degli aiutanti + PyObjC su macOS |
 | `.github/workflows/build-installers.yml` | Installer macOS (dmg) + Windows (Inno Setup) + Release |
 
@@ -305,9 +304,6 @@ class App(tk.Tk):
 def tema_testo(testo: tk.Text) -> None           # sfondo E testo E cursore E selezione
 def tema_tela(tela: tk.Canvas) -> None
 def tema_finestra(finestra: tk.Misc) -> None
-
-# scripts/crea_pacchetto_windows.py
-def crea_pacchetto(destinazione: Path | None = None, forza: bool = False) -> Path
 ```
 
 Stato condiviso fra le pagine: `app.device`, `app.media_files`, `app.options`, `app.results`,
@@ -315,27 +311,13 @@ Stato condiviso fra le pagine: `app.device`, `app.media_files`, `app.options`, `
 
 ---
 
-## Setup per Windows (pronto sulla Scrivania)
+## Setup per Windows
 
-Cartella: **`~/Desktop/FotoFacile per Windows/`** (51 file, 0,39 MB). Ricreabile con:
-
-```bash
-.venv/bin/python scripts/crea_pacchetto_windows.py            # oppure --force per sovrascrivere
-```
-
-Contenuto e uso sul PC Windows:
-
-| File | Cosa fa |
-|---|---|
-| `Avvia FotoFacile.bat` | Avvia subito il programma; se manca Python lo installa con winget (o spiega come fare) |
-| `Crea l'eseguibile per Windows.bat` | Crea `dist\FotoFacile\FotoFacile.exe` con PyInstaller e lo verifica con `--selftest` |
-| `Installa FotoFacile.bat` | Installa per l'utente (collegamenti su Desktop e Start Menu) |
-| `LEGGIMI - Windows.txt` | Istruzioni in italiano, **aggiornate**: nessun Debug USB da attivare |
-| `fotofacile/` | Sorgente completo, **compreso `aiutanti/wpd_win.ps1`** (senza di esso il collegamento diretto non funziona) |
-| `requirements.txt` | PyObjC è solo per macOS: su Windows non serve niente |
-
-Il pacchetto contiene anche `installer/windows/` (`InstallaFotoFacile.ps1`,
-`DisinstallaFotoFacile.ps1`, `FotoFacile.iss`) per la pipeline Inno Setup.
+L'utente scarica `FotoFacile-Setup-<versione>.exe` (Inno Setup, `installer/windows/FotoFacile.iss`,
+costruito dalla pipeline GitHub), fa doppio clic e preme «Avanti». Chi non vuole installare nulla
+usa `FotoFacile-portable.zip`. Non ci sono più `.bat`/`.ps1` d'installazione né la cartella
+«FotoFacile per Windows» (task D3). `fotofacile/aiutanti/wpd_win.ps1` **resta**: è l'aiutante
+che parla con il telefono, e viaggia con il programma (`build_app.py --add-data`).
 
 ---
 
@@ -380,13 +362,8 @@ Il pacchetto contiene anche `installer/windows/` (`InstallaFotoFacile.ps1`,
    sleep 3; screencapture -x /tmp/schermo.png
    ```
 
-6. **Cartella Windows**
-   ```bash
-   .venv/bin/python scripts/crea_pacchetto_windows.py
-   ls "$HOME/Desktop/FotoFacile per Windows"
-   ```
-   - Atteso: `Avvia FotoFacile.bat`, `Crea l'eseguibile per Windows.bat`, `LEGGIMI - Windows.txt`,
-     `fotofacile/aiutanti/wpd_win.ps1`. Test: `.venv/bin/python -m pytest tests/test_pacchetto_windows.py -q`.
+6. **Windows**: il `Setup.exe` si costruisce solo dalla pipeline (`.github/workflows/build-installers.yml`).
+   Test dell'aiutante e dell'installer: `.venv/bin/python -m pytest tests/test_aiutante_windows.py tests/test_installer_pacchetti.py -q`.
 
 7. **Build macOS**: `pip install -r requirements.txt`, poi `python3 scripts/build_app.py --verify` →
    `dist/FotoFacile.app`; l'autocollaudo deve rispondere `{"ok": true}`.
@@ -409,8 +386,7 @@ Il pacchetto contiene anche `installer/windows/` (`InstallaFotoFacile.ps1`,
 - Graphify: `uv tool install graphifyy` (interprete in `graphify-out/.graphify_python`).
 - Grafica da automazione: `launchctl asuser $(id -u)` + `PYTHONPATH` esplicito + `screencapture`.
 - Nessuna chiave API.
-- Windows: nessun prerequisito sul PC di destinazione se si usa l'eseguibile; per crearlo serve
-  Python sul PC dove si lancia il `.bat` (che lo installa da sé con winget).
+- Windows: nessun prerequisito sul PC di destinazione (il `Setup.exe` contiene già tutto).
 
 ---
 
@@ -455,10 +431,9 @@ Il pacchetto contiene anche `installer/windows/` (`InstallaFotoFacile.ps1`,
   della copia su stdout), messaggi per l'utente su stderr, codici 0/2/3. Se cambia, vanno aggiornati
   **tutti e tre** gli aiutanti e `core/trasporto_aiutante.py`.
 - **Codifica degli script PowerShell**: i `.ps1` **devono avere** il BOM UTF-8 (PowerShell 5.1 legge
-  senza BOM come ANSI: accenti illeggibili e confronti di testo rotti); i `.bat` **non devono**
-  averlo (cmd.exe non lo salta: `'ï»¿@echo' non riconosciuto`). C'è un test per entrambi.
-- **`wpd_win.ps1` deve viaggiare con il programma**: è incluso da `build_app.py` (`--add-data`) e da
-  `crea_pacchetto_windows.py`. Senza, il collegamento diretto di Windows non funziona.
+  senza BOM come ANSI: accenti illeggibili e confronti di testo rotti); eventuali
+  `.bat` **non devono** averlo (cmd.exe non lo salta: `'ï»¿@echo' non riconosciuto`; oggi non ce ne sono).
+- **`wpd_win.ps1` deve viaggiare con il programma**: è incluso da `build_app.py` (`--add-data`). Senza, il collegamento diretto di Windows non funziona.
 - **Un solo modo di rilanciare sé stessi**: usare `osutil.comando_se_stesso()`. Il bug di una
   cartella in `comando_aiutante()` ha reso morto tutto il collegamento diretto dal sorgente.
 - **Non riprovare lo stesso collegamento**: `App._gia_provati` esiste per questo. Un confronto fra

@@ -142,7 +142,7 @@ def ripulisci_quarantena(pacchetto: Path) -> None:
 
 
 def crea_scorciatoia() -> Path | None:
-    """Crea «Avvia FotoFacile.command» (macOS/Linux): su Windows serve il file .bat."""
+    """Crea «Avvia FotoFacile.command» (macOS/Linux): su Windows c'è il Setup.exe."""
     if sys.platform == "win32":
         return None
     percorso = RADICE / "Avvia FotoFacile.command"

@@ -1,123 +1,28 @@
-"""Verifica degli installer (macOS .dmg e Windows) e dei file `.bat` per Windows.
+"""Verifica degli installer: il `Setup.exe` di Windows (Inno Setup) e il `.dmg` di macOS.
 
-Include il test che avrebbe intercettato il difetto vero: uno snippet Python scritto dentro i
-`.bat` conteneva `^>=` (escape di `cmd` finito dentro il codice Python) → il controllo di Python
-falliva sempre e il file diceva «Python non è installato» anche quando c'era.
+Per Windows l'unico installatore è il `Setup.exe`: niente `.bat` né `.ps1` da lanciare a
+mano (D3). L'aiutante `wpd_win.ps1`, che parla con il telefono, è un'altra cosa e resta:
+lo controlla `tests/test_aiutante_windows.py`.
 """
 
 from __future__ import annotations
 
-import re
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
-from scripts.crea_pacchetto_windows import NOME_CARTELLA, crea_pacchetto
-
 RADICE = Path(__file__).resolve().parent.parent
-SNIPPET = re.compile(r'-c\s+"([^"]+)"')
 
 
-@pytest.fixture(scope="module")
-def pacchetto(tmp_path_factory):
-    destinazione = tmp_path_factory.mktemp("pacchetto") / NOME_CARTELLA
-    crea_pacchetto(destinazione)
-    return destinazione
-
-
-def _bat(pacchetto: Path) -> list[Path]:
-    return sorted(pacchetto.glob("*.bat"))
-
-
-def test_gli_snippet_python_dentro_i_bat_sono_validi(pacchetto):
-    """Ogni frammento Python scritto nei .bat deve essere compilabile davvero."""
-    trovati = 0
-    for percorso in _bat(pacchetto):
-        testo = percorso.read_text(encoding="utf-8")
-        for frammento in SNIPPET.findall(testo):
-            trovati += 1
-            try:
-                compile(frammento, str(percorso.name), "exec")
-            except SyntaxError as errore:  # pragma: no cover - solo se si rompe di nuovo
-                raise AssertionError(
-                    f"{percorso.name}: lo snippet Python non è valido ({errore}): {frammento!r}"
-                ) from errore
-    assert trovati >= 4, "i .bat devono controllare Python prima di usarlo"
-
-
-def test_nei_bat_non_ci_sono_caret_dentro_il_codice_python(pacchetto):
-    """Il caret serve a cmd, ma dentro il codice Python lo rompe: non deve comparire."""
-    for percorso in _bat(pacchetto):
-        for frammento in SNIPPET.findall(percorso.read_text(encoding="utf-8")):
-            assert "^" not in frammento, f"{percorso.name}: caret dentro lo snippet: {frammento!r}"
-
-
-def test_gli_snippet_python_dentro_gli_script_powershell_sono_validi():
-    """Anche i frammenti Python incorporati nei .ps1 devono essere compilabili davvero."""
-    trovati = 0
-    for percorso in sorted((RADICE / "installer" / "windows").glob("*.ps1")):
-        for frammento in SNIPPET.findall(percorso.read_text(encoding="utf-8")):
-            trovati += 1
-            try:
-                compile(frammento, percorso.name, "exec")
-            except SyntaxError as errore:  # pragma: no cover - solo se si rompe di nuovo
-                raise AssertionError(
-                    f"{percorso.name}: lo snippet Python non è valido ({errore}): {frammento!r}"
-                ) from errore
-            assert "^" not in frammento, f"{percorso.name}: caret dentro lo snippet: {frammento!r}"
-    assert trovati >= 1, "l'installer deve verificare Python prima di usarlo"
-
-
-def test_il_controllo_di_python_negli_script_powershell_non_aggiunge_argomenti_fantasma():
-    """PowerShell conta all'indietro: per un array di un solo elemento $a[1..0] restituisce
-    gli indici 1 e 0. Il probe riceveva così un argomento in più prima di -c e falliva
-    sempre: «python» e «python3» non venivano mai trovati."""
-    ps1 = (RADICE / "installer/windows/InstallaFotoFacile.ps1").read_text(encoding="utf-8")
-    assert "Select-Object -Skip 1" in ps1, "gli argomenti veri vanno passati con lo splat"
-    assert "[1..($candidato.Count - 1)]" not in ps1, "la sintassi [1..0] aggiunge argomenti fantasma"
-
-
-def test_i_bat_cercano_python_in_tutti_i_modi_utili(pacchetto):
-    testo = (pacchetto / "Avvia FotoFacile.bat").read_text(encoding="utf-8")
-    assert "py -3" in testo, "manca il launcher ufficiale"
-    assert "Programs\\Python" in testo and "ProgramFiles" in testo, "mancano i percorsi tipici"
-    assert "for %%C in (python python3)" in testo, "manca la ricerca nel PATH"
-    assert "py -0p" in testo, "manca l'elenco delle versioni del launcher"
-    assert "EnableDelayedExpansion" in testo
-    assert ":diagnostica" in testo, "se non trova Python deve dire cosa ha visto"
-
-
-def test_se_python_non_c_e_lo_dice_e_propone_le_alternative(pacchetto):
-    testo = (pacchetto / "Avvia FotoFacile.bat").read_text(encoding="utf-8")
-    assert "winget install -e --id Python.Python.3.13" in testo
-    assert "Microsoft Store" in testo and "python.org" in testo
-    assert "Installa FotoFacile.bat" in testo
-
-
-def test_installer_windows_installa_e_registra_la_disinstallazione(pacchetto):
-    testo = (pacchetto / "Installa FotoFacile.bat").read_text(encoding="utf-8")
-    assert "InstallaFotoFacile.ps1" in testo
-    assert "ExecutionPolicy Bypass" in testo
-    ps1 = (RADICE / "installer/windows/InstallaFotoFacile.ps1").read_text(encoding="utf-8")
-    assert "$env:LOCALAPPDATA" in ps1, "installazione per utente, senza amministratore"
-    assert (
-        "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall" in ps1
-    ), "manca la voce in «App e funzionalità»"
-    assert r"Uninstall\$Nome" in ps1
-    assert "UninstallString" in ps1 and "DisplayVersion" in ps1
-    assert "CreateShortcut" in ps1 and "Start Menu" in ps1 and "Desktop" in ps1
-    disinstalla = (RADICE / "installer/windows/DisinstallaFotoFacile.ps1").read_text(encoding="utf-8")
-    assert "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall" in disinstalla
-    assert "fotofacile-disinstallazione" in disinstalla, "deve potersi cancellare da sola"
-
-
-def test_installer_windows_funziona_con_o_senza_eseguibile():
-    ps1 = (RADICE / "installer/windows/InstallaFotoFacile.ps1").read_text(encoding="utf-8")
-    assert "Trova-Eseguibile" in ps1 and "Trova-Python" in ps1
-    assert "modalitaSorgente" in ps1
-    assert "dist\\FotoFacile" in ps1
+def test_windows_ha_solo_il_setup_e_nessuno_script_da_lanciare_a_mano():
+    """Nel repository non restano `.bat`/`.ps1` d'installazione né lo script del pacchetto."""
+    cartella = RADICE / "installer" / "windows"
+    assert not list(cartella.glob("*.bat")), "i .bat d'installazione non ci sono più"
+    assert not list(cartella.glob("*.ps1")), "i .ps1 d'installazione non ci sono più"
+    assert (cartella / "FotoFacile.iss").is_file()
+    assert not (RADICE / "scripts" / "crea_pacchetto_windows.py").exists()
 
 
 def test_script_inno_setup_pronto_per_la_pipeline():
@@ -127,6 +32,13 @@ def test_script_inno_setup_pronto_per_la_pipeline():
     assert "UninstallDisplayIcon" in iss
     assert "CartellaSorgente" in iss and "dist\\FotoFacile" in iss
     assert "Italian.isl" in iss, "l'installazione deve essere in italiano"
+
+
+def test_lo_zip_portatile_non_importa_lo_script_del_pacchetto():
+    """Il passo «Versione portatile (zip)» usava `import scripts.crea_pacchetto_windows`."""
+    flusso = (RADICE / ".github/workflows/build-installers.yml").read_text(encoding="utf-8")
+    assert "crea_pacchetto_windows" not in flusso
+    assert "shutil.make_archive('dist/FotoFacile-portable', 'zip', 'dist', 'FotoFacile')" in flusso
 
 
 def test_pipeline_github_costruisce_entrambi_gli_installer():
