@@ -9,3 +9,6 @@
 # Su Windows e Linux non serve niente di tutto questo: il collegamento diretto usa
 # rispettivamente PowerShell (di sistema) e gio/gvfs (presente sui desktop).
 pyobjc-framework-ImageCaptureCore>=10 ; sys_platform == "darwin"
+
+# Opzionale: senza Pillow il programma funziona, ma non può trasformare le immagini WebP in JPG.
+pillow>=10
