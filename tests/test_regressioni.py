@@ -1192,3 +1192,34 @@ def test_d19_linux_interrotto_non_lascia_comandi_orfani(tmp_path):
         aiutante.stderr.close()
         if pid and _processo_vivo(pid):
             os.kill(pid, signal.SIGKILL)
+
+
+# ── D20 ────────────────────────────────────────────────────────────────────
+# Prima: i guai previsti dell'aiutante macOS (file sparito, sessione che non si apre, file
+# incompleto, argomento mancante) sono frasi italiane sollevate come OSError/ValueError, ma
+# venivano stampate col nome della classe: la persona leggeva nel «dettaglio» dell'errore
+# «OSError: Sul telefono non trovo più il file …». Gli altri aiutanti scrivono solo la frase.
+def test_d20_l_aiutante_macos_scrive_frasi_senza_nomi_tecnici(monkeypatch, capsys):
+    from fotofacile.aiutanti import ptp_mac
+
+    monkeypatch.setattr(ptp_mac, "_componenti", lambda: (None,) * 6)
+    assert ptp_mac.main(["copia"]) == 2
+    assert capsys.readouterr().err == "Manca il file da copiare (--percorso).\n"
+
+    monkeypatch.setattr(ptp_mac, "_apri_telefono", lambda voluto="": object())
+    monkeypatch.setattr(ptp_mac, "trova_file", lambda telefono, percorso, ic: None)
+    monkeypatch.setattr(ptp_mac, "chiudi_sessione", lambda telefono: None)
+    assert ptp_mac.main(["cancella", "--percorso", "/DCIM/a.jpg"]) == 2
+    assert capsys.readouterr().err == "Sul telefono non trovo più il file /DCIM/a.jpg.\n"
+
+
+def test_d20_un_guaio_imprevisto_resta_riconoscibile(monkeypatch, capsys):
+    """Guardia: un errore di programmazione continua a dire di che tipo è (serve a noi)."""
+    from fotofacile.aiutanti import ptp_mac
+
+    def rotto(_argomenti):
+        raise KeyError("x")
+
+    monkeypatch.setitem(ptp_mac.COMANDI, "elenca", rotto)
+    assert ptp_mac.main(["elenca"]) == 2
+    assert capsys.readouterr().err.startswith("KeyError")

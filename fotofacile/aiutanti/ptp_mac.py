@@ -546,7 +546,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except NessunTelefono as errore:
         sys.stderr.write(f"{errore}\n")
         return USCITA_NESSUN_TELEFONO
-    except AiutanteNonDisponibile as errore:
+    except (AiutanteNonDisponibile, OSError, ValueError) as errore:
+        # I guai previsti sono già frasi per la persona: il nome della classe («OSError: »)
+        # finirebbe nel dettaglio mostrato dall'app.
         sys.stderr.write(f"{errore}\n")
         return USCITA_ERRORE
     except Exception as errore:  # qualunque guaio va raccontato, non nascosto
