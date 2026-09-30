@@ -103,9 +103,9 @@ python3 fotofacile.py doctor      (Windows: py fotofacile.py doctor)
 
 ## Se il programma non si apre
 
-1. **Modo più semplice**: doppio clic su **`Avvia FotoFacile.command`** nella cartella del
-   progetto (si apre una finestra nera del Terminale: è normale, serve ad avviare il programma).
-   In alternativa, doppio clic su **`dist/FotoFacile.app`**.
+1. **Modo più semplice**: dal Terminale, nella cartella del progetto, `python3 fotofacile.py`
+   (lo script `python3 scripts/build_app.py` crea anche `Avvia FotoFacile.command`, che fa lo stesso con
+   un doppio clic). In alternativa, doppio clic su **`dist/FotoFacile.app`**.
 2. Se compare un avviso di macOS («sviluppatore non verificato»): **clic destro sull'app → Apri**
    (solo la prima volta; il pacchetto non è firmato).
 3. Se non succede nulla, guarda il file **`~/.fotofacile/avvio.log`**: contiene la data e il
@@ -138,7 +138,7 @@ bisogno di niente.
 | Sistema | Cosa viene creato | Come si apre |
 |---|---|---|
 | macOS | `dist/FotoFacile.app` (+ `.zip` da condividere) | doppio clic; la prima volta **clic destro → Apri** (il pacchetto non è firmato) |
-| qualsiasi | `Avvia FotoFacile.command` | doppio clic: avvia la versione da sorgente (serve Python) |
+| macOS/Linux | `Avvia FotoFacile.command` (creato da `build_app.py`, non è nel repository) | doppio clic: avvia la versione da sorgente (serve Python) |
 | Windows | `dist/FotoFacile/FotoFacile.exe` | doppio clic (si può zippare la cartella `dist/FotoFacile`) |
 | Linux | `dist/FotoFacile/FotoFacile` | `./dist/FotoFacile/FotoFacile` |
 

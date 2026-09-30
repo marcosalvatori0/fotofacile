@@ -14,6 +14,12 @@ vero; nessuna operazione con un telefono Android reale su nessun sistema.
 
 ---
 
+**Pulizia del repository (2026-09-30):** tolti `LEGGIMI - Installazione.txt` (le istruzioni sono nel README e nel testo della Release) e
+`Avvia FotoFacile.command` (lo ricrea `python3 scripts/build_app.py`, non è più versionato); cancellati i file generati (`build/`, `dist/`,
+cache). Restano codice, test, `installer/windows/` (serve alla pipeline e ai test), workflow, `docs/`, grafo e questo file.
+**Attenzione:** sul Mac di Marco gira anche l'app Codex sulla stessa cartella e in questa sessione ha cancellato dal disco file
+tracciati (`installer/`, `requirements*.txt`): controllare `git status` all'inizio di ogni sessione e ripristinare con `git checkout -- <file>`.
+
 ## Goal
 
 Permettere a **persone non tecniche** (anche anziane) di copiare foto e video da un telefono Android al computer
