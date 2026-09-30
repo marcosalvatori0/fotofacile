@@ -4,6 +4,7 @@ from fotofacile.core.scanner import (
     DEFAULT_ROOTS,
     FALLBACK_MAX_DEPTH,
     MediaFile,
+    MediaFolder,
     build_scan_command,
     group_folders,
     list_media,
@@ -131,3 +132,11 @@ def test_mediafile_ha_nome_e_cartella():
     assert foto.name == "a.jpg"
     assert foto.parent == "/sdcard/DCIM/Camera"
     assert DEFAULT_ROOTS[0] == "/sdcard/DCIM"
+
+
+def test_mediafolder_nome_e_comprensibile_e_label_resta_tecnica():
+    cartella = MediaFolder(
+        remote_path="/sdcard/DCIM/Camera", label="DCIM/Camera", file_count=3, total_size=10
+    )
+    assert cartella.nome == "Foto e video scattati con il telefono"
+    assert cartella.label == "DCIM/Camera"

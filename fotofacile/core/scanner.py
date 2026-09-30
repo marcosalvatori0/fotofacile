@@ -69,6 +69,13 @@ class MediaFolder:
     file_count: int
     total_size: int
 
+    @property
+    def nome(self) -> str:
+        """Nome comprensibile per la grafica (l'etichetta tecnica resta in ``label``)."""
+        from .nomi_cartelle import nome_amichevole
+
+        return nome_amichevole(self.remote_path)
+
 
 def _kind_for(path: str) -> str | None:
     nome = path.rsplit("/", 1)[-1]
