@@ -693,26 +693,27 @@ def test_d11_errore_del_sistema_durante_la_copia_diretta_da_un_errore_comprensib
     tmp_path, monkeypatch
 ):
     """Stesso difetto più avanti: il blocco principale della copia diretta non traduceva gli
-    OSError (per esempio il disco di sistema pieno quando si prepara il file degli errori),
-    a differenza di `AdbAPassi.copia`."""
+    OSError (per esempio il file a metà che non si riesce a chiudere o a scrivere sul
+    disco), a differenza di `AdbAPassi.copia`."""
     import errno
 
-    from fotofacile.core import ops
+    from fotofacile.core import trasporto_aiutante
     from fotofacile.core.trasporto_aiutante import TrasportoAiutante
 
     class AiutanteFinto(TrasportoAiutante):
         def base(self) -> list[str]:
             return ["/bin/echo"]
 
-    def pieno(*_args, **_kwargs):
+    def pieno(_percorso):
         raise OSError(errno.ENOSPC, "No space left on device")
 
-    monkeypatch.setattr(ops.tempfile, "mkstemp", pieno)
+    monkeypatch.setattr(trasporto_aiutante, "_rallenta_scrittura", pieno)
     destinazione = tmp_path / "uscita" / "foto.jpg"
     with pytest.raises(FotoFacileError) as errore:
         esegui_fino_alla_fine(AiutanteFinto(intervallo=0.0).copia("S1", "/DCIM/foto.jpg", destinazione))
     assert "spazio" in errore.value.message.lower()
-    assert list(destinazione.parent.glob("*.part")) == []
+    assert list(destinazione.parent.iterdir()) == [], "niente .part e niente foto a metà"
+
 
 # ── D12 ────────────────────────────────────────────────────────────────────
 # Prima: il disco pieno veniva riconosciuto cercando «spazio» anche nel messaggio, che
@@ -747,3 +748,32 @@ def test_d12_il_disco_pieno_detto_dal_comando_si_riconosce_ancora(tmp_path):
     with pytest.raises(FotoFacileError) as errore:
         _esito_di_copia(processo, tmp_path / "foto.jpg")
     assert "spazio" in errore.value.message.lower()
+
+
+# ── D13 ────────────────────────────────────────────────────────────────────
+# Prima: se il file degli errori non si poteva creare (disco di sistema pieno) usciva un
+# OSError grezzo da `ProcessoEsterno.avvia` e il file di output temporaneo, già creato,
+# restava nella cartella temporanea. Il controllo del telefono finiva in «Qualcosa non ha
+# funzionato» invece di dire cosa fare.
+def test_d13_file_degli_errori_impossibile_da_creare(tmp_path, monkeypatch):
+    import errno
+    import tempfile
+
+    from fotofacile.core import ops
+
+    originale = tempfile.mkstemp
+    creati: list[str] = []
+
+    def secondo_fallisce(*args, **kwargs):
+        if creati:
+            raise OSError(errno.ENOSPC, "No space left on device")
+        descrittore, nome = originale(*args, dir=str(tmp_path), **kwargs)
+        creati.append(nome)
+        return descrittore, nome
+
+    monkeypatch.setattr(ops.tempfile, "mkstemp", secondo_fallisce)
+    processo = ProcessoEsterno(["/bin/echo", "ciao"])
+    with pytest.raises(FotoFacileError) as errore:
+        processo.avvia()
+    assert errore.value.hint
+    assert creati and not Path(creati[0]).exists(), "il file di output non deve restare"

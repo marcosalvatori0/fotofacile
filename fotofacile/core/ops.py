@@ -84,8 +84,16 @@ class ProcessoEsterno:
         if self.process is not None:
             return
         self._prepara_file_output()
-        descrittore, nome_errori = tempfile.mkstemp(prefix="fotofacile-errori-", suffix=".txt")
-        os.close(descrittore)
+        try:
+            descrittore, nome_errori = tempfile.mkstemp(prefix="fotofacile-errori-", suffix=".txt")
+            os.close(descrittore)
+        except OSError as errore:
+            # Il file di output temporaneo è già stato creato: non deve restare in giro.
+            self._pulisci_flussi()
+            raise FotoFacileError(
+                "Non riesco a preparare il file di appoggio per il comando.",
+                hint="Controlla di avere spazio e permessi di scrittura, poi riprova.",
+            ) from errore
         self._file_errori = Path(nome_errori)
         verso_errori = None
         verso_output = None
