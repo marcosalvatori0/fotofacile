@@ -184,7 +184,7 @@ def apply_theme(
     stile.map("Secondary.TButton", background=[("active", COLORI["selezione"])])
     stile.configure(
         "Link.TButton",
-        font=font(13),
+        font=font(14),
         padding=(6, 4),
         background=COLORI["sfondo"],
         foreground=COLORI["primario"],
@@ -200,7 +200,12 @@ def apply_theme(
     )
     stile.map("TCheckbutton", background=[("active", COLORI["sfondo"])])
     # anello di messa a fuoco ben visibile per chi usa la tastiera
-    for nome in ("Big.TButton", "Secondary.TButton", "Link.TButton", "TCheckbutton"):
+    stile.map(
+        "Big.TButton",
+        focuscolor=[("focus", COLORI["pannello"] if not modalita else COLORI["sfondo"])],
+    )
+    # Grande.TCheckbutton eredita font, spaziatura e focus da TCheckbutton.
+    for nome in ("Secondary.TButton", "Link.TButton", "TCheckbutton"):
         stile.map(nome, focuscolor=[("focus", COLORI["primario"])])
     stile.configure(
         "TEntry",
