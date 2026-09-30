@@ -803,3 +803,42 @@ def test_d14_la_copia_diretta_su_linux_accetta_la_dimensione(tmp_path):
     assert scritti == 5
     assert destinazione.read_bytes() == b"ciao!"
     assert copiatore._usati == {"S1"}
+
+
+# ── D15 ────────────────────────────────────────────────────────────────────
+# Prima: su macOS, se il telefono indicato con `--seriale` non c'era più, l'aiutante
+# ripiegava in silenzio sul primo telefono collegato. Con due telefoni, copia e
+# cancellazione potevano agire sul telefono sbagliato (quello non scelto dall'utente).
+class _TelefonoMacFinto:
+    def __init__(self, seriale: str) -> None:
+        self._seriale = seriale
+
+    def serialNumber(self) -> str:
+        return self._seriale
+
+    def name(self) -> str:
+        return f"Telefono {self._seriale}"
+
+
+def test_d15_con_due_telefoni_non_si_usa_quello_sbagliato(monkeypatch):
+    from fotofacile.aiutanti import ptp_mac
+
+    aperti: list[str] = []
+    monkeypatch.setattr(
+        ptp_mac, "trova_telefoni", lambda: [_TelefonoMacFinto("B"), _TelefonoMacFinto("C")]
+    )
+    monkeypatch.setattr(ptp_mac, "apri_sessione", lambda telefono: aperti.append(ptp_mac.seriale(telefono)))
+    with pytest.raises(ptp_mac.NessunTelefono):
+        ptp_mac._apri_telefono("A")
+    assert aperti == [], "non si apre la sessione su un telefono diverso da quello scelto"
+    assert ptp_mac.seriale(ptp_mac._apri_telefono("C")) == "C"
+
+
+def test_d15_con_un_solo_telefono_si_usa_quello(monkeypatch):
+    """Guardia: con un telefono solo si continua a usarlo anche se l'identificativo è
+    cambiato (per esempio fra un avvio dell'aiutante e l'altro)."""
+    from fotofacile.aiutanti import ptp_mac
+
+    monkeypatch.setattr(ptp_mac, "trova_telefoni", lambda: [_TelefonoMacFinto("B")])
+    monkeypatch.setattr(ptp_mac, "apri_sessione", lambda telefono: None)
+    assert ptp_mac.seriale(ptp_mac._apri_telefono("A")) == "B"

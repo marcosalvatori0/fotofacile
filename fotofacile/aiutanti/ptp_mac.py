@@ -411,10 +411,13 @@ def _apri_telefono(voluto: str = ""):
         raise NessunTelefono("Non vedo nessun telefono collegato.")
     scelto = telefoni[0]
     if voluto:
-        for telefono in telefoni:
-            if seriale(telefono) == voluto:
-                scelto = telefono
-                break
+        corrispondenti = [telefono for telefono in telefoni if seriale(telefono) == voluto]
+        if corrispondenti:
+            scelto = corrispondenti[0]
+        elif len(telefoni) > 1:
+            # Con più telefoni non si tira a indovinare: copiare o cancellare sul telefono
+            # sbagliato è peggio che fermarsi. Con uno solo si usa quello (come prima).
+            raise NessunTelefono("Non trovo il telefono indicato: forse è stato scollegato.")
     apri_sessione(scelto)
     return scelto
 
