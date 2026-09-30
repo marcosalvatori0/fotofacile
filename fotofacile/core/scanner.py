@@ -89,7 +89,9 @@ def parse_stat_stream(output: str) -> list[MediaFile]:
     per colpa di un nome strano). Il nome può contenere «|».
     """
     risultato: list[MediaFile] = []
-    for riga in output.splitlines():
+    # Solo «\n», come `read -r` sul telefono: `splitlines()` taglierebbe anche su caratteri
+    # che possono stare in un nome (U+2028, U+0085…) e inventerebbe un file (D26).
+    for riga in output.split("\n"):
         riga = riga.strip()
         if not riga or "|" not in riga:
             continue

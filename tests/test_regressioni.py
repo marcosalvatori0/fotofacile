@@ -1434,3 +1434,25 @@ def test_d25_un_secondo_e_un_minuto_restano_al_singolare():
     assert format_eta(121) == "circa 2 minuti e 1 secondo"
     assert format_duration(7260) == "2 ore e 1 minuto"
     assert format_duration(62) == "1 minuto e 2 secondi"  # guardia: il plurale resta
+
+
+# ── D26 ────────────────────────────────────────────────────────────────────
+# Prima: `parse_stat_stream` divideva l'elenco con `splitlines()`, che taglia anche su
+# caratteri che possono stare nel nome di un file (U+2028, U+0085, \x1c…), mentre sul
+# telefono `read -r` e `stat` producono una riga per file, divisa solo da «\n». Il file
+# «a.jpg<U+2028>b.jpg» spariva dall'elenco e al suo posto compariva «a.jpg», un file diverso
+# (se esiste) con la dimensione sbagliata.
+def test_d26_nomi_con_separatori_unicode_restano_un_file_solo():
+    from fotofacile.core.scanner import parse_stat_stream
+
+    uscita = (
+        "5|1|/sdcard/DCIM/a.jpg b.jpg\n"
+        "7|2|/sdcard/DCIM/c\x85d.jpg\n"
+        "3|4|/sdcard/DCIM/e.jpg\r\n"  # guardia: i vecchi telefoni chiudono le righe con \r\n
+    )
+    percorsi = [file.remote_path for file in parse_stat_stream(uscita)]
+    assert percorsi == [
+        "/sdcard/DCIM/a.jpg b.jpg",
+        "/sdcard/DCIM/c\x85d.jpg",
+        "/sdcard/DCIM/e.jpg",
+    ]
