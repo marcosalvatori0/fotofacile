@@ -1383,6 +1383,45 @@ def test_d23_disco_pieno_durante_l_installazione_del_componente(tmp_path, monkey
     assert list(cartella.parent.iterdir()) == [], "niente pacchetto, file a metà o cartelle di appoggio"
 
 
+def test_d23_disco_pieno_anche_con_il_file_bufferizzato(tmp_path, monkeypatch):
+    """`open(..., "wb")` dà un `BufferedWriter`: i byte restano in coda e l'errore compare
+    sia a `write`/`flush` sia di nuovo a `close()`. Il secondo non deve cancellare il
+    messaggio «disco pieno» (prima diventava «controlla la connessione»)."""
+    import errno
+    import io
+
+    from fotofacile.core import installer, ops
+
+    monkeypatch.setattr(installer, "MIN_DIMENSIONE_ARCHIVIO", 1)
+    dati = _zip_del_componente(tmp_path)
+    vero_open = open
+
+    class Pieno(io.RawIOBase):
+        def writable(self):
+            return True
+
+        def write(self, _dati):
+            raise OSError(errno.ENOSPC, "No space left on device")
+
+    def apri_file(percorso, modo="r", *args, **kwargs):
+        if str(percorso).endswith(".scarico"):
+            vero_open(percorso, modo).close()  # il file a metà esiste davvero
+            return io.BufferedWriter(Pieno(), buffer_size=1024 * 1024)
+        return vero_open(percorso, modo, *args, **kwargs)
+
+    monkeypatch.setattr(ops, "open", apri_file, raising=False)
+    cartella = tmp_path / "casa" / ".fotofacile" / "platform-tools"
+    with pytest.raises(FotoFacileError) as errore:
+        esegui_fino_alla_fine(
+            installer.installa_a_passi(
+                target_dir=cartella, url="https://esempio/pt.zip", opener=_opener_con(dati), system="linux"
+            )
+        )
+    assert "spazio" in errore.value.message.lower()
+    assert "connessione" not in errore.value.hint
+    assert list(cartella.parent.iterdir()) == [], "niente pacchetto, file a metà o cartelle di appoggio"
+
+
 # ── D24 ────────────────────────────────────────────────────────────────────
 # Prima: ogni passo del download chiedeva `read(256 KB)` alla risposta di `urllib`. Su una
 # rete lenta quella chiamata **aspetta** che arrivino tutti i 256 KB (misurato con un server

@@ -603,12 +603,28 @@ la copia di ripiego viene rimessa a posto prima di cancellarla (`:171-175`); nel
   durante l'estrazione (`_scompatta`/`replace` non protetti) usciva un `OSError` grezzo:
   «Qualcosa non ha funzionato» e pulsante disattivato. Se il disco si riempiva durante il
   download il messaggio diceva di controllare la connessione a internet. Ora `ops.py:275-281`
-  (`_sul_disco`, usato in `:316`, `:325`, `:336`, `:342`) ed `extract_component`
+  (`_sul_disco`, usato in `:316`, `:326`, `:337`, `:343`) ed `extract_component`
   (`installer.py:144-148`) usano `errors.errore_disco_componente` (`errors.py:58-70`): «Non c'è
   abbastanza spazio sul disco per installare il componente…» oppure «Non riesco a salvare il
   componente… nella cartella …». Test: `test_d23_cartella_dei_dati_impossibile_da_creare`,
   `test_d23_disco_pieno_durante_l_installazione_del_componente[download|estrazione]` (tutti
   rossi prima; controllano anche che non restino pacchetto, `.scarico` o cartelle di appoggio).
+  Ramo download, seconda passata (revisione): la prima correzione reggeva solo con un file non
+  bufferizzato. `open(..., "wb")` dà un `BufferedWriter`: il `close()` del `with` ritentava lo
+  svuotamento, falliva ancora con `OSError` e quell'errore copriva il «disco pieno», che tornava
+  «controlla la connessione». Ora la chiusura è dentro `_sul_disco` (`ops.py:342-343`) e quella
+  di riserva in `finally` ignora il secondo `OSError` (`:344-350`); il `.scarico` si toglie come
+  prima. Coperto anche con file bufferizzato da
+  `test_d23_disco_pieno_anche_con_il_file_bufferizzato` (rosso prima, verde dopo).
+- *Sospetto/da valutare (minor del revisore):* `int(Content-Length)` con un valore non
+  numerico solleva `ValueError`, che nessun `except` cattura (`ops.py:320`): «Qualcosa non ha
+  funzionato» invece del messaggio di rete. Serve un server che sbaglia l'intestazione.
+- *Sospetto/da valutare:* `scanner.py:95` usa `strip()`, che toglie anche U+2028, U+0085 e
+  `\x1c`-`\x1f` in testa e in coda al nome: un file con uno di questi ai bordi potrebbe essere
+  cercato con un nome diverso da quello vero (stessa famiglia di D26).
+- *Sospetto/da valutare:* in `installer.py:190-206`, due voci dello zip che dopo l'appiattimento
+  hanno lo stesso nome finale si sovrascrivono in silenzio (vince l'ultima). Il componente
+  ufficiale non ha questo caso; uno zip manomesso sì.
 - *Da valutare:* `download_file` e `install_component` (`installer.py:240-292`, `:334-360`)
   sono usati **solo dai test**: la finestra usa `installa_a_passi`. Hanno ricevuto la correzione
   D22 (una riga) ma non D23 (il loro `mkdir` è ancora fuori dal `try`, `:257`, `:348`).

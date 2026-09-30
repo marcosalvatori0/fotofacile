@@ -324,7 +324,7 @@ class ScaricatoreAPassi:
                 leggi = getattr(risposta, "read1", None) or risposta.read
                 with _sul_disco(cartella):
                     uscita = open(temporaneo, "wb")
-                with uscita:
+                try:
                     while True:
                         if self.annulla is not None and self.annulla.is_set():
                             raise FotoFacileError(
@@ -340,7 +340,15 @@ class ScaricatoreAPassi:
                             self.on_progress({"ricevuti": ricevuti, "totale": totale})
                         yield 0.0
                     with _sul_disco(cartella):
-                        uscita.flush()
+                        uscita.close()  # svuota la coda dei byte: qui il disco pieno si vede
+                finally:
+                    # `BufferedWriter.close()` ritenta lo svuotamento e, col disco pieno,
+                    # fallisce ancora: quel secondo OSError non deve coprire l'errore già
+                    # spiegato (D23). Il file a metà viene tolto più sotto.
+                    try:
+                        uscita.close()
+                    except OSError:
+                        pass
             if self.validatore is not None:
                 self.validatore(temporaneo)
             temporaneo.replace(self.destinazione)
