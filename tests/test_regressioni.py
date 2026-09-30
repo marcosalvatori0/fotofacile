@@ -1381,3 +1381,43 @@ def test_d23_disco_pieno_durante_l_installazione_del_componente(tmp_path, monkey
         )
     assert "spazio" in errore.value.message.lower()
     assert list(cartella.parent.iterdir()) == [], "niente pacchetto, file a metà o cartelle di appoggio"
+
+
+# ── D24 ────────────────────────────────────────────────────────────────────
+# Prima: ogni passo del download chiedeva `read(256 KB)` alla risposta di `urllib`. Su una
+# rete lenta quella chiamata **aspetta** che arrivino tutti i 256 KB (misurato con un server
+# locale che manda 1 KB ogni 50 ms: `read(256 KB)` è tornata dopo 2,1 s, `read1` subito): la
+# finestra restava ferma per secondi a ogni passo e il pulsante «Annulla» non rispondeva.
+class _RispostaLenta:
+    """Come `http.client.HTTPResponse` su una rete lenta: `read(n)` aspetterebbe n byte,
+    `read1(n)` consegna subito quello che è già arrivato."""
+
+    headers = {"Content-Length": "3000"}
+
+    def __init__(self) -> None:
+        self.pezzi = [b"x" * 1000] * 3
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def read(self, *_args):
+        raise AssertionError("read(n) blocca la finestra finché non arrivano n byte")
+
+    def read1(self, *_args):
+        return self.pezzi.pop(0) if self.pezzi else b""
+
+
+def test_d24_con_la_rete_lenta_ogni_passo_prende_solo_quello_che_e_arrivato(tmp_path):
+    from fotofacile.core.ops import ScaricatoreAPassi
+
+    destinazione = tmp_path / "pt.zip"
+    passi = list(
+        ScaricatoreAPassi(
+            "https://esempio/pt.zip", destinazione, opener=lambda *_a, **_k: _RispostaLenta()
+        ).scarica()
+    )
+    assert destinazione.read_bytes() == b"x" * 3000
+    assert len(passi) == 3, "un passo (e un ritorno alla finestra) per ogni pezzo arrivato"

@@ -319,6 +319,9 @@ class ScaricatoreAPassi:
                 intestazioni = getattr(risposta, "headers", None)
                 totale = int((intestazioni or {}).get("Content-Length") or 0)
                 ricevuti = 0
+                # `read1` consegna quello che è già arrivato; `read(n)` aspetterebbe n byte
+                # interi, bloccando la finestra a ogni passo con una rete lenta (D24).
+                leggi = getattr(risposta, "read1", None) or risposta.read
                 with _sul_disco(cartella):
                     uscita = open(temporaneo, "wb")
                 with uscita:
@@ -327,7 +330,7 @@ class ScaricatoreAPassi:
                             raise FotoFacileError(
                                 "Download interrotto.", hint="Puoi riprovare quando vuoi."
                             )
-                        blocco = risposta.read(self.blocco)
+                        blocco = leggi(self.blocco)
                         if not blocco:
                             break
                         with _sul_disco(cartella):
