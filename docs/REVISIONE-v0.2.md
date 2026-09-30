@@ -756,3 +756,283 @@ finisce in `.fotofacile`; tutto bloccato (anche la cartella personale) → `Foto
   programma; contenuto deterministico dal percorso (`:90-98`); `file_count` negativo → nessun
   file (`:36`); un percorso sconosciuto dà un `AdbError` comprensibile (`:84-89`, `:101-105`).
   La data dei file dipende dall'ora di avvio (`:52`): i test non ne dipendono.
+
+---
+
+## G6 — Avvio e CLI
+
+File rivisti: `fotofacile/cli.py`, `fotofacile/__main__.py`, `fotofacile.py`, con quello che serve
+all'avvio dal programma impacchettato: `core/osutil.py:comando_se_stesso`, `scripts/build_app.py`
+(opzioni di PyInstaller), `ui/widgets.py:tk_available`. Due revisioni (lettura diretta + revisore
+`caveman:cavecrew-reviewer`); tenuti solo i difetti confermati leggendo il codice e riprodotti con
+un test. Il comportamento con `sys.stdout`/`sys.stderr` a `None` (programma `--windowed` su
+Windows) è stato **misurato** con Python 3.14 mettendo a `None` i due flussi.
+
+### `--selftest` distingue «grafica rotta» da «avvio sbagliato» anche da eseguibile congelato?
+
+**In parte**: lo distingue il **testo**, non il codice di uscita; dal `.exe` di Windows il testo
+oggi si perde (**D7**, pianificato nel Task D2), e prima di **D31** su Windows poteva mancare anche
+fuori dal `.exe`.
+
+- Codici di `main` (`cli.py:373-386`): `0` finestra costruita (i quattro passi, `cli.py:146-173`);
+  `1` qualunque eccezione durante la costruzione (`cli.py:170-171`), con `"motivo": "TclError: …"`
+  per la grafica e un altro tipo (`ImportError: …`, `AttributeError: …`) per un pacchetto rotto;
+  `2` opzione sbagliata (argparse). Provato: `--selftets` → 2, `--selftest` → 0, `TclError`
+  simulato → 1 con il motivo (test esistenti `test_autocollaudo_riporta_esito_*`).
+- Programma congelato: nessun punto dell'avvio dipende da `sys._MEIPASS`; l'unico uso di
+  `sys.frozen` è `comando_se_stesso` (`osutil.py:121-122`), che richiama l'eseguibile stesso
+  (`sys.executable`), e `--selftest` non avvia processi figli. `build_app.py:66-78` porta dentro
+  tutto `fotofacile` e la cartella degli aiutanti. Un guasto **prima** di `main` (bootloader,
+  modulo mancante) non arriva a `selftest`: niente JSON, codice diverso da 0 e, con `--windowed`
+  su Windows, la finestra d'errore di PyInstaller.
+- **Con `sys.stdout` a `None`** `print` non solleva niente (misurato: `print` su `None` non fa
+  nulla; anche `print(..., file=None)`), e nemmeno argparse (`--version`, `--help`, opzione
+  sbagliata: misurato, `SystemExit` 0/0/2, nessun `AttributeError`). Quindi nessun `print` del
+  percorso di avvio (`main`, `selftest`, `doctor`, `avviso_visibile`, `esegui_aiutante`) può
+  fermare il programma: ma quello che stampa **non si vede**. (Il revisore ha segnalato il
+  contrario per `cli.py:99`, `:158`, `:257`, `:316-325`: **non confermato**, misurato.)
+- **difetto D31 (media, Windows)** — corretto. Quando l'uscita **esiste** ma non è la finestra
+  dei comandi (un file: `py fotofacile.py doctor > diagnosi.txt`; la pipeline; `build_app.py
+  --verify`) Python su Windows scrive nella codifica del sistema, cp1252, che non ha la riga
+  «──────» della diagnosi: `print` si fermava con `UnicodeEncodeError`, codice 1 e nessuna
+  diagnosi. Stessa sorte per `--selftest` con un motivo che contiene caratteri fuori da cp1252 (un
+  nome utente in cirillico nel percorso) e per `avviso_visibile`, che stampava **prima** di
+  mostrare l'avviso. Riprodotto qui con `PYTHONIOENCODING=cp1252 python fotofacile.py doctor`
+  (codice 1, traccia). Ora `_stampa` (`cli.py:69-80`, usata in `:113`, `:172`, `:271`) sostituisce
+  con «?» solo i caratteri che l'uscita non sa scrivere. `esegui_aiutante` scrive su `stderr`, che
+  in Python usa già `backslashreplace`: niente da fare. Test:
+  `test_d31_la_diagnosi_esce_anche_in_un_file_con_la_codifica_di_windows`,
+  `test_d31_l_autocollaudo_esce_anche_con_la_codifica_di_windows`,
+  `test_d31_l_avviso_di_avvio_non_si_ferma_sulla_codifica` (tutti rossi prima).
+- *Da valutare:* un codice di uscita diverso per «grafica rotta» (`TclError`) e per «pacchetto
+  rotto» (ogni altra eccezione) renderebbe la differenza visibile anche senza leggere il testo.
+  Cambia il contratto della pipeline: da decidere nel Task D2/D4.
+
+**Cosa dovrà coprire il Task D2** (non implementato qui, come richiesto):
+
+1. `doctor` (`cli.py:113-125`) e `selftest` (`cli.py:172`) scrivono con `_stampa`: `emetti`
+   dovrà usare `_stampa` (non un `print` nudo, altrimenti D31 torna) quando `sys.stdout` esiste,
+   e il file (`diagnosi.txt`, `selftest.txt`, in UTF-8) quando è `None`.
+2. Per la pipeline conviene che `selftest.txt` venga scritto **anche** con esito positivo: la sua
+   assenza è la prova di un «avvio sbagliato» (il programma non è arrivato a `selftest`), il
+   `motivo` distingue `TclError` dal resto.
+3. `avviso_visibile` (`cli.py:259-279`): su Windows mostra l'avviso solo con `print` (niente
+   `osascript`); con `--windowed` chi apre il programma e la finestra non parte **non vede
+   niente**, resta solo `avvio.log`. Il piano di D2 non lo nomina: da aggiungere (per esempio
+   `ctypes.windll.user32.MessageBoxW`, oppure `emetti` + apertura del registro).
+4. `--version` e `--help` dal `.exe` non mostrano niente (argparse su `None`): bassa, da valutare.
+5. `esegui_aiutante` (`cli.py:318-340`): nessun intervento; il processo figlio riceve sempre file
+   veri come uscite (`ProcessoEsterno`). *Da verificare su Windows vero (D6):* che
+   `FotoFacile.exe --aiutante wpd_win …` lanciato con le uscite rediritte abbia `sys.stderr`
+   diverso da `None` (ragionato: il CRT eredita gli handle; non verificabile qui).
+
+### `scrivi_log_avvio` cresce senza limite? Lo stesso `avvio.log` viene ruotato?
+
+**difetti D27 e D28**, corretti.
+
+- **difetto D27 (bassa)** — corretto. `scrivi_log_avvio` apriva `~/.fotofacile/avvio.log` in
+  aggiunta, senza limite né rotazione: due righe a ogni apertura, più gli avvisi interi. Ora, oltre
+  `LIMITE_LOG_AVVIO` = 256 KB (`cli.py:178`), il registro ricomincia da capo e la parte precedente
+  resta in `avvio.log.1` (una copia sola, sostituita alla rotazione successiva, `cli.py:194-199`);
+  se la rotazione non riesce (copia aperta da un'altra finestra su Windows) si continua ad
+  aggiungere. Spazio massimo circa 512 KB. Test:
+  `test_d27_il_registro_di_avvio_non_cresce_per_sempre` (rosso prima),
+  `test_d27_un_registro_piccolo_continua_a_crescere` (guardia).
+- **difetto D28 (media)** — corretto. `start_gui` (prima riga, `cli.py:287`) e `avviso_visibile`
+  (`:270`) scrivevano il registro fuori da ogni `try`. Se non si poteva scrivere (disco pieno, un
+  file al posto della cartella `.fotofacile`, cartella personale protetta) usciva un `OSError`
+  grezzo: **il programma non si apriva affatto** (dal `.exe`, la finestra d'errore di PyInstaller)
+  e l'avviso che doveva spiegare il problema non compariva. Ora `scrivi_log_avvio`
+  (`cli.py:181-204`) rinuncia in silenzio e restituisce `None`. Test (una cartella impossibile da
+  creare, un registro impossibile da aprire):
+  `test_d28_il_programma_si_apre_anche_se_il_registro_non_si_scrive[…]`,
+  `test_d28_l_avviso_compare_anche_se_il_registro_non_si_scrive[…]` (tutti rossi prima).
+- **Isolamento dei test** — corretto (commit `test:`, non è un difetto del programma). Tre test di
+  `tests/test_cli.py` avviavano la grafica finta senza isolare la cartella personale: ogni
+  esecuzione della suite aggiungeva cinque righe al **vero** `~/.fotofacile/avvio.log` di chi la
+  eseguiva (su questo Mac: 583 righe e 62 KB in due giorni, tutte dei test). Ora un fixture
+  automatico del modulo punta `HOME`/`USERPROFILE` a una cartella di prova; verificato che dopo
+  tutta la suite il registro vero non cambia (dimensione e data identiche).
+
+### Altri controlli del gruppo
+
+- `fotofacile.py` e `__main__.py`: `raise SystemExit(main())`, nient'altro; `main` intercetta
+  `--aiutante` prima di argparse (`cli.py:377-378`), così gli argomenti dell'aiutante non vengono
+  letti come opzioni di FotoFacile. **ok**.
+- `contesto_grafico_dubbio` (`cli.py:207-217`) vale solo su macOS; dal `.app` aperto dal Finder
+  c'è `__CFBundleIdentifier`, quindi niente prova. `prova_finestra` (`:220-227`) richiama sé stesso
+  con `--prova-finestra` (corretto per il congelato, B16/C4). **ok**.
+- *Da valutare (Parte C):* `ui/widgets.py:32-45` (`_prova_finestra` di `tk_available`) usa ancora
+  `sys.executable -c`, che nel programma impacchettato non funziona (stesso problema di B16). Oggi
+  la usano solo i test (`tests/conftest.py`): non va usata nel programma.
+
+---
+
+## G7 — Pagine e app
+
+File rivisti: `fotofacile/ui/app.py`, `ui/page_connect.py`, `ui/page_select.py`,
+`ui/page_options.py`, `ui/page_transfer.py` (e `ui/widgets.py` per `Banner`/`StepIndicator`). Due
+revisioni (lettura diretta + revisore `caveman:cavecrew-reviewer`). Come richiesto dal piano, la
+Parte C **riscriverà** le quattro pagine e `widgets.py`: i difetti **dentro le pagine** sono solo
+annotati per la Parte C (nessuno è una perdita di foto né un blocco totale); quelli di `app.py`,
+che sopravvive, sono corretti. Le prove sono state fatte con la finestra vera (script a parte e
+test con la finestra condivisa).
+
+### Nessun `after` resta pendente alla chiusura?
+
+**ok**.
+
+- `_chiusura` (`app.py:361-388`): `stop_all_polling` ferma il sondaggio del passo 1
+  (`page_connect.py:234-242`, `after_cancel` di `_tick_id`) e l'attesa del passo 2
+  (`page_select.py:113-120`); `after_cancel` del primo piano (`app.py:381-386`, B23).
+- Il `tick` di `run_task` (`app.py:320`, `:322`) non viene annullato con `after_cancel`, ma
+  `annulla_task` cambia l'epoca (`:330`) e un `tick` vecchio esce subito (`:292-293`); dopo
+  `destroy` il `mainloop` finisce e nessun `after` viene più eseguito (il revisore lo segnala come
+  rischio: non confermato, non esiste un percorso che lo esegua). Pagine e `widgets.py` non hanno
+  altri `after`; la finestra di aiuto è figlia della pagina e viene distrutta con lei.
+
+### `go_to` durante un task attivo lascia stato incoerente?
+
+**difetto D29** in `go_to` stesso; per il task in corso **ok** con note per la Parte C.
+
+- **difetto D29 (media)** — corretto. `go_to` chiamava `on_show` della pagina e **dopo**
+  aggiornava `current_page`, l'indicatore dei passi e chiudeva l'avviso. Effetti misurati con la
+  finestra vera: (1) ogni messaggio scritto da `on_show` spariva subito, compreso «Sto copiando le
+  foto: non scollegare il telefono.» (`page_transfer.py:97`), «Ultimo passo prima della copia…»
+  (`page_options.py:99-102`) e «Sto cercando le foto sul telefono…» al primo ingresso nel passo 2;
+  (2) quando `on_show` rimanda a un'altra pagina (`page_transfer.py:85-96`, `page_select.py:136-149`)
+  la finestra mostrava «Destinazione» ma teneva `current_page = "transfer"`, l'indicatore sul passo
+  4, l'avviso del motivo **nascosto**, e «Indietro» restava sulla stessa pagina. È la causa comune
+  di C17, allora corretto pagina per pagina. Ora lo stato si aggiorna prima e `on_show` viene
+  chiamato per ultimo (`app.py:247-255`). Test: `test_d29_il_messaggio_scritto_all_ingresso_resta_visibile`,
+  `test_d29_una_pagina_che_rimanda_altrove_lascia_la_finestra_coerente` (rossi prima; usano pagine
+  finte, quindi reggono alla Parte C). Tre test di `test_ui_app.py` davano per buono il
+  comportamento sbagliato (entrare in «Scegli le foto» senza telefono, in «Copia» senza opzioni) e
+  sono stati adattati; il collaudo `tests/pilota_app.py` dà `"ok": true`, 54 file, nessun `.part`,
+  nessuna sottocartella.
+- Task in corso e cambio di pagina: `go_to` non ferma il lavoro (il revisore lo propone come
+  difetto: **non confermato**). Durante la copia non si può cambiare pagina (il passo 4 non ha
+  «Indietro», «Chiudi» è spento fino alla fine, `page_transfer.py:74-79`); una ricerca lasciata a
+  metà con «Indietro» finisce da sola e il passo 2 si rimette in ordine (`page_select.py:100-105`,
+  C3). Note per la Parte C:
+  - *da risolvere in Parte C (C6/C7):* `_scansione_finita` e `_scansione_fallita`
+    (`page_select.py:166-194`) scrivono l'avviso anche se nel frattempo si è tornati al passo 1:
+    «Trovate 54 foto e video.» compare sotto «Collega il telefono».
+  - *da risolvere in Parte C (C6):* «Riprova il collegamento» (`page_connect.py:411-428`) avvia
+    `riavvia()` senza guardare `task_in_corso`: il lavoro precedente viene abbandonato (e chiuso
+    solo al suo `tick` successivo). «Prova senza telefono» durante un controllo del telefono vero
+    (`page_connect.py:430-435`) può lasciare per un giro il seriale del telefono vero con il
+    collegamento demo; si rimette a posto al sondaggio successivo. Nessun file toccato.
+  - *latente, per la Parte C (C5/C7/C9):* `start_scan` (`page_select.py:156-164`) passa
+    `app.cancel_event` **senza** azzerarlo (lo fanno `start_transfer` e `install_component`), e
+    `ricostruisci_pagine` (`app.py:217-227`) non lo azzera. Dopo «Interrompi» al passo 4 l'evento
+    resta acceso; oggi non si può tornare al passo 2 dopo una copia, ma se la Parte C aggiunge un
+    ritorno (o `cambia_scala` → `ricostruisci_pagine` a metà uso) la ricerca con adb o con
+    l'aiutante partirebbe già annullata: `Annullato` non è un `FotoFacileError`, quindi «Qualcosa
+    non ha funzionato» e pulsanti spenti. Con il telefono demo non si vede (non legge l'evento).
+- `ricostruisci_pagine` (`app.py:217-227`): ferma sondaggi e task, ricrea le pagine e apre il
+  passo 1. Non azzera `device`, `media_files`, `options`, `cancel_event` (vedi sopra): oggi la
+  chiamano solo i test (`conftest.azzera`, che azzera tutto a mano); la Parte C (C5) la userà a
+  metà uso. **ok** oggi, nota per C5.
+
+### Doppio clic rapido su «Copia le foto»?
+
+**Nessun doppio avvio misurato; la conferma della cancellazione si aggira** (da risolvere in Parte
+C, C8).
+
+- Senza «cancella dal telefono»: il primo clic porta subito al passo 4 (`page_options.py:211`) e
+  il secondo cade sulla pagina «Copia». Misurato con la finestra vera a 1020×780: «Copia le foto»
+  occupa y 438-491, i pulsanti del passo 4 y 363-416: il secondo clic cade nel vuoto (non su
+  «Interrompi»).
+- **Da risolvere in Parte C (C8), non corretto:** con «Cancella le foto dal telefono dopo averle
+  copiate» spuntata, il primo clic mette `_conferma_eliminazione = True` e chiede di premere di
+  nuovo (`page_options.py:199-206`): un **doppio clic** conferma da solo, senza leggere l'avviso
+  (riprodotto con due `invoke()`: pagina «transfer», `delete_after = True`). Non è una perdita di
+  foto (si cancella solo dopo copia e verifica della dimensione, e la casella va spuntata apposta),
+  quindi resta alla Parte C, che passa a `messagebox.askyesno`. Nota per C8: dare `default="no"`
+  alla domanda, perché anche `Invio` tenuto premuto (tasto previsto da C5) non la confermi da solo.
+  Stessa pagina: `_conferma_eliminazione` si azzera solo cambiando la casella (`:105-111`), non
+  tornando indietro e rientrando.
+- *Sospetto non confermato (dal revisore):* un secondo `go_to("transfer")` avvierebbe una seconda
+  copia, perché `start_transfer` non guarda `task_in_corso` (`page_transfer.py:84-99`, `:116-143`).
+  Serve che il secondo clic arrivi **al pulsante nascosto** (evento già in coda prima del cambio
+  di pagina, oppure il tasto spazio con il fuoco rimasto sul pulsante): non riprodotto. Ragionato
+  sulle conseguenze: il `.part` ha lo stesso nome nelle due copie (stesso processo), quindi al più
+  un file fallisce o viene copiato come «nome (1)»; nessuna foto viene cancellata senza essere
+  stata copiata. *Da risolvere in Parte C (C9):* una riga di guardia in `start_transfer`.
+
+### Altri controlli del gruppo
+
+- **difetto D30 (bassa)** — corretto. `_chiusura` chiedeva «Sto ancora copiando le foto. Vuoi
+  interrompere e chiudere?» con **qualunque** lavoro in corso. Al passo 1 il telefono viene
+  controllato ogni 2 s, e su macOS, senza telefono, ogni controllo dura fino a 6 s
+  (`aiutanti/ptp_mac.py:31`, `:137-163`): chi chiudeva il programma prima di collegare il telefono
+  si sentiva chiedere di interrompere una copia inesistente. Ora la domanda compare solo al passo 4
+  (`app.py:368`, affidabile dopo D29); gli altri lavori si interrompono come prima con
+  `annulla_task`. Test: `test_d30_chiudere_mentre_si_cerca_il_telefono_non_parla_di_copia` (rosso
+  prima), `test_d30_durante_la_copia_la_domanda_resta` (guardia).
+- `_chiusura` con copia in corso (**ok**): `askyesno` (durante la domanda la copia continua) → «Sì»
+  → `cancel_event.set`, `annulla_task` chiude il generatore: il `GeneratorExit` salva la cronologia
+  (D2), ferma il processo e toglie il `.part` (G1); poi `_pulisci_ambiente` e `destroy`. «No» → si
+  continua. La finestra può restare ferma fino a 6 s mentre `termina` aspetta il processo (G1).
+- *Sospetto già annotato nel G1 (non confermato):* `run_task` (`app.py:278-322`) sostituisce il
+  task senza chiudere quello precedente; la chiusura arriva al `tick` successivo del vecchio.
+- *Da risolvere in Parte C (C9):* `start_transfer` intercetta solo `OSError`
+  (`page_transfer.py:120-128`): dopo «Non riesco a leggere la cartella di destinazione» restano
+  accesi solo «Interrompi» (inutile) e nessun «Indietro»; si esce solo chiudendo la finestra.
+  `show_error` (`:145-153`) lascia spento «Salva resoconto». Il riepilogo dice «in 1 secondi»
+  (`:190-191`, stessa famiglia di D25) e «Ne ho saltati 1».
+- *Da risolvere in Parte C (C7):* il campo della data (`page_select.py:61-66`) è già sostituito
+  dal menu dei periodi nel piano.
+
+---
+
+## G8 — Script di build (sola lettura)
+
+File letti: `scripts/build_app.py`, `scripts/crea_installer_mac.py`, `scripts/make_icon.py`,
+`scripts/crea_pacchetto_windows.py`, `scripts/run_tests.sh`, `installer/windows/FotoFacile.iss`,
+`installer/windows/InstallaFotoFacile.ps1`, `DisinstallaFotoFacile.ps1`, `Installa FotoFacile.bat`,
+`.github/workflows/build-installers.yml`. Nessuna modifica: le correzioni vere sono nella Parte D.
+
+### Cosa sostituirà la Parte D
+
+| Oggi | Task | Cosa cambia |
+|---|---|---|
+| `FotoFacile.iss`: `#define Versione "0.1.0"` scritto a mano (`:11`), `ISCC` senza `/DVersione` (workflow `:66`) | D0, D1, D4 | versione letta da `fotofacile/__init__.py` (`scripts/leggi_versione.py`) |
+| `FotoFacile.iss`: il LEGGIMI usato **sia** come licenza da accettare **sia** come informazioni (`:39-40`); `[Run]` con `doctor` dopo l'installazione (`:61`), che dal `.exe` `--windowed` non mostra niente (D7) | D1, D2 | script riscritto con `Benvenuto.txt`; `doctor` scrive `diagnosi.txt` |
+| `Installa FotoFacile.bat`, `InstallaFotoFacile.ps1`, `DisinstallaFotoFacile.ps1`, `crea_pacchetto_windows.py` | D3 | eliminati (i due `.ps1` hanno il BOM: verificato con `xxd`) |
+| workflow, passo «Versione portatile (zip)»: importa `scripts.crea_pacchetto_windows` (`:62`) | D3, D4 | solo `shutil.make_archive` |
+| workflow, job `windows`: nessun test, nessuna prova dell'installatore, niente somme di controllo; testo della Release che manda al «Debug USB» (`:99-101`) | D4 | test su Windows, `prova-installazione.ps1` (installa, avvia, disinstalla), `SHA256SUMS.txt`, testo nuovo |
+| `doctor`/`--selftest` muti dal `.exe` | D2 | `emetti` (vedi i punti in G6) |
+
+### Difetti che la Parte D **non** copre (da aggiungere alla Parte D)
+
+- **`scripts/build_app.py:116-131` (`crea_archivio`), media, solo Windows/Linux:** fuori da macOS
+  il «pacchetto» è l'**eseguibile** (`pacchetto_creato`, `:91-96`), e `pacchetto.rglob("*")` su un
+  file non trova niente: l'archivio da condividere esce **vuoto**. Verificato con una cartella
+  finta `dist/FotoFacile/{FotoFacile.exe,_internal/python312.dll}`: zip con 0 voci. Anche
+  `dimensione_mb` (`:208`) riporta solo la dimensione dell'eseguibile. La pipeline usa `--no-zip`
+  e non lo vede; chi costruisce a mano su Windows o Linux sì. Correzione: archiviare
+  `pacchetto.parent` quando non è un `.app`.
+- **`scripts/crea_installer_mac.py:31-32` (`LEGGIMI` dentro il `.dmg`), media:** dice di premere
+  «Come si attiva il Debug USB?», un pulsante che non esiste più («Il telefono non viene
+  riconosciuto?»), e presenta il Debug USB come la strada normale, contro D9 («Trasferimento
+  file»). La Parte D è solo Windows: da correggere insieme al testo della Release (D4) o in E1.
+- **Workflow, job `windows`, «Verifica l'eseguibile» (`:56-60`), da verificare:** l'eseguibile
+  `--windowed` viene lanciato direttamente da PowerShell. PowerShell non aspetta i programmi con
+  finestra (sottosistema GUI) e non aggiorna `$LASTEXITCODE` quando non li aspetta: il passo
+  potrebbe risultare verde anche con l'autocollaudo fallito. Non verificabile da qui. Il Task D4
+  tiene questa forma nel passo «Verifica l'eseguibile (autocollaudo)»; `prova-installazione.ps1`
+  invece usa giustamente `Start-Process -Wait -PassThru` e controlla `ExitCode`: usare la stessa
+  forma anche nel passo di build.
+- **Workflow, job `macos` (`:32-34`), da valutare:** `--selftest || echo ::warning::` trasforma in
+  avviso **qualunque** fallimento, anche un pacchetto rotto (per esempio PyObjC mancante). Con il
+  JSON del `selftest` si può tenere l'avviso solo per `TclError` (niente sessione grafica) e far
+  fallire il resto.
+- *Nota:* la pipeline usa Python 3.12 (`:25`, `:51`), lo sviluppo 3.14: i test oggi girano solo su
+  3.14. Il Task D4 aggiunge i test su Windows (3.12): bene.
+- `scripts/make_icon.py`: **ok**. Rigenerato in una cartella temporanea: `fotofacile.png` e
+  `fotofacile.ico` identici byte per byte a quelli in `assets/` (quindi `build_app.py:185-187` non
+  cambia le icone). `scripts/run_tests.sh`: **ok**.
+- `build_app.py:141-160` riscrive a ogni costruzione `Avvia FotoFacile.command`, che è nel
+  repository: oggi il contenuto coincide (nessuna modifica dopo la costruzione), **ok**.

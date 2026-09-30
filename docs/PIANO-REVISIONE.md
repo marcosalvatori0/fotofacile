@@ -108,3 +108,57 @@ Una revisione indipendente del lavoro delle fasi 1–3 ha trovato altri difetti,
 - Nessun telefono Android è mai stato collegato: il collegamento diretto è verificato solo
   fino a «nessun telefono presente».
 - Windows e Linux non sono stati provati su hardware vero.
+
+---
+
+## Terza revisione (D1–D31)
+
+Piano `docs/superpowers/plans/2026-09-30-fotofacile-v0.2.md` (Parte A): D1–D10 trovati leggendo
+il codice prima del piano, D11–D31 dall'audit per gruppi G1–G8 (Task A7), con le risposte scritte
+a ogni domanda in `docs/REVISIONE-v0.2.md`. Ogni difetto corretto ha un test in
+`tests/test_regressioni.py` (rosso prima della correzione) e un commit `fix(Dn): …`. **D7 e D10
+non sono ancora corretti**: sono pianificati nei Task D2 e nella Parte C.
+
+| # | Gravità | Dove | Cosa succedeva | Stato |
+|---|---|---|---|---|
+| D1 | **alta** | `core/transfer.py` | Le foto copiate prendevano la data di oggi, non quella di scatto. | corretto |
+| D2 | media | `core/transfer.py` | Chiudendo la finestra durante la copia la cronologia dei file già copiati non si salvava. | corretto |
+| D3 | media | `core/transfer.py` | Una cancellazione dal telefono fallita veniva taciuta. | corretto |
+| D4 | bassa | `core/transfer.py` | Con un file fallito la barra non arrivava al 100 % e il tempo restante era sbagliato. | corretto |
+| D5 | media | `ui/page_select.py` | La ricerca fallita diceva solo «Ricerca non riuscita.», senza motivo. | corretto |
+| D6 | bassa | `core/history.py` | Due copie del programma aperte si cancellavano a vicenda la cronologia. | corretto |
+| D7 | media | `cli.py` (Windows) | Dal `.exe` `--windowed` `doctor` e `--selftest` non mostrano niente. | pianificato (Task D2) |
+| D8 | media | grafica su Windows | Senza dichiarazione DPI il testo era sfocato sugli schermi ingranditi. | corretto |
+| D9 | **alta** | `ui/page_connect.py` | Non si diceva di scegliere «Trasferimento file»: il collegamento diretto non vedeva il telefono. | corretto |
+| D10 | UX | `ui/*` | Testi piccoli, date da scrivere a mano, percorsi tecnici, dettagli sempre visibili. | pianificato (Parte C) |
+| D11 | media | `core/trasporto_aiutante.py`, `core/adb_passi.py` | Una cartella di destinazione impossibile da creare fermava tutta la copia con un errore grezzo. | corretto |
+| D12 | bassa | `core/adb_passi.py` | Un file con «spazio» nel nome faceva credere a un disco pieno. | corretto |
+| D13 | bassa | `core/ops.py` | Con il disco di sistema pieno l'avvio di un comando dava un `OSError` grezzo e lasciava file in `/tmp`. | corretto |
+| D14 | **alta** | `core/trasporto_linux.py` | Su Linux la copia diretta falliva sempre (`TypeError`): nessuna foto copiata. | corretto |
+| D15 | media | `aiutanti/ptp_mac.py` | Su macOS, con due telefoni, copia e cancellazione potevano agire su quello sbagliato. | corretto |
+| D16 | media | `core/trasporto_aiutante.py`, `core/ops.py` (Windows) | Le foto con accenti o emoji nel nome non venivano copiate. | corretto |
+| D17 | **alta** | `aiutanti/wpd_win.ps1` (Windows) | Con le estensioni nascoste nessuna foto veniva elencata (correzione non verificata su Windows vero). | corretto |
+| D18 | **alta** | `aiutanti/ptp_mac.py` | Su macOS sparivano in silenzio le foto delle cartelle visitate dopo la prima. | corretto |
+| D19 | bassa | `aiutanti/__init__.py` | L'aiutante interrotto lasciava foto in `/tmp` (macOS) o comandi orfani (Linux). | corretto |
+| D20 | bassa | `aiutanti/ptp_mac.py` | Gli errori dell'aiutante macOS comparivano con «OSError:» davanti. | corretto |
+| D21 | bassa | `core/transfer.py` | La copia interna non traduceva la cartella impossibile da creare. | corretto |
+| D22 | media | `core/ops.py`, `core/installer.py` | Una risposta di rete troncata o non HTTP bloccava il download del componente («Qualcosa non ha funzionato»). | corretto |
+| D23 | media | `core/ops.py`, `core/installer.py` | Disco pieno o cartella dati impossibile durante l'installazione del componente: errore grezzo o «controlla la connessione». | corretto |
+| D24 | bassa | `core/ops.py` | Con la rete lenta ogni passo del download bloccava la finestra per secondi. | corretto |
+| D25 | bassa | `core/format.py` | «1 minuto e 1 secondi», «1 ora e 1 minuti». | corretto |
+| D26 | bassa | `core/scanner.py` | Un nome con U+2028/U+0085 faceva cercare un file diverso. | corretto |
+| D27 | bassa | `cli.py` | Il registro `avvio.log` cresceva per sempre. | corretto |
+| D28 | media | `cli.py` | Se `avvio.log` non si poteva scrivere il programma non si apriva affatto. | corretto |
+| D29 | media | `ui/app.py` | `go_to` cancellava gli avvisi scritti entrando in una pagina e, dopo un rimando, si credeva nella pagina sbagliata. | corretto |
+| D30 | bassa | `ui/app.py` | Chiudendo al passo 1 chiedeva di interrompere una copia inesistente. | corretto |
+| D31 | media | `cli.py` (Windows) | Con l'uscita in un file (cp1252) `doctor`, `--selftest` e l'avviso di avvio si fermavano su `UnicodeEncodeError`. | corretto |
+
+Rimandati (dettagli in `docs/REVISIONE-v0.2.md`): alla **Parte C** i difetti trovati dentro le
+pagine che verranno riscritte (conferma della cancellazione aggirata da un doppio clic, C8; avvisi
+della ricerca mostrati nel passo sbagliato, C6/C7; vicolo cieco dopo un errore di pianificazione e
+«in 1 secondi», C9; `cancel_event` non azzerato da `start_scan`, C5/C7/C9); alla **Parte D**
+l'archivio vuoto di `build_app.py` fuori da macOS, il LEGGIMI del `.dmg` che manda al Debug USB, la
+verifica dell'eseguibile nella pipeline e i punti di `emetti` elencati nel G6.
+
+Verifica a fine audit: **441 test verdi** (erano 385 prima della Parte A), `pyflakes` vuoto,
+collaudo `tests/pilota_app.py` con `"ok": true` (54 file, nessun `.part`, nessuna sottocartella).
