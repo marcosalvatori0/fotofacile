@@ -4,6 +4,17 @@ from fotofacile import __version__
 from fotofacile.cli import build_doctor_report, main
 
 
+@pytest.fixture(autouse=True)
+def _casa_isolata(monkeypatch, tmp_path):
+    """Qui si avvia la grafica (finta): il registro di avvio deve finire in una cartella di prova.
+
+    Prima alcuni test scrivevano nel vero ``~/.fotofacile/avvio.log`` di chi li eseguiva,
+    cinque righe a ogni esecuzione della suite.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+
+
 def test_versione(capsys):
     with pytest.raises(SystemExit) as uscita:
         main(["--version"], env={})
