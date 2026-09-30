@@ -7,6 +7,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import ttk
 
+from ..core.errors import FotoFacileError
 from ..core.format import format_size
 from ..core.planner import TransferOptions, build_plan, ensure_space, suggested_destination
 from .theme import COLORI, font
@@ -21,7 +22,9 @@ class OptionsPage(ttk.Frame):
         # intestazione (indicatore dei passi), avvisi e dettagli
         super().__init__(parent.container)
         self.app = parent
-        self.mantieni_cartelle = tk.BooleanVar(value=True)
+        # Predefinito: le foto e i video finiscono **direttamente** nella cartella scelta.
+        # Ricreare le cartelle del telefono è un'opzione, non il comportamento normale.
+        self.mantieni_cartelle = tk.BooleanVar(value=False)
         self.salta_gia_copiate = tk.BooleanVar(value=True)
         self.elimina_dopo_copia = tk.BooleanVar(value=False)
         self._conferma_eliminazione = False
@@ -29,8 +32,13 @@ class OptionsPage(ttk.Frame):
         ttk.Label(self, text="Dove vuoi salvare le foto?", style="Titolo.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             self,
-            text="Va bene la cartella proposta: potrai sempre spostare le foto dopo.",
+            text=(
+                "Le foto e i video verranno messi direttamente in questa cartella, senza ricreare "
+                "le cartelle del telefono. Va bene quella proposta: potrai sempre spostarli dopo."
+            ),
             style="Sottotitolo.TLabel",
+            wraplength=860,
+            justify="left",
         ).grid(row=1, column=0, sticky="w", pady=(0, 10))
 
         self.chooser = PathChooser(self, on_change=lambda _percorso: self._aggiorna_spazio())
@@ -40,7 +48,7 @@ class OptionsPage(ttk.Frame):
         scelte.grid(row=3, column=0, sticky="w", pady=12)
         ttk.Checkbutton(
             scelte,
-            text="Mantieni le cartelle come sul telefono (consigliato)",
+            text="Ricrea anche le cartelle del telefono (di solito non serve)",
             variable=self.mantieni_cartelle,
             command=self._aggiorna_spazio,
         ).grid(row=0, column=0, sticky="w", pady=3)
@@ -112,14 +120,15 @@ class OptionsPage(ttk.Frame):
             include_videos=True,
         )
 
-    def free_space(self) -> int:
+    def free_space(self) -> int | None:
+        """Spazio libero in byte nella cartella scelta; ``None`` se non è possibile saperlo."""
         destinazione = Path(self.chooser.get() or ".")
         while not destinazione.exists() and destinazione != destinazione.parent:
             destinazione = destinazione.parent
         try:
             return shutil.disk_usage(destinazione).free
-        except OSError:  # pragma: no cover - difensivo
-            return 0
+        except OSError:  # disco di rete, permessi, unità rimossa
+            return None
 
     def build_plan(self):
         return build_plan(
@@ -132,6 +141,10 @@ class OptionsPage(ttk.Frame):
     def _aggiorna_spazio(self) -> None:
         try:
             piano = self.build_plan()
+        except FotoFacileError as errore:
+            self.spazio.configure(text=errore.message, foreground=COLORI["errore"])
+            self.dettaglio_salti.configure(text=errore.hint)
+            return
         except OSError as errore:
             self.spazio.configure(
                 text=f"Non riesco a leggere la cartella scelta: {errore.strerror or errore}",
@@ -139,11 +152,15 @@ class OptionsPage(ttk.Frame):
             )
             return
         libero = self.free_space()
-        colore = COLORI["successo"] if piano.total_bytes <= libero else COLORI["errore"]
-        self.spazio.configure(
-            text=f"Da copiare: {format_size(piano.total_bytes)} — Spazio libero: {format_size(libero)}",
-            foreground=colore,
-        )
+        if libero is None:
+            colore = COLORI["testo"]
+            testo_spazio = f"Da copiare: {format_size(piano.total_bytes)} — spazio libero non leggibile"
+        else:
+            colore = COLORI["successo"] if piano.total_bytes <= libero else COLORI["errore"]
+            testo_spazio = (
+                f"Da copiare: {format_size(piano.total_bytes)} — Spazio libero: {format_size(libero)}"
+            )
+        self.spazio.configure(text=testo_spazio, foreground=colore)
         saltati = piano.skipped_duplicates + piano.skipped_existing
         self.dettaglio_salti.configure(
             text=f"Verranno saltati {saltati} file già presenti." if saltati else ""
@@ -167,21 +184,17 @@ class OptionsPage(ttk.Frame):
             return
         try:
             piano = self.build_plan()
-        except OSError as errore:
+        except (FotoFacileError, OSError) as errore:
             self.app.set_status(
-                "Non riesco a leggere la cartella scelta.",
-                hint=f"Controlla di avere accesso a {opzioni.destination}: {errore}",
+                getattr(errore, "message", "Non riesco a leggere la cartella scelta."),
+                hint=getattr(errore, "hint", f"Controlla di avere accesso a {opzioni.destination}."),
                 kind="errore",
             )
             return
         try:
             ensure_space(piano, opzioni.destination, self.free_space())
-        except Exception as errore:
-            self.app.set_status(
-                getattr(errore, "message", str(errore)),
-                hint=getattr(errore, "hint", ""),
-                kind="errore",
-            )
+        except FotoFacileError as errore:
+            self.app.set_status(errore.message, hint=errore.hint, kind="errore")
             return
         if opzioni.delete_after and not self._conferma_eliminazione:
             self._conferma_eliminazione = True

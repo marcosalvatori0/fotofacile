@@ -18,6 +18,11 @@ SFONDO_ALTO = (21, 101, 192)
 SFONDO_BASSO = (13, 71, 161)
 SUPER_CAMPIONAMENTO = 2
 LATO = 1024
+# Slot dell'iconset macOS: (lato nominale, fattore di scala). 64×64 non è uno slot valido
+# e ogni @2x va disegnato alla sua dimensione vera (per esempio 16@2x = 32×32 pixel).
+SLOT_ICONSET = ((16, 1), (16, 2), (32, 1), (32, 2), (128, 1), (128, 2), (256, 1), (256, 2), (512, 1), (512, 2))
+# Misure incluse nel .ico: Windows sceglie la più adatta da solo.
+LATI_ICO = (16, 32, 64, 128, 256)
 
 
 def _arrotondato(x: float, y: float, x0: float, y0: float, x1: float, y1: float, raggio: float) -> bool:
@@ -68,18 +73,22 @@ def _colore_pixel(x: float, y: float) -> tuple[int, int, int, int]:
     return (r, g, b, 255)
 
 
-def disegna(riduzione: int = SUPER_CAMPIONAMENTO) -> list[list[tuple[int, int, int, int]]]:
-    """Costruisce l'immagine riducendo il rumore dei bordi (campionamento multiplo)."""
-    lato_finale = LATO // riduzione
+def disegna(lato: int = LATO, campioni: int = SUPER_CAMPIONAMENTO) -> list[list[tuple[int, int, int, int]]]:
+    """Costruisce l'immagine alla dimensione richiesta, con più campioni per pixel.
+
+    Il disegno è definito su una griglia di LATO punti: chiedendo un `lato` diverso si
+    ottiene la stessa icona alla dimensione vera voluta, non un ingrandimento.
+    """
+    passo = LATO / lato
     righe: list[list[tuple[int, int, int, int]]] = []
-    for riga in range(lato_finale):
+    for riga in range(lato):
         riga_pixel: list[tuple[int, int, int, int]] = []
-        for colonna in range(lato_finale):
+        for colonna in range(lato):
             somma_r = somma_g = somma_b = somma_a = 0
-            for sotto_y in range(riduzione):
-                for sotto_x in range(riduzione):
-                    x = (colonna + (sotto_x + 0.5) / riduzione) * riduzione
-                    y = (riga + (sotto_y + 0.5) / riduzione) * riduzione
+            for sotto_y in range(campioni):
+                for sotto_x in range(campioni):
+                    x = (colonna + (sotto_x + 0.5) / campioni) * passo
+                    y = (riga + (sotto_y + 0.5) / campioni) * passo
                     r, g, b, a = _colore_pixel(x, y)
                     somma_r += r * a
                     somma_g += g * a
@@ -89,13 +98,58 @@ def disegna(riduzione: int = SUPER_CAMPIONAMENTO) -> list[list[tuple[int, int, i
                 riga_pixel.append((0, 0, 0, 0))
             else:
                 riga_pixel.append(
-                    (somma_r // somma_a, somma_g // somma_a, somma_b // somma_a, somma_a // (riduzione**2))
+                    (somma_r // somma_a, somma_g // somma_a, somma_b // somma_a, somma_a // (campioni**2))
                 )
         righe.append(riga_pixel)
     return righe
 
 
-def scrivi_png(percorso: Path, righe: list[list[tuple[int, int, int, int]]]) -> Path:
+def ridimensiona(righe: list[list[tuple[int, int, int, int]]], lato: int) -> list[list[tuple[int, int, int, int]]]:
+    """Riduce l'immagine con una media a blocchi (i lati richiesti dividono il master).
+
+    La media pesa i colori con l'alfa: senza questo peso i pixel trasparenti dei bordi
+    tirerebbero il colore verso il nero e comparirebbe un alone scuro attorno all'icona.
+    """
+    if len(righe) % lato:
+        raise ValueError(f"il lato {lato} non divide l'immagine {len(righe)}")
+    fattore = len(righe) // lato
+    if fattore <= 1:
+        return righe
+    quanti = fattore * fattore
+    nuove: list[list[tuple[int, int, int, int]]] = []
+    for riga in range(lato):
+        nuova_riga: list[tuple[int, int, int, int]] = []
+        for colonna in range(lato):
+            somma_r = somma_g = somma_b = somma_a = 0
+            for y in range(riga * fattore, (riga + 1) * fattore):
+                for x in range(colonna * fattore, (colonna + 1) * fattore):
+                    r, g, b, a = righe[y][x]
+                    somma_r += r * a
+                    somma_g += g * a
+                    somma_b += b * a
+                    somma_a += a
+            if somma_a == 0:
+                nuova_riga.append((0, 0, 0, 0))
+            else:
+                nuova_riga.append(
+                    (somma_r // somma_a, somma_g // somma_a, somma_b // somma_a, somma_a // quanti)
+                )
+        nuove.append(nuova_riga)
+    return nuove
+
+
+def livelli(master: list[list[tuple[int, int, int, int]]]) -> dict[int, list[list[tuple[int, int, int, int]]]]:
+    """Prepara tutte le dimensioni riducendo il master a metà per volta (catena 1024…16)."""
+    disponibili = {len(master): master}
+    corrente = master
+    while len(corrente) > 16:
+        corrente = ridimensiona(corrente, len(corrente) // 2)
+        disponibili[len(corrente)] = corrente
+    return disponibili
+
+
+def immagine_png(righe: list[list[tuple[int, int, int, int]]]) -> bytes:
+    """Serializza l'immagine in un PNG RGBA, senza librerie esterne."""
     altezza = len(righe)
     larghezza = len(righe[0])
     dati = bytearray()
@@ -113,33 +167,46 @@ def scrivi_png(percorso: Path, righe: list[list[tuple[int, int, int, int]]]) -> 
         )
 
     intestazione = struct.pack(">IIBBBBB", larghezza, altezza, 8, 6, 0, 0, 0)
-    percorso.write_bytes(
+    return (
         b"\x89PNG\r\n\x1a\n"
         + blocco(b"IHDR", intestazione)
         + blocco(b"IDAT", zlib.compress(bytes(dati), 9))
         + blocco(b"IEND", b"")
     )
+
+
+def scrivi_png(percorso: Path, righe: list[list[tuple[int, int, int, int]]]) -> Path:
+    percorso.write_bytes(immagine_png(righe))
     return percorso
 
 
-def scrivi_ico(percorso: Path, png_256: Path) -> Path:
-    """Crea un .ico contenente il PNG 256×256 (formato accettato da Windows)."""
-    dati = png_256.read_bytes()
-    intestazione = struct.pack("<HHH", 0, 1, 1)
-    voce = struct.pack("<BBBBHHII", 0, 0, 0, 0, 1, 32, len(dati), 22)
-    percorso.write_bytes(intestazione + voce + dati)
+def scrivi_ico(percorso: Path, immagini: list[tuple[int, bytes]]) -> Path:
+    """Crea il .ico con una voce per dimensione, ognuna dichiarata per la sua misura vera.
+
+    Nel formato ICO il valore 0 in larghezza/altezza significa 256: qui si scrivono le
+    dimensioni reali, così Windows non ripiega sull'icona generica.
+    """
+    intestazione = struct.pack("<HHH", 0, 1, len(immagini))
+    voci = []
+    dati = b""
+    for lato, png in immagini:
+        byte_lato = 0 if lato >= 256 else lato
+        offset = 6 + 16 * len(immagini) + len(dati)
+        voci.append(struct.pack("<BBBBHHII", byte_lato, byte_lato, 0, 0, 1, 32, len(png), offset))
+        dati += png
+    percorso.write_bytes(intestazione + b"".join(voci) + dati)
     return percorso
 
 
-def crea_iconset(cartella: Path, righe: list[list[tuple[int, int, int, int]]]) -> Path:
-    """Crea le dimensioni richieste da macOS a partire dall'immagine grande."""
+def crea_iconset(cartella: Path, livelli_icona: dict[int, list[list[tuple[int, int, int, int]]]]) -> Path:
+    """Crea le dimensioni richieste da macOS, ognuna con i pixel della sua misura vera."""
     iconset = cartella / "FotoFacile.iconset"
     iconset.mkdir(parents=True, exist_ok=True)
-    for lato in (16, 32, 64, 128, 256, 512):
-        base = righe[:: len(righe) // lato]
-        ridimensionata = [riga[:: len(riga) // lato] for riga in base][:lato]
-        scrivi_png(iconset / f"icon_{lato}x{lato}.png", ridimensionata)
-        scrivi_png(iconset / f"icon_{lato}x{lato}@2x.png", ridimensionata)
+    for vecchio in iconset.glob("icon_*.png"):
+        vecchio.unlink()  # via le misure non più previste (per esempio la 64×64 di prima)
+    for lato, scala in SLOT_ICONSET:
+        suffisso = "" if scala == 1 else "@2x"
+        scrivi_png(iconset / f"icon_{lato}x{lato}{suffisso}.png", livelli_icona[lato * scala])
     return iconset
 
 
@@ -148,16 +215,20 @@ def main(destinazione: str | None = None) -> int:
 
     cartella = Path(destinazione) if destinazione else Path(__file__).resolve().parent.parent / "assets"
     cartella.mkdir(parents=True, exist_ok=True)
-    righe = disegna()
-    png = scrivi_png(cartella / "fotofacile.png", righe)
+    master = disegna()  # 1024×1024 con bordi morbidi: da qui derivano tutte le misure
+    livelli_icona = livelli(master)
+    png = scrivi_png(cartella / "fotofacile.png", master)
     print(f"Icona PNG: {png} ({png.stat().st_size // 1024} KB)")
 
-    piccola = [riga[::4] for riga in righe[::4]]
-    ico = scrivi_ico(cartella / "fotofacile.ico", scrivi_png(cartella / "fotofacile-256.png", piccola))
+    scrivi_png(cartella / "fotofacile-256.png", livelli_icona[256])
+    ico = scrivi_ico(
+        cartella / "fotofacile.ico",
+        [(lato, immagine_png(livelli_icona[lato])) for lato in LATI_ICO],
+    )
     print(f"Icona ICO: {ico}")
 
     if sys.platform == "darwin":
-        iconset = crea_iconset(cartella, righe)
+        iconset = crea_iconset(cartella, livelli_icona)
         try:
             subprocess.run(
                 ["iconutil", "-c", "icns", str(iconset), "-o", str(cartella / "fotofacile.icns")],

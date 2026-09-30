@@ -190,3 +190,38 @@ def apply_theme(
         darkcolor=COLORI["primario"],
     )
     stile.configure("TScrollbar", background=COLORI["barra"], troughcolor=COLORI["sfondo"], arrowcolor=COLORI["testo"])
+
+
+# ── widget Tk «classici» ──────────────────────────────────────────────────
+# Text, Canvas e Listbox non sono ttk: gli stili di `apply_theme` non li toccano. Se si
+# imposta solo lo sfondo, il testo resta nero su un pannello scuro — cioè invisibile.
+# Queste funzioni sono l'unico posto dove si colorano.
+
+
+def tema_testo(testo: tk.Text) -> None:
+    """Colora un'area di testo classica: sfondo **e** testo, cursore e selezione compresi."""
+    testo.configure(
+        background=COLORI["campo"],
+        foreground=COLORI["testo"],
+        insertbackground=COLORI["testo"],
+        selectbackground=COLORI["selezione"],
+        selectforeground=COLORI["testo"],
+        highlightthickness=1,
+        highlightbackground=COLORI["bordo"],
+        highlightcolor=COLORI["primario"],
+        borderwidth=0,
+    )
+
+
+def tema_tela(tela: tk.Canvas) -> None:
+    """Colora una superficie di disegno, allineandola al pannello."""
+    tela.configure(background=COLORI["pannello"], highlightthickness=0)
+
+
+def tema_finestra(finestra: tk.Misc) -> None:
+    """Colora una finestra secondaria come quella principale.
+
+    Serve a evitare il bordo grigio chiaro attorno a una finestra scura su macOS e Windows:
+    il `Toplevel` di Tk usa i colori di sistema finché non glieli si impone.
+    """
+    finestra.configure(background=COLORI["sfondo"])

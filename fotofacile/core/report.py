@@ -54,9 +54,18 @@ def build_report(
 
 
 def _cartelle_di_riserva() -> list[Path]:
-    """Dove salvare il resoconto se la cartella delle foto non è scrivibile."""
+    """Dove salvare il resoconto se la cartella delle foto non è scrivibile.
+
+    Si usa il Desktop **solo se esiste già**: crearlo su un computer dove non c'è (per
+    esempio un server, o Windows con il Desktop spostato su OneDrive) riempirebbe la cartella
+    personale di cartelle inattese.
+    """
     base = Path(os.environ.get("USERPROFILE") or os.environ.get("HOME") or str(Path.home()))
-    return [base / "Desktop", base / ".fotofacile"]
+    riserve = [base / ".fotofacile"]
+    desktop = base / "Desktop"
+    if desktop.is_dir():
+        riserve.insert(0, desktop)
+    return riserve
 
 
 def save_report(text: str, destination: Path) -> Path:

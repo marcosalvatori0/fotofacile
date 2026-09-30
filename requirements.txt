@@ -1,0 +1,11 @@
+# FotoFacile non ha dipendenze obbligatorie: la grafica (Tkinter) fa parte di Python.
+#
+# Questo file elenca solo l'eccezione, che riguarda **esclusivamente macOS**.
+# macOS non sa leggere i telefoni Android come dischi (non ha il supporto MTP): l'unico modo
+# di usare il collegamento diretto, senza Debug USB, è il componente di sistema
+# «ImageCaptureCore» — lo stesso che usa l'applicazione «Acquisizione immagini».
+# PyObjC lo rende utilizzabile da Python.
+#
+# Su Windows e Linux non serve niente di tutto questo: il collegamento diretto usa
+# rispettivamente PowerShell (di sistema) e gio/gvfs (presente sui desktop).
+pyobjc-framework-ImageCaptureCore>=10 ; sys_platform == "darwin"

@@ -66,6 +66,10 @@ def azzera(applicazione, tmp_path) -> None:
     applicazione.annulla_task()
     applicazione.cancel_event.clear()
     applicazione.ricostruisci_pagine()
+    # `ricostruisci_pagine` apre il passo 1, che avvia subito un controllo del telefono:
+    # lo si ferma qui, così ogni test parte da uno stato identico e prevedibile.
+    applicazione.stop_all_polling()
+    applicazione.annulla_task()
 
     seleziona = applicazione.pages["select"]
     seleziona._files = []
@@ -83,7 +87,7 @@ def azzera(applicazione, tmp_path) -> None:
 
     opzioni = applicazione.pages["options"]
     opzioni.chooser.set("")
-    opzioni.mantieni_cartelle.set(True)
+    opzioni.mantieni_cartelle.set(False)
     opzioni.salta_gia_copiate.set(True)
     opzioni.elimina_dopo_copia.set(False)
     opzioni._conferma_eliminazione = False

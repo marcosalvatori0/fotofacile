@@ -5,8 +5,8 @@ mentre la finestra è aperta blocca il programma. Tenere il lavoro dentro il cic
 grafica, avanzando a passi, evita del tutto il problema e rende i test deterministici.
 
 Il comando esterno parte subito; poi il programma lo tiene d'occhio con :meth:`ProcessoEsterno.passo`
-chiamata dal ciclo della grafica. L'output lungo viene scritto direttamente su file, così
-non si riempie mai il tubo di comunicazione del processo.
+chiamata dal ciclo della grafica. L'output **viene sempre scritto su file**, mai letto da un tubo
+di comunicazione: così un comando molto loquace non riempie il tubo e non blocca il processo.
 """
 
 from __future__ import annotations
@@ -56,6 +56,8 @@ class ProcessoEsterno:
         hint: str = "",
         output_file: Path | None = None,
         orologio: Callable[[], float] = time.monotonic,
+        leggi_output: bool = True,
+        env: dict | None = None,
     ) -> None:
         self.args = [str(argomento) for argomento in args]
         self.timeout = timeout
@@ -63,45 +65,73 @@ class ProcessoEsterno:
         self.hint = hint
         self.output_file = Path(output_file) if output_file is not None else None
         self.orologio = orologio
+        #: Quando False l'output non viene mai riletto: serve alla copia, dove l'output del
+        #: comando *è* il file appena scritto su disco e rileggerlo sprecherebbe memoria e tempo
+        #: (un video da 4 GB diventerebbe una stringa da 4 GB in RAM).
+        self.leggi_output = leggi_output
+        #: Variabili d'ambiente per il figlio (None = eredita quelle del programma).
+        self.env = env
         self.process: subprocess.Popen | None = None
         self._inizio = 0.0
         self._file_errori: Path | None = None
+        #: File che riceve l'output del comando (mai un tubo: un comando loquace lo riempirebbe
+        #: e resterebbe bloccato in scrittura finché qualcuno non lo svuota).
+        self._file_output: Path | None = None
+        self._output_temporaneo: Path | None = None
 
     # ── avvio e avanzamento ───────────────────────────────────────────────
     def avvia(self) -> None:
         if self.process is not None:
             return
-        verso_output = None
+        self._prepara_file_output()
         descrittore, nome_errori = tempfile.mkstemp(prefix="fotofacile-errori-", suffix=".txt")
         os.close(descrittore)
         self._file_errori = Path(nome_errori)
-        verso_errori = open(self._file_errori, "wb")
-        if self.output_file is not None:
-            self.output_file.parent.mkdir(parents=True, exist_ok=True)
-            verso_output = open(self.output_file, "wb")
+        verso_errori = None
+        verso_output = None
         try:
+            verso_errori = open(self._file_errori, "wb")
+            verso_output = open(self._file_output, "wb")
             self.process = subprocess.Popen(
                 self.args,
-                stdout=verso_output if verso_output is not None else subprocess.PIPE,
+                stdout=verso_output,
                 stderr=verso_errori,
                 stdin=subprocess.DEVNULL,
                 creationflags=flag_nascosta(),
+                env=self.env,
             )
         except OSError as errore:
-            if verso_output is not None:
-                verso_output.close()
-            verso_errori.close()
-            self._pulisci_flussi()
             raise FotoFacileError(
                 self.umano or "Non riesco ad avviare il comando sul computer.",
                 hint=self.hint or "Riprova; se serve, apri la diagnosi con «doctor».",
             ) from errore
         finally:
-            if verso_output is not None:
-                verso_output.close()
-            if not verso_errori.closed:
-                verso_errori.close()
+            # I due file vanno chiusi comunque: il figlio ne ha una copia propria. Se l'apertura
+            # di uno dei due fallisce (cartella di destinazione non scrivibile, file bloccato),
+            # senza questo `finally` resterebbe aperto e il file temporaneo resterebbe sul disco.
+            for flusso in (verso_output, verso_errori):
+                if flusso is not None and not flusso.closed:
+                    flusso.close()
+            if self.process is None:
+                self._pulisci_flussi()
         self._inizio = self.orologio()
+
+    def _prepara_file_output(self) -> None:
+        """Sceglie dove finisce l'output: il file indicato, oppure uno temporaneo."""
+        try:
+            if self.output_file is not None:
+                self.output_file.parent.mkdir(parents=True, exist_ok=True)
+                self._file_output = self.output_file
+                return
+            descrittore, nome = tempfile.mkstemp(prefix="fotofacile-output-", suffix=".txt")
+            os.close(descrittore)
+        except OSError as errore:
+            raise FotoFacileError(
+                "Non riesco a preparare il file di appoggio per il comando.",
+                hint="Controlla di avere spazio e permessi di scrittura, poi riprova.",
+            ) from errore
+        self._file_output = Path(nome)
+        self._output_temporaneo = self._file_output
 
     def passo(self) -> bool:
         """True se il comando è ancora in corso."""
@@ -129,19 +159,32 @@ class ProcessoEsterno:
                     pass
         self._pulisci_flussi()
 
-    def aspetta(self) -> Generator[float, None, RisultatoComando]:
-        """Generatore: cede il controllo alla grafica finché il comando non è finito."""
+    def aspetta(self, leggi_output: bool | None = None) -> Generator[float, None, RisultatoComando]:
+        """Generatore: cede il controllo alla grafica finché il comando non è finito.
+
+        Se il generatore viene chiuso (l'utente cambia schermata o chiude la finestra) il
+        comando esterno viene **interrotto**: senza questo resterebbe vivo in sottofondo.
+        """
         if self.process is None:
             self.avvia()
-        while self.passo():
-            if self.scaduto():
-                self.termina()
-                raise FotoFacileError(
-                    self.umano or "Il telefono non ha risposto in tempo.",
-                    hint=self.hint or "Controlla il cavo e riprova; se serve, premi «Riavvia collegamento».",
-                )
-            yield INTERVALLO_PRECEDENTE
-        return self.esito()
+        if leggi_output is not None:
+            self.leggi_output = leggi_output
+        try:
+            while self.passo():
+                if self.scaduto():
+                    self.termina()
+                    raise FotoFacileError(
+                        self.umano or "Il telefono non ha risposto in tempo.",
+                        hint=self.hint
+                        or "Controlla il cavo e riprova; se serve, premi «Riprova il collegamento».",
+                    )
+                yield INTERVALLO_PRECEDENTE
+            # Il risultato si legge **prima** della pulizia finale: dopo, il file degli
+            # errori non esisterebbe più e la spiegazione andrebbe persa.
+            esito = self.esito()
+        finally:
+            self.termina()
+        return esito
 
     def esito(self) -> RisultatoComando:
         """Output e codice di uscita; solleva un errore comprensibile se è andata male."""
@@ -154,23 +197,18 @@ class ProcessoEsterno:
         if codice != 0:
             raise FotoFacileError(
                 self.umano or "Il comando non è riuscito.",
-                hint=self.hint or self._primo_errore(errori or output),
+                hint=self._suggerimento(errori or output),
             )
         return RisultatoComando(returncode=codice, output=output)
 
     # ── lettura dell'output ───────────────────────────────────────────────
     def _leggi_output(self) -> str:
-        if self.output_file is not None:
-            try:
-                return self.output_file.read_text(errors="replace")
-            except OSError:  # pragma: no cover - difensivo
-                return ""
-        if self.process is None or self.process.stdout is None:
+        if not self.leggi_output or self._file_output is None:
             return ""
-        dati = self.process.stdout.read()
-        if isinstance(dati, bytes):
-            return dati.decode(errors="replace")
-        return dati or ""
+        try:
+            return self._file_output.read_text(errors="replace")
+        except OSError:  # pragma: no cover - difensivo
+            return ""
 
     def _leggi_errori(self) -> str:
         if self._file_errori is None or not self._file_errori.exists():
@@ -182,9 +220,21 @@ class ProcessoEsterno:
 
     def _primo_errore(self, output: str) -> str:
         righe = [riga.strip() for riga in (output or "").splitlines() if riga.strip()]
-        if righe:
-            return righe[-1]
-        return "Riprova; se il problema resta, salva il registro e contattaci."
+        return righe[-1] if righe else ""
+
+    def _suggerimento(self, output: str) -> str:
+        """Unisce il consiglio previsto con quello che ha detto davvero il comando.
+
+        Il testo prodotto dal comando esterno è spesso **la spiegazione più precisa** che
+        esista (per esempio «il telefono è bloccato» invece di «controlla il cavo»): buttarlo
+        via per far posto al consiglio generico era un peccato.
+        """
+        dettaglio = self._primo_errore(output)
+        if not self.hint:
+            return dettaglio or "Riprova; se il problema resta, salva il registro e contattaci."
+        if not dettaglio or dettaglio in self.hint or dettaglio == self.umano:
+            return self.hint
+        return f"{self.hint} (dettaglio: {dettaglio})"
 
     def _pulisci_flussi(self) -> None:
         """Chiude i tubi e cancella il file degli errori: nessuna risorsa lasciata aperta."""
@@ -198,6 +248,9 @@ class ProcessoEsterno:
         if self._file_errori is not None:
             self._file_errori.unlink(missing_ok=True)
             self._file_errori = None
+        if self._output_temporaneo is not None:
+            self._output_temporaneo.unlink(missing_ok=True)
+            self._output_temporaneo = None
 
     def __del__(self) -> None:  # pragma: no cover - pulizia difensiva
         try:
@@ -218,6 +271,7 @@ class ScaricatoreAPassi:
         opener: Callable | None = None,
         blocco: int = 256 * 1024,
         timeout: float = 60.0,
+        validatore: Callable[[Path], None] | None = None,
     ) -> None:
         self.url = url
         self.destinazione = Path(destinazione)
@@ -226,6 +280,8 @@ class ScaricatoreAPassi:
         self.opener = opener
         self.blocco = blocco
         self.timeout = timeout
+        #: Controllo sul file scaricato **prima** che sostituisca quello buono.
+        self.validatore = validatore
 
     def scarica(self) -> Generator[float, None, Path]:
         import urllib.request
@@ -233,6 +289,7 @@ class ScaricatoreAPassi:
         apri = self.opener or urllib.request.urlopen
         self.destinazione.parent.mkdir(parents=True, exist_ok=True)
         temporaneo = self.destinazione.with_name(self.destinazione.name + ".scarico")
+        completato = False
         try:
             with apri(self.url, timeout=self.timeout) as risposta:
                 intestazioni = getattr(risposta, "headers", None)
@@ -252,15 +309,20 @@ class ScaricatoreAPassi:
                         if self.on_progress is not None:
                             self.on_progress({"ricevuti": ricevuti, "totale": totale})
                         yield 0.0
-            self.destinazione.unlink(missing_ok=True)
+            if self.validatore is not None:
+                self.validatore(temporaneo)
             temporaneo.replace(self.destinazione)
+            completato = True
         except FotoFacileError:
-            temporaneo.unlink(missing_ok=True)
             raise
         except OSError as errore:
-            temporaneo.unlink(missing_ok=True)
             raise FotoFacileError(
                 "Non sono riuscito a scaricare il componente di collegamento.",
                 hint="Controlla la connessione a internet e riprova.",
             ) from errore
+        finally:
+            # Vale anche se il download viene abbandonato (chiusura della finestra o cambio
+            # idea): il file a metà non deve restare sul disco dell'utente.
+            if not completato:
+                temporaneo.unlink(missing_ok=True)
         return self.destinazione

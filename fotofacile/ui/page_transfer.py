@@ -13,7 +13,7 @@ from ..core.osutil import open_in_file_manager
 from ..core.planner import TransferPlan, build_plan
 from ..core.report import build_report, save_report
 from ..core.transfer import Progress, TransferResults, transfer_steps
-from .theme import COLORI, font
+from .theme import font
 
 
 class TransferPage(ttk.Frame):
@@ -83,20 +83,40 @@ class TransferPage(ttk.Frame):
     # ── ciclo di vita ─────────────────────────────────────────────────────
     def on_show(self) -> None:
         if self.app.options is None or self.app.remote is None:
-            self.app.set_status(
+            self._avviso_e_ritorno(
                 "Manca un'informazione per iniziare la copia.",
-                hint="Torna al passo «Destinazione» e premi di nuovo «Copia le foto».",
-                kind="avviso",
+                "Torna al passo «Destinazione» e premi di nuovo «Copia le foto».",
+            )
+            return
+        if self.app.device is None:
+            self._avviso_e_ritorno(
+                "Il telefono non è più collegato.",
+                "Ricollega il telefono e riparti dal primo passo.",
             )
             return
         self.app.set_status("Sto copiando le foto: non scollegare il telefono.", kind="info")
         self.bottone_annulla.state(["!disabled"])
         self.start_transfer()
 
+    def _torna_indietro(self) -> None:
+        """Riporta al passo precedente evitando un vicolo cieco senza uscita.
+
+        L'avviso va ripetuto **dopo** il cambio di schermata: `go_to` chiude il banner, quindi
+        il messaggio che spiega il motivo del ritorno sparirebbe subito.
+        """
+        testo, suggerimento = self.app.banner.message_text, self.app.banner.hint_text
+        self.app.go_to("options")
+        if testo:
+            self.app.set_status(testo, hint=suggerimento, kind="avviso")
+
+    def _avviso_e_ritorno(self, testo: str, suggerimento: str) -> None:
+        self.app.set_status(testo, hint=suggerimento, kind="avviso")
+        self._torna_indietro()
+
     def start_transfer(self) -> None:
         self.app.cancel_event.clear()
         self.started_at = time.time()
-        seriale = self.app.device.serial if self.app.device is not None else ""
+        seriale = self.app.device.serial
         try:
             self.last_plan = self._pianifica(seriale)
         except OSError as errore:
@@ -120,7 +140,17 @@ class TransferPage(ttk.Frame):
             on_progress=self.update_progress,
             annulla=self.app.cancel_event,
         )
-        self.app.run_task(generatore, on_done=self.show_summary)
+        self.app.run_task(generatore, on_done=self.show_summary, on_error=self.show_error)
+
+    def show_error(self, errore) -> None:
+        """La copia si è fermata per un errore: si spiega e si sbloccano i pulsanti."""
+        self.stato.configure(text="Copia interrotta.")
+        self.riepilogo.configure(text=errore.message)
+        self.riepilogo_errori.configure(text=errore.hint)
+        self.bottone_annulla.state(["disabled"])
+        for bottone in (self.bottone_apri, self.bottone_chiudi):
+            bottone.state(["!disabled"])
+        self.app.log(f"Errore durante la copia: {errore.message} {errore.hint}".strip())
 
     def _pianifica(self, seriale: str) -> TransferPlan:
         return build_plan(
@@ -133,8 +163,14 @@ class TransferPage(ttk.Frame):
     # ── avanzamento ───────────────────────────────────────────────────────
     def update_progress(self, progresso: Progress) -> None:
         percentuale = (progresso.bytes_done * 100 / progresso.bytes_total) if progresso.bytes_total else 0.0
-        self.barra_totale.configure(value=percentuale)
-        self.barra_file.configure(value=100.0 if percentuale >= 100 else percentuale)
+        self.barra_totale.configure(value=min(percentuale, 100.0))
+        # La seconda barra segue il **singolo file** in corso, non il totale: altrimenti le
+        # due barre si muovono insieme e quella «File in corso» non aggiunge nulla.
+        if progresso.file_bytes_total:
+            percentuale_file = progresso.file_bytes_done * 100 / progresso.file_bytes_total
+        else:
+            percentuale_file = percentuale
+        self.barra_file.configure(value=min(percentuale_file, 100.0))
         self.etichetta_file.configure(text=f"File in corso: {progresso.current_name or '—'}")
         self.dettagli.configure(
             text=(
@@ -188,6 +224,8 @@ class TransferPage(ttk.Frame):
         self.app.log("Interruzione richiesta: mi fermo subito. Le foto già copiate restano al sicuro.")
 
     def open_folder(self) -> None:
+        if self.app.options is None:
+            return
         destinazione = self.app.options.destination
         try:
             open_in_file_manager(destinazione)
@@ -199,7 +237,7 @@ class TransferPage(ttk.Frame):
             )
 
     def save_report(self) -> None:
-        if not self.report_text:
+        if not self.report_text or self.app.options is None:
             return
         try:
             percorso = save_report(self.report_text, self.app.options.destination)

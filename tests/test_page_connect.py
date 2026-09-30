@@ -16,6 +16,21 @@ def test_aiuto_contiene_le_marche_e_i_passi():
     assert "Debug USB" in testo
     assert "Consenti" in testo
     assert "cavo" in testo.lower()
+    # Il Debug USB è l'ultima spiaggia, non il primo consiglio.
+    assert "ultima" in testo.lower() or "solo se" in testo.lower()
+
+
+def test_l_aiuto_generico_non_parla_di_debug():
+    """I primi consigli non devono nominare il Debug USB: non è obbligatorio."""
+    from fotofacile.ui.page_connect import build_help_text_generico
+
+    testo = build_help_text_generico()
+    assert "cavo" in testo.lower()
+    righe = [riga for riga in testo.splitlines() if riga.strip()]
+    # Il Debug USB può comparire solo alla fine, come ultima possibilità.
+    prime = "\n".join(righe[: max(1, len(righe) - 2)])
+    assert "Debug USB" not in prime
+    assert "Debug USB" in testo
 
 
 def test_aiuto_per_marca_sconosciuta_non_lascia_vuoti():
@@ -53,12 +68,13 @@ def test_nessun_telefono_invita_a_collegarlo(app):
 
 
 def test_senza_componente_lo_dice_e_propone_installazione(app):
+    """Se su questo computer non esiste **nessun** modo di collegarsi, l'app lo dice."""
     app.remote = None
     app.demo_mode = False
     app.adb_path = None
     pagina = app.pages["connect"]
     pagina.check_now()
-    assert attendi(app, lambda: "componente" in pagina.message.lower())
+    assert attendi(app, lambda: "collegarmi" in pagina.message.lower())
     assert pagina.bottone_installa.instate(["!disabled"])
 
 
@@ -77,13 +93,23 @@ def test_riavvio_collegamento_richiama_il_backend(app):
     assert chiamate == ["riavviato"]
 
 
-def test_riavvio_senza_componente_avvisa(app):
+def test_riavvio_ricontrolla_i_collegamenti_disponibili(app, monkeypatch):
+    """«Riprova il collegamento» non presuppone nessuna impostazione sul telefono."""
+    import fotofacile.ui.app as modulo_app
+    from fotofacile.core.trasporto import TrasportoDemo
+
+    def finti_disponibili(**_kwargs):
+        return [TrasportoDemo(app.backend, intervallo=0.0)]
+
+    monkeypatch.setattr(modulo_app, "trasporti_disponibili", finti_disponibili)
     app.remote = None
     app.demo_mode = False
     pagina = app.pages["connect"]
     pagina.restart_connection()
+    assert app.remote is not None
     assert attendi(app, lambda: app.banner.visible)
-    assert "install" in f"{app.banner.message_text} {app.banner.hint_text}".lower()
+    testo = f"{app.banner.message_text} {app.banner.hint_text}".lower()
+    assert "collegamento" in testo
 
 
 def test_modalita_demo_attivabile_dal_passo_1(app):

@@ -6,12 +6,15 @@ import tkinter as tk
 from tkinter import ttk
 
 from ..core.format import format_size, parse_date
-from ..core.scanner import DEFAULT_ROOTS, MediaFile, build_scan_command, group_folders
-from .theme import COLORI, font
+from ..core.scanner import MediaFile, group_folders
+from .theme import COLORI, font, tema_tela
 
 
 class SelectPage(ttk.Frame):
     """Elenco delle cartelle con caselle di spunta, filtri e totale scelto."""
+
+    #: Ogni quanto si ricontrolla se il telefono si è liberato (millisecondi).
+    ATTESA_TASK = 120
 
     def __init__(self, parent) -> None:
         # le pagine vivono dentro app.container: la finestra resta libera per
@@ -24,6 +27,8 @@ class SelectPage(ttk.Frame):
         self._folders: list = []
         self._files: list[MediaFile] = []
         self._scansione_fatta = False
+        self._scansione_in_corso = False
+        self._attesa_id: str | None = None
 
         ttk.Label(self, text="Scegli cosa copiare", style="Titolo.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
@@ -36,7 +41,8 @@ class SelectPage(ttk.Frame):
 
         contenitore = ttk.Frame(self)
         contenitore.grid(row=2, column=0, sticky="nsew")
-        self.canvas = tk.Canvas(contenitore, highlightthickness=0, background=COLORI["pannello"], height=260)
+        self.canvas = tk.Canvas(contenitore, background=COLORI["pannello"], height=260)
+        tema_tela(self.canvas)
         self.canvas.grid(row=0, column=0, sticky="nsew")
         barra = ttk.Scrollbar(contenitore, orient="vertical", command=self.canvas.yview)
         barra.grid(row=0, column=1, sticky="ns")
@@ -82,11 +88,44 @@ class SelectPage(ttk.Frame):
 
     # ── ciclo di vita ─────────────────────────────────────────────────────
     def on_show(self) -> None:
-        if not self._scansione_fatta and not self.app.task_in_corso:
-            self.start_scan()
+        self._avvia_quando_libero()
+
+    def _avvia_quando_libero(self) -> None:
+        """Avvia la ricerca appena il telefono è libero.
+
+        Se all'ingresso in questa schermata c'è ancora un controllo del telefono in corso
+        (per esempio il sondaggio del passo 1) si riprova fra poco: senza questo, la
+        schermata resterebbe vuota per sempre e l'utente non capirebbe perché.
+        """
+        self._attesa_id = None
+        if self._scansione_in_corso and not self.app.task_in_corso:
+            # Il lavoro è stato abbandonato altrove (cambio schermata, altro comando): senza
+            # questo azzeramento la schermata resterebbe bloccata per sempre su «Sto cercando…»,
+            # con i pulsanti spenti e nessun modo di riprovare.
+            self._scansione_in_corso = False
+        if self._scansione_fatta or self._scansione_in_corso:
+            return
+        if self.app.task_in_corso:
+            self._attesa_id = self.after(self.ATTESA_TASK, self._avvia_quando_libero)
+            return
+        self.start_scan()
+
+    def stop_polling(self) -> None:
+        """Annulla l'attesa programmata (l'app la chiama quando si cambia schermata)."""
+        if self._attesa_id is not None:
+            try:
+                self.after_cancel(self._attesa_id)
+            except (tk.TclError, ValueError):  # finestra già chiusa
+                pass
+            self._attesa_id = None
 
     # ── ricerca ───────────────────────────────────────────────────────────
     def start_scan(self) -> None:
+        self.stop_polling()
+        if self._scansione_in_corso:
+            # Premere «Cerca di nuovo» o cambiare la casella dei video mentre una ricerca è
+            # già in corso abbandonava il lavoro a metà (processo e file temporanei compresi).
+            return
         if self.app.remote is None:
             self.app.set_status(
                 "Manca il collegamento con il telefono.",
@@ -94,25 +133,47 @@ class SelectPage(ttk.Frame):
                 kind="avviso",
             )
             return
+        if self.app.device is None:
+            self.app.set_status(
+                "Il telefono non è più collegato.",
+                hint="Torna al passo «Collega il telefono» e ricollegalo, poi premi «Cerca le foto».",
+                kind="avviso",
+            )
+            self.app.go_to("connect")
+            # L'avviso va mostrato **dopo** il cambio di schermata: `go_to` chiude il banner.
+            self.app.set_status(
+                "Il telefono non è più collegato.",
+                hint="Ricollegalo e premi «Avanti» per riprovare.",
+                kind="avviso",
+            )
+            return
+        self._scansione_in_corso = True
         self.app.set_status("Sto cercando le foto sul telefono… può richiedere un momento.", kind="info")
         self.bottone_avanti.state(["disabled"])
         self.bottone_cerca.state(["disabled"])
+        self.casella_video.state(["disabled"])
         self.riepilogo.configure(text="Sto cercando…", foreground=COLORI["tenue"])
-        seriale = self.app.device.serial if self.app.device is not None else ""
-        comando = build_scan_command(DEFAULT_ROOTS, include_videos=self.sto_scegliendo_video.get())
         self.app.run_task(
-            self.app.remote.cerca_media(seriale, comando, annulla=self.app.cancel_event),
+            self.app.remote.cerca_media(
+                self.app.device.serial,
+                include_videos=self.sto_scegliendo_video.get(),
+                annulla=self.app.cancel_event,
+            ),
             on_done=self._scansione_finita,
             on_error=self._scansione_fallita,
         )
 
     def _scansione_fallita(self, _errore) -> None:
+        self._scansione_in_corso = False
         self.bottone_cerca.state(["!disabled"])
+        self.casella_video.state(["!disabled"])
         self.riepilogo.configure(text="Ricerca non riuscita.", foreground=COLORI["avviso"])
 
     def _scansione_finita(self, file: list[MediaFile]) -> None:
         self._scansione_fatta = True
+        self._scansione_in_corso = False
         self.bottone_cerca.state(["!disabled"])
+        self.casella_video.state(["!disabled"])
         self._files = list(file)
         self._folders = group_folders(self._files)
         self.rebuild_list(self._folders)
@@ -187,6 +248,14 @@ class SelectPage(ttk.Frame):
         self.bottone_avanti.state(["!disabled"] if quanti else ["disabled"])
 
     def go_next(self) -> None:
+        if self.app.device is None:
+            self.app.set_status(
+                "Il telefono non è più collegato.",
+                hint="Torna al passo «Collega il telefono» e ricollegalo.",
+                kind="avviso",
+            )
+            self.app.go_to("connect")
+            return
         file = self.selected_files()
         if not file:
             self.app.set_status(

@@ -23,6 +23,7 @@ from typing import Callable, Generator
 from .adb import AdbBackend
 from .errors import FotoFacileError, traduci_errore_file
 from .history import History
+from .adb_passi import percorso_temporaneo
 from .ops import Annullato, esegui_fino_alla_fine
 from .planner import TransferOptions, TransferPlan
 from .scanner import MediaFile
@@ -41,6 +42,10 @@ class Progress:
     bytes_total: int = 0
     speed_bps: float = 0.0
     eta_seconds: float | None = None
+    #: Avanzamento del file in corso, per la seconda barra: senza questi due campi la barra
+    #: del singolo file ripeteva semplicemente quella generale.
+    file_bytes_done: int = 0
+    file_bytes_total: int = 0
 
 
 @dataclass
@@ -86,7 +91,7 @@ def download_file_stream(
     """Scrive un file dal telefono su disco passando da un temporaneo ``.part`` (modo diretto)."""
     destinazione = Path(dest_path)
     destinazione.parent.mkdir(parents=True, exist_ok=True)
-    temporaneo = destinazione.with_name(destinazione.name + ".part")
+    temporaneo = percorso_temporaneo(destinazione)
     flusso = adb.stream_file(serial, remote_path, chunk_size=chunk_size)
     scritti = 0
     try:
@@ -134,6 +139,7 @@ class CopiatoreInterno:
         destinazione: Path,
         on_scritti: Callable[[int], None] | None = None,
         annulla=None,
+        remoto_dimensione: int | None = None,
     ) -> Generator[float, None, int]:
         totale = 0
 
@@ -188,12 +194,15 @@ def transfer_steps(
             esiti.cancelled = True
             break
         avanzamento.current_name = pianificato.media.name
+        avanzamento.file_bytes_total = pianificato.media.size
+        avanzamento.file_bytes_done = 0
         bytes_prima = avanzamento.bytes_done
         ultimo = _pubblica(on_progress, avanzamento, orologio, ultimo, forza=True)
 
         def conta(byte_totali: int) -> None:
             nonlocal ultimo
             avanzamento.bytes_done = bytes_prima + byte_totali
+            avanzamento.file_bytes_done = byte_totali
             trascorso = max(orologio() - inizio, 0.001)
             avanzamento.speed_bps = avanzamento.bytes_done / trascorso
             restanti = max(avanzamento.bytes_total - avanzamento.bytes_done, 0)
@@ -212,13 +221,18 @@ def transfer_steps(
                     pianificato.dest_path,
                     on_scritti=conta,
                     annulla=annulla,
+                    # La dimensione serve solo a controllare lo spazio libero: chiedere
+                    # 16 MB per una foto da 200 KB non avrebbe senso.
+                    remoto_dimensione=pianificato.media.size,
                 )
             except Annullato:
                 avanzamento.bytes_done = bytes_prima
+                avanzamento.file_bytes_done = 0
                 esiti.cancelled = True
                 break
             except FotoFacileError as errore:
                 avanzamento.bytes_done = bytes_prima
+                avanzamento.file_bytes_done = 0
                 messaggio = errore.message
                 if not errore.ritentabile:
                     break  # inutile ritentare: il motivo non è temporaneo
@@ -226,6 +240,7 @@ def transfer_steps(
             if pianificato.media.size and scritti != pianificato.media.size:
                 _rimuovi(pianificato.dest_path)
                 avanzamento.bytes_done = bytes_prima
+                avanzamento.file_bytes_done = 0
                 messaggio = (
                     f"La copia di {pianificato.media.name} è incompleta "
                     f"(attesi {pianificato.media.size} byte, ricevuti {scritti})."
@@ -237,6 +252,7 @@ def transfer_steps(
         if esiti.cancelled:
             break
         avanzamento.done_files += 1
+        avanzamento.file_bytes_done = avanzamento.file_bytes_total
         if not riuscito:
             esiti.failed.append((pianificato.media, messaggio))
             continue

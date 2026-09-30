@@ -11,7 +11,7 @@ from typing import Mapping, Sequence
 from . import __version__
 from .core.adb import find_adb
 from .core.devices import get_devices
-from .core.osutil import app_dir, flag_nascosta
+from .core.osutil import app_dir, comando_se_stesso, flag_nascosta
 
 
 def build_doctor_report(
@@ -23,6 +23,7 @@ def build_doctor_report(
     devices: Sequence[tuple[str, str]],
     app_folder: str,
     writing_ok: bool,
+    modi: Sequence[tuple[str, bool]] = (),
 ) -> str:
     """Testo della diagnosi: serve al supporto per capire cosa non va su un computer."""
     righe = [
@@ -31,8 +32,12 @@ def build_doctor_report(
         f"Sistema: {system}",
         f"Python: {python_version}",
         f"Tkinter: {tk_version}",
-        f"Componente: {adb_path or 'non trovato'}",
     ]
+    if modi:
+        righe.append("Modi di collegamento:")
+        for nome, attivo in modi:
+            righe.append(f"  • {nome} — {'disponibile' if attivo else 'non disponibile'}")
+    righe.append(f"Componente aggiuntivo (adb): {adb_path or 'non trovato'}")
     if adb_version:
         righe.append(f"Versione componente: {adb_version}")
     if devices:
@@ -43,7 +48,7 @@ def build_doctor_report(
         righe.append("Telefoni collegati: nessuno")
     righe.append(f"Cartella dati: {app_folder}")
     righe.append(f"Scrittura: {'ok' if writing_ok else 'problema'}")
-    if not adb_path:
+    if not adb_path and not modi:
         righe.extend(
             [
                 "",
@@ -51,7 +56,13 @@ def build_doctor_report(
             ]
         )
     if not devices:
-        righe.extend(["", "Suggerimento: collega il telefono con il cavo e sbloccalo."])
+        righe.extend(
+            [
+                "",
+                "Suggerimento: collega il telefono con il cavo e sblocca lo schermo.",
+                "Non serve attivare il Debug USB: il programma usa il collegamento normale.",
+            ]
+        )
     return "\n".join(righe) + "\n"
 
 
@@ -95,9 +106,27 @@ def doctor(env: Mapping[str, str] | None = None) -> int:
             devices=dispositivi,
             app_folder=str(cartella),
             writing_ok=scrittura,
+            modi=elenco_modi(ambiente),
         )
     )
     return 0
+
+
+def elenco_modi(ambiente: Mapping[str, str] | None = None) -> list[tuple[str, bool]]:
+    """Quali modi di collegamento al telefono sono utilizzabili su questo computer.
+
+    È la riga più utile della diagnosi: dice subito se il collegamento **senza Debug USB**
+    è disponibile, o se l'unica possibilità è il collegamento rapido.
+    """
+    try:
+        from .core.trasporto import trasporti_disponibili
+
+        return [
+            (trasporto.nome, trasporto.disponibile())
+            for trasporto in trasporti_disponibili(env=ambiente)
+        ]
+    except Exception as errore:  # diagnosi «best effort»: non deve mai fallire
+        return [(f"errore nella verifica: {errore}", False)]
 
 
 def selftest() -> int:
@@ -159,13 +188,21 @@ def contesto_grafico_dubbio(env: Mapping[str, str] | None = None, system: str | 
 
 
 def prova_finestra(timeout: float = 10.0) -> bool:
-    """Prova ad aprire una finestra in un processo separato, senza bloccare l'avvio."""
+    """Prova ad aprire una finestra in un processo separato, senza bloccare l'avvio.
+
+    Nel pacchetto (PyInstaller) non si possono passare opzioni come ``-c`` all'eseguibile:
+    si richiama sé stesso con l'opzione interna ``--prova-finestra``. Il richiamo funziona
+    identico dal sorgente e dal programma impacchettato (vedi ``osutil.comando_se_stesso``).
+    """
+    return _processo_finestra(comando_se_stesso("--prova-finestra"), timeout)
+
+
+def _processo_finestra(comando: list[str], timeout: float) -> bool:
     import subprocess
 
-    codice = "import tkinter as tk; r=tk.Tk(); r.withdraw(); r.update(); r.destroy()"
     try:
         esito = subprocess.run(
-            [sys.executable, "-c", codice],
+            comando,
             capture_output=True,
             timeout=timeout,
             creationflags=flag_nascosta(),
@@ -173,6 +210,20 @@ def prova_finestra(timeout: float = 10.0) -> bool:
     except (subprocess.TimeoutExpired, OSError):
         return False
     return esito.returncode == 0
+
+
+def prova_finestra_diretta() -> int:
+    """Apre e chiude una finestra vuota: è il corpo di ``--prova-finestra``."""
+    try:
+        import tkinter as tk
+
+        radice = tk.Tk()
+        radice.withdraw()
+        radice.update()
+        radice.destroy()
+    except Exception:
+        return 1
+    return 0
 
 
 def avviso_visibile(
@@ -231,6 +282,31 @@ def start_gui(demo: bool = False) -> int:
     return 0
 
 
+def esegui_aiutante(argomenti: Sequence[str]) -> int:
+    """Modalità interna: il programma richiama sé stesso per parlare con il telefono.
+
+    Non è pensata per essere usata a mano: serve a :mod:`fotofacile.core.trasporto_aiutante`,
+    che avvia un processo separato perché il collegamento diretto (ImageCaptureCore su macOS,
+    WPD su Windows, gio su Linux) ha bisogno di un ciclo di eventi tutto suo, che non si può
+    mescolare con la finestra.
+    """
+    from .aiutanti import esegui
+
+    elenco = list(argomenti)
+    if not elenco:
+        print("Serve il nome dell'aiutante.", file=sys.stderr)
+        return 2
+    nome, resto = elenco[0], elenco[1:]
+    try:
+        return esegui(nome, resto)
+    except KeyError:
+        print(f"Aiutante sconosciuto: {nome}", file=sys.stderr)
+        return 2
+    except ImportError as errore:
+        print(f"L'aiutante {nome} non è disponibile su questo computer: {errore}", file=sys.stderr)
+        return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="fotofacile",
@@ -247,6 +323,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"FotoFacile {__version__}")
     parser.add_argument(
+        "--prova-finestra",
+        dest="prova_finestra",
+        action="store_true",
+        help=argparse.SUPPRESS,  # uso interno: verifica che la grafica si apra davvero
+    )
+    parser.add_argument(
         "comando",
         nargs="?",
         choices=["doctor"],
@@ -256,9 +338,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None, env: Mapping[str, str] | None = None) -> int:
-    argomenti = build_parser().parse_args(list(argv) if argv is not None else None)
-    if argomenti.comando == "doctor":
+    argomenti = list(argv) if argv is not None else sys.argv[1:]
+    # L'opzione interna va intercettata **prima** di argparse: gli argomenti dopo di essa
+    # appartengono all'aiutante, non a FotoFacile.
+    if argomenti[:1] == ["--aiutante"]:
+        return esegui_aiutante(argomenti[1:])
+    argomenti_letti = build_parser().parse_args(argomenti)
+    if argomenti_letti.prova_finestra:
+        return prova_finestra_diretta()
+    if argomenti_letti.comando == "doctor":
         return doctor(env)
-    if argomenti.selftest:
+    if argomenti_letti.selftest:
         return selftest()
-    return start_gui(demo=argomenti.demo)
+    return start_gui(demo=argomenti_letti.demo)

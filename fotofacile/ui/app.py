@@ -10,14 +10,14 @@ from __future__ import annotations
 
 import threading
 import tkinter as tk
+import traceback
 from tkinter import messagebox, ttk
 from typing import Any, Callable, Generator
 
 from ..core.adb import RealAdbBackend, find_adb
-from ..core.adb_passi import AdbAPassi, AdbDemoAPassi
-from ..core.demo import DemoAdbBackend
 from ..core.errors import FotoFacileError
 from ..core.history import History
+from ..core.trasporto import Trasporto, TrasportoAdb, TrasportoDemo, trasporti_disponibili
 from .theme import apply_theme
 from .widgets import Banner, LogPane, StepIndicator
 
@@ -44,8 +44,11 @@ class App(tk.Tk):
 
         self.adb_path = adb_path or find_adb()
         self.backend: Any = None
-        self.remote: Any = None
+        self.trasporto: Trasporto | None = None
         self.demo_mode = False
+        #: Nomi dei modi di collegamento già provati senza successo (evita di riprovare
+        #: sempre lo stesso e di restare in un ciclo infinito).
+        self._gia_provati: set[str] = set()
 
         self.device = None
         self.media_files: list = []
@@ -56,6 +59,7 @@ class App(tk.Tk):
         self.current_page = ""
         self._task: Generator | None = None
         self._epoca_task = 0
+        self._id_primo_piano: str | None = None
         self._history = History()
         self._history.load()
 
@@ -91,8 +95,8 @@ class App(tk.Tk):
             self._usa_backend(backend)
         elif demo_mode:
             self.attiva_demo()
-        elif self.adb_path:
-            self._usa_adb(self.adb_path)
+        else:
+            self.usa_collegamento_migliore()
 
         self.pages: dict[str, ttk.Frame] = {}
         self._costruisci_pagine()
@@ -105,40 +109,99 @@ class App(tk.Tk):
         """Mette la finestra davanti alle altre: avviata dal Terminale resterebbe dietro."""
         self.lift()
         self.attributes("-topmost", True)
-        self.after(700, lambda: self.attributes("-topmost", False))
+        self._id_primo_piano = self.after(700, self._togli_primo_piano)
         self.focus_force()
 
+    def _togli_primo_piano(self) -> None:
+        """Rimette la finestra a livello normale, ma solo se esiste ancora.
+
+        Se l'utente chiude il programma entro 700 ms il comando programmato arriverebbe su
+        una finestra già distrutta e solleverebbe un `TclError`.
+        """
+        self._id_primo_piano = None
+        try:
+            if self.winfo_exists():
+                self.attributes("-topmost", False)
+        except tk.TclError:  # pragma: no cover - finestra chiusa nel frattempo
+            pass
+
     # ── backend ───────────────────────────────────────────────────────────
+    @property
+    def remote(self) -> Trasporto | None:
+        """Il modo di parlare con il telefono attualmente in uso."""
+        return self.trasporto
+
+    @remote.setter
+    def remote(self, valore: Trasporto | None) -> None:
+        self.trasporto = valore
+
     def _usa_backend(self, backend) -> None:
         """Usa un backend in memoria (test) o il telefono demo."""
         self.backend = backend
-        self.remote = AdbDemoAPassi(backend, intervallo=self.INTERVALLO_PASSI)
+        self.trasporto = TrasportoDemo(backend, intervallo=self.INTERVALLO_PASSI)
         self.demo_mode = True
 
     def _usa_adb(self, percorso: str) -> None:
+        """Usa il collegamento rapido tramite adb (serve il Debug USB già attivo)."""
         self.adb_path = percorso
         self.backend = RealAdbBackend(percorso)
-        self.remote = AdbAPassi(percorso, intervallo=self.INTERVALLO_PASSI)
+        self.trasporto = TrasportoAdb(percorso, intervallo=self.INTERVALLO_PASSI)
         self.demo_mode = False
+
+    def usa_collegamento_migliore(self) -> bool:
+        """Sceglie da sé come parlare con il telefono, senza chiedere niente all'utente.
+
+        Si preferisce sempre il **collegamento diretto** (quello che non richiede il Debug
+        USB); il Debug USB viene usato solo come scorciatoia se è già attivo.
+        """
+        self._gia_provati = set()
+        return self.cambia_collegamento()
+
+    def cambia_collegamento(self) -> bool:
+        """Passa a un modo di collegamento **non ancora provato**.
+
+        Tener traccia di quelli già falliti è indispensabile: senza, un errore faceva
+        ripartire subito lo stesso tentativo, all'infinito, e l'utente non vedeva mai il
+        messaggio di errore.
+        """
+        elenco = trasporti_disponibili(adb_path=self.adb_path or None)
+        for trasporto in elenco:
+            if trasporto.nome in self._gia_provati:
+                continue
+            self._gia_provati.add(trasporto.nome)
+            self.demo_mode = False
+            self.trasporto = trasporto
+            self.adb_path = getattr(trasporto, "adb_path", None) or self.adb_path
+            self.log(f"Collegamento scelto: {trasporto.nome} — {trasporto.spiegazione}")
+            return True
+        return False
 
     def attiva_demo(self) -> None:
         """Passa al telefono finto: permette di provare tutto senza dispositivo collegato."""
+        from ..core.demo import DemoAdbBackend
+
         self._usa_backend(DemoAdbBackend(file_count=54))
         self.log("Modalità demo attiva: verrà usato un telefono finto.")
 
     def usa_telefono_vero(self, percorso: str | None = None) -> bool:
-        """Torna al telefono vero, se il componente di collegamento è disponibile."""
-        percorso = percorso or self.adb_path or find_adb()
-        if not percorso:
-            return False
-        self._usa_adb(percorso)
-        self.log(f"Collegamento pronto: {percorso}")
-        return True
+        """Torna al telefono vero, se su questo computer è possibile."""
+        if percorso:
+            self._usa_adb(percorso)
+            return True
+        return self.usa_collegamento_migliore()
 
     @property
     def component_mancante(self) -> bool:
-        return self.remote is None and not self.demo_mode
+        """True quando **nessun** modo di collegarsi è disponibile.
 
+        Con il collegamento diretto il componente aggiuntivo (platform-tools) non serve più:
+        il pulsante di installazione compare solo se davvero non c'è alternativa.
+        """
+        return self.transport is None
+
+    @property
+    def transport(self) -> Trasporto | None:
+        return self.trasporto
     # ── costruzione e navigazione ─────────────────────────────────────────
     def _costruisci_pagine(self) -> None:
         from .page_connect import ConnectPage
@@ -158,8 +221,10 @@ class App(tk.Tk):
         for pagina in self.pages.values():
             pagina.destroy()
         self.pages.clear()
-        self.current_page = ""
         self._costruisci_pagine()
+        # Senza questo la finestra resterebbe con `current_page = ""`: il primo «Indietro»
+        # cercherebbe la posizione di una stringa vuota e solleverebbe ValueError.
+        self.go_to("connect")
 
     def register_page(self, key: str, page: ttk.Frame) -> None:
         """Registra una pagina dentro il contenitore centrale (non sulla finestra)."""
@@ -169,10 +234,16 @@ class App(tk.Tk):
         self.container.grid_columnconfigure(0, weight=1)
 
     def go_to(self, key: str) -> None:
-        if key == "prev":
-            key = ORDINE[max(0, ORDINE.index(self.current_page) - 1)]
-        elif key == "next":
-            key = ORDINE[min(len(ORDINE) - 1, ORDINE.index(self.current_page) + 1)]
+        if key in ("prev", "next"):
+            # Con `current_page` vuoto (finestra appena costruita) «Indietro» e «Avanti»
+            # devono portare al primo passo, non far saltare il programma.
+            corrente = ORDINE.index(self.current_page) if self.current_page in ORDINE else 0
+            if key == "prev":
+                key = ORDINE[max(0, corrente - 1)]
+            else:
+                key = ORDINE[min(len(ORDINE) - 1, corrente + 1)]
+        if key not in self.pages:
+            key = ORDINE[0]
         pagina = self.pages[key]
         pagina.tkraise()
         pagina.on_show()
@@ -240,6 +311,7 @@ class App(tk.Tk):
                     kind="errore",
                 )
                 self.log(f"Errore imprevisto: {errore!r}")
+                self.log(traceback.format_exc())
                 return
             ritardo = pausa if isinstance(pausa, (int, float)) else attesa
             self.after(max(0, int(ritardo * 1000)), tick)
@@ -298,6 +370,12 @@ class App(tk.Tk):
         self.stop_all_polling()
         self.cancel_event.set()
         self.annulla_task()
+        if self._id_primo_piano is not None:
+            try:
+                self.after_cancel(self._id_primo_piano)
+            except (tk.TclError, ValueError):  # pragma: no cover - difensivo
+                pass
+            self._id_primo_piano = None
         self._pulisci_ambiente()
         self.destroy()
 

@@ -1,4 +1,4 @@
-# FotoFacile — programma di installazione per Windows (PowerShell)
+﻿# FotoFacile — programma di installazione per Windows (PowerShell)
 #
 # Installa FotoFacile per l'utente corrente, senza chiedere privilegi di amministratore:
 #   * copia i file in %LOCALAPPDATA%\Programs\FotoFacile
@@ -29,6 +29,16 @@ function Scrivi($testo, $colore = "Gray") {
     Write-Host $testo -ForegroundColor $colore
 }
 
+function Scrivi-File($percorso, $contenuto, [switch]$SoloAscii) {
+    # Windows PowerShell 5.1 scrive il BOM con -Encoding UTF8; cmd.exe non salta il BOM,
+    # quindi la prima riga dei .bat diventa irriconoscibile («'@echo' non e' riconosciuto»).
+    # Meglio scrivere senza BOM e con fine riga esplicito CRLF, come fa
+    # scripts/crea_pacchetto_windows.py per gli altri file destinati a Windows.
+    $normalizzato = ($contenuto -replace "`r`n", "`n").Replace("`n", "`r`n")
+    $codifica = if ($SoloAscii) { [System.Text.Encoding]::ASCII } else { New-Object System.Text.UTF8Encoding($false) }
+    [System.IO.File]::WriteAllText($percorso, $normalizzato, $codifica)
+}
+
 function Trova-Eseguibile {
     $possibili = @(
         (Join-Path $Radice "dist\FotoFacile\$Nome.exe"),
@@ -44,7 +54,11 @@ function Trova-Eseguibile {
 function Trova-Python {
     foreach ($candidato in @(@("py", "-3"), @("python"), @("python3"))) {
         try {
-            $esito = & $candidato[0] $candidato[1..($candidato.Count - 1)] -c "import sys,tkinter; raise SystemExit(0 if sys.version_info >= (3,9) else 1)" 2>$null
+            # Select-Object -Skip 1: con un array di un solo elemento PowerShell legge
+            # $candidato[1..0] come gli indici 1 e 0, aggiungendo un argomento fantasma
+            # prima di -c: il controllo falliva sempre e «python» non veniva mai trovato.
+            $argomenti = @($candidato | Select-Object -Skip 1)
+            $esito = & $candidato[0] @argomenti -c "import sys,tkinter; raise SystemExit(0 if sys.version_info >= (3,9) else 1)" 2>$null
             if ($LASTEXITCODE -eq 0) { return ($candidato -join " ") }
         } catch { }
     }
@@ -115,8 +129,8 @@ if errorlevel 1 (
 )
 "@
     $avvio = Join-Path $Destinazione "FotoFacile.bat"
-    Set-Content -Path $avvio -Value $avvioAuto -Encoding UTF8
-    Set-Content -Path (Join-Path $Destinazione "Versione.txt") -Value "$Nome $Versione (modalità Python)" -Encoding UTF8
+    Scrivi-File -Percorso $avvio -Contenuto $avvioAuto -SoloAscii
+    Scrivi-File -Percorso (Join-Path $Destinazione "Versione.txt") -Contenuto "$Nome $Versione (modalità Python)"
 } else {
     Copy-Item -Path (Join-Path (Split-Path -Parent $eseguibile) "*") -Destination $Destinazione -Recurse -Force
     $avvio = Join-Path $Destinazione (Split-Path -Leaf $eseguibile)
@@ -132,7 +146,7 @@ chcp 65001 >nul
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0DisinstallaFotoFacile.ps1"
 pause
 "@
-Set-Content -Path $disinstalla -Value $testoDisinstalla -Encoding UTF8
+Scrivi-File -Percorso $disinstalla -Contenuto $testoDisinstalla -SoloAscii
 
 Scrivi "File installati in: $Destinazione" "Green"
 

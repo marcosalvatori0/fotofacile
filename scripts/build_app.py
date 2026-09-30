@@ -18,6 +18,7 @@ Note:
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -71,6 +72,14 @@ def comando_pyinstaller(icona: Path | None) -> list[str]:
         "--specpath",
         str(RADICE / "build"),
     ]
+    # Gli aiutanti del collegamento diretto non sono solo codice Python: quello per Windows
+    # è uno script PowerShell, che senza questa riga non finirebbe dentro il pacchetto e il
+    # collegamento diretto non funzionerebbe sulla versione installata.
+    comando += ["--add-data", f"{RADICE / 'fotofacile' / 'aiutanti'}{os.pathsep}fotofacile/aiutanti"]
+    if sys.platform == "darwin":
+        # PyObjC serve al collegamento diretto: importato solo dall'aiutante, mai dal
+        # programma principale, quindi PyInstaller non lo vede da solo.
+        comando += ["--collect-submodules", "objc", "--collect-submodules", "ImageCaptureCore"]
     if icona is not None:
         comando += ["--icon", str(icona)]
     if sys.platform == "darwin":

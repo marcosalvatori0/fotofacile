@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 from typing import Callable, Sequence
 
-from .theme import COLORI, font
+from .theme import COLORI, font, tema_testo
 
 
 _TK_DISPONIBILE: bool | None = None
@@ -75,9 +75,8 @@ class LogPane(ttk.Frame):
 
     def __init__(self, parent: tk.Misc, height: int = 8) -> None:
         super().__init__(parent)
-        self.text = tk.Text(
-            self, height=height, wrap="word", state="disabled", font=font(11), background=COLORI["pannello"]
-        )
+        self.text = tk.Text(self, height=height, wrap="word", state="disabled", font=font(11))
+        tema_testo(self.text)  # senza questo, in modalità scura il testo resta nero su nero
         self.text.grid(row=0, column=0, sticky="nsew")
         barra = ttk.Scrollbar(self, orient="vertical", command=self.text.yview)
         barra.grid(row=0, column=1, sticky="ns")

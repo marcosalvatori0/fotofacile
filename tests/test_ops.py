@@ -35,7 +35,10 @@ def test_processo_fallito_produce_errore_umano(tmp_path):
     with pytest.raises(FotoFacileError) as errore:
         esegui_fino_alla_fine(processo.aspetta())
     assert errore.value.message == "Il telefono non risponde."
-    assert errore.value.hint == "Controlla il cavo."
+    # Il consiglio previsto **e** quello che ha detto il comando: il secondo è spesso la
+    # spiegazione più precisa (per esempio «il telefono è bloccato») e prima veniva buttato via.
+    assert "Controlla il cavo." in errore.value.hint
+    assert "errore tecnico" in errore.value.hint
 
 
 def test_processo_che_non_risponde_scade_e_viene_interrotto(tmp_path):

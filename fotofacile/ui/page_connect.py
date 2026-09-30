@@ -1,7 +1,11 @@
-"""Passo 1: guidare la persona a collegare il telefono e autorizzare il computer.
+"""Passo 1: guidare la persona a collegare il telefono.
 
-Questa schermata è la più delicata: se il telefono non viene riconosciuto, l'utente deve
-capire *cosa fare adesso*, senza gergo tecnico.
+Questa schermata è la più delicata: il telefono deve funzionare **senza** che l'utente attivi
+qualcosa di speciale. Il programma sceglie da sé il collegamento migliore disponibile
+(vedi :mod:`fotofacile.core.trasporto`) e qui si spiega solo cosa fare col cavo.
+
+Le istruzioni per attivare il «Debug USB» esistono ancora, ma sono l'**ultima spiaggia**: si
+mostrano solo se nessun altro collegamento dà risultati.
 """
 
 from __future__ import annotations
@@ -10,8 +14,8 @@ import tkinter as tk
 from tkinter import ttk
 
 from ..core.devices import STATE_MESSAGE
-from ..core.installer import installa_a_passi, is_installed
-from .theme import COLORI, font
+from ..core.installer import installa_a_passi
+from .theme import COLORI, font, tema_finestra, tema_testo
 
 PASSI_SAMSUNG = [
     "Apri «Impostazioni».",
@@ -75,8 +79,23 @@ CONSIGLI_FINALI = (
     "",
     "Se il telefono non viene riconosciuto:",
     "• prova un altro cavo USB (alcuni cavi servono solo per ricaricare);",
-    "• su Windows, installa il driver USB del produttore del telefono;",
+    "• sblocca lo schermo del telefono e lascialo sbloccato durante la copia;",
     "• scollega e ricollega il cavo dopo aver attivato il «Debug USB».",
+)
+
+#: Testo mostrato quando nessun collegamento funziona: prima le cose semplici, il Debug USB
+#: solo alla fine, perché non deve mai sembrare obbligatorio.
+CONSIGLI_SENZA_DEBUG = (
+    "Il telefono non viene riconosciuto.",
+    "",
+    "Prova in quest'ordine:",
+    "1. usa un altro cavo USB (alcuni cavi servono solo per ricaricare);",
+    "2. cambia porta del computer (evita gli adattatori e gli hub);",
+    "3. sblocca lo schermo del telefono e rispondi «Consenti» se compare una richiesta;",
+    "4. scollega e ricollega il cavo tenendo il telefono sbloccato.",
+    "",
+    "Se non basta, l'ultima possibilità è attivare il «Debug USB»: scegli la marca del"
+    " telefono qui sopra e segui i passaggi.",
 )
 
 
@@ -86,12 +105,18 @@ def build_help_text(brand: str) -> str:
     righe = [
         f"Come attivare il «Debug USB» — {brand}",
         "",
-        "Il telefono deve autorizzare il computer: è una procedura da fare una volta sola.",
+        "Serve solo se il telefono non viene riconosciuto in nessun altro modo:",
+        "di solito non è necessario.",
         "",
     ]
     righe.extend(f"{indice}. {passo}" for indice, passo in enumerate(passi, start=1))
     righe.extend(CONSIGLI_FINALI)
     return "\n".join(righe)
+
+
+def build_help_text_generico() -> str:
+    """Cosa provare **prima** di pensare al Debug USB."""
+    return "\n".join(CONSIGLI_SENZA_DEBUG)
 
 
 class ConnectPage(ttk.Frame):
@@ -106,6 +131,10 @@ class ConnectPage(ttk.Frame):
         self.app = parent
         self.message = ""
         self._polling = False
+        #: Identificativo del prossimo controllo programmato: annullarlo è l'unico modo
+        #: per non lasciare in giro catene di `after` che continuano a interrogare il telefono.
+        self._tick_id: str | None = None
+        self._finestra_aiuto: tk.Toplevel | None = None
         self._ultimo_stato = ("", 0, 0)
 
         ttk.Label(self, text="Collega il telefono al computer", style="Titolo.TLabel").grid(
@@ -113,7 +142,10 @@ class ConnectPage(ttk.Frame):
         )
         ttk.Label(
             self,
-            text="Usa il cavo USB e tieni il telefono sbloccato: ti chiederà di autorizzare il computer.",
+            text=(
+                "Usa il cavo USB e tieni lo schermo del telefono sbloccato. "
+                "Non devi attivare nessuna impostazione: il programma trova da s\u00e9 il modo di leggere le foto."
+            ),
             style="Sottotitolo.TLabel",
             wraplength=860,
             justify="left",
@@ -129,7 +161,10 @@ class ConnectPage(ttk.Frame):
         pulsanti = ttk.Frame(self)
         pulsanti.grid(row=4, column=0, sticky="w", pady=14)
         self.bottone_aiuto = ttk.Button(
-            pulsanti, text="Come si attiva il Debug USB?", style="Secondary.TButton", command=self.show_help
+            pulsanti,
+            text="Il telefono non viene riconosciuto?",
+            style="Secondary.TButton",
+            command=self.show_help,
         )
         self.bottone_aiuto.grid(row=0, column=0, padx=(0, 8))
         self.bottone_installa = ttk.Button(
@@ -140,7 +175,7 @@ class ConnectPage(ttk.Frame):
         )
         self.bottone_installa.grid(row=0, column=1, padx=8)
         self.bottone_ricarica = ttk.Button(
-            pulsanti, text="Riavvia collegamento", style="Secondary.TButton", command=self.restart_connection
+            pulsanti, text="Riprova il collegamento", style="Secondary.TButton", command=self.restart_connection
         )
         self.bottone_ricarica.grid(row=0, column=2, padx=8)
 
@@ -175,6 +210,8 @@ class ConnectPage(ttk.Frame):
         self.indicatore.configure(text=testo, foreground=colori.get(tono, COLORI["testo"]))
 
     def _aggiorna_bottone_installa(self) -> None:
+        # Il pulsante compare solo quando **nessun** collegamento è disponibile: con il
+        # collegamento diretto non serve installare niente.
         serve = self.app.component_mancante
         self.bottone_installa.state(["!disabled"] if serve else ["disabled"])
 
@@ -183,28 +220,42 @@ class ConnectPage(ttk.Frame):
         self.start_polling()
 
     def start_polling(self) -> None:
-        if self._polling:
-            return
+        # Si riparte sempre da zero: senza l'annullamento del controllo precedente ogni
+        # ritorno a questa schermata aggiungeva una catena di `after` in più, e il telefono
+        # veniva interrogato due, tre, quattro volte ogni due secondi.
+        self.stop_polling()
         self._polling = True
         self.check_now()
-        self.after(self.INTERVALLO_SONDAGGIO, self._tick)
+        self._tick_id = self.after(self.INTERVALLO_SONDAGGIO, self._tick)
 
     def stop_polling(self) -> None:
         self._polling = False
+        if self._tick_id is not None:
+            try:
+                self.after_cancel(self._tick_id)
+            except (tk.TclError, ValueError):  # finestra già chiusa
+                pass
+            self._tick_id = None
         self._ultimo_stato = ("", 0, 0)
 
     def _tick(self) -> None:
+        self._tick_id = None
         if not self._polling:
             return
         self.check_now()
-        self.after(self.INTERVALLO_SONDAGGIO, self._tick)
+        self._tick_id = self.after(self.INTERVALLO_SONDAGGIO, self._tick)
 
     def check_now(self) -> None:
         """Chiede al telefono come sta e aggiorna il messaggio in base allo stato reale."""
         self._aggiorna_bottone_installa()
         if self.app.remote is None:
-            self.set_message("Manca il componente di collegamento.", tono="avviso")
-            self.dettaglio.configure(text="Premi «Installa componente mancante»: lo scarico io da internet.")
+            # Su questo computer non esiste nessun modo di collegarsi: è una condizione di
+            # partenza, non qualcosa che cambia da sola. Lo si dice una volta sola, indicando
+            # l'unica azione che può davvero aiutare.
+            self.set_message("Su questo computer non riesco a collegarmi al telefono.", tono="avviso")
+            self.dettaglio.configure(
+                text="Premi «Installa componente mancante», oppure apri la diagnosi con «doctor»."
+            )
             return
         if self.app.task_in_corso:
             return  # c'è già un controllo in corso
@@ -215,14 +266,18 @@ class ConnectPage(ttk.Frame):
         )
 
     def _controllo_fallito(self, errore) -> None:
-        """Se il componente è guasto o assente, il pulsante di installazione torna attivo."""
-        testo = f"{errore.message} {errore.hint}".lower()
-        if "componente" in testo or "collegamento" in testo:
-            self.app.remote = None
-            self.app.demo_mode = False
+        """Il controllo non è riuscito: si ripiega su un altro modo di collegamento, se c'è.
+
+        Una sola volta per modo: se anche l'ultimo disponibile fallisce, si mostra l'errore
+        invece di riprovare all'infinito.
+        """
+        if not self.app.demo_mode and self.app.cambia_collegamento():
+            self.app.log(f"Cambio collegamento: {errore.message}")
             self._aggiorna_bottone_installa()
+            self.check_now()
+            return
         self.set_message(errore.message, tono="avviso")
-        self.dettaglio.configure(text=errore.hint or "Premi «Riavvia collegamento» e riprova.")
+        self.dettaglio.configure(text=errore.hint or "Premi «Riprova il collegamento» e riprova.")
 
     def _dispositivi_ricevuti(self, dispositivi) -> None:
         pronti = [dispositivo for dispositivo in dispositivi if dispositivo.is_ready]
@@ -261,48 +316,84 @@ class ConnectPage(ttk.Frame):
     # ── azioni ────────────────────────────────────────────────────────────
     def _avanti(self) -> None:
         if self.app.device is None:
-            self.set_message("Prima collega il telefono e autorizza il computer.", tono="avviso")
+            self.set_message("Prima collega il telefono e sblocca lo schermo.", tono="avviso")
             return
         self.stop_polling()
         self.app.go_to("select")
 
     def show_help(self) -> None:
-        """Istruzioni per marca, con menù a tendina."""
-        finestra = tk.Toplevel(self)
-        finestra.title("Come attivare il Debug USB")
-        finestra.geometry("660x540")
-        marca = tk.StringVar(value="Samsung")
-        testo = tk.Text(finestra, wrap="word", font=font(12), height=16, background=COLORI["pannello"])
-        testo.grid(row=1, column=0, sticky="nsew", padx=14, pady=(0, 8))
+        """Cosa provare quando il telefono non viene riconosciuto.
 
-        def aggiorna(*_args) -> None:
+        Prima le cose semplici (cavo, porta, schermo sbloccato); il «Debug USB» è in fondo,
+        presentato come ultima possibilità e non come passaggio obbligato. La finestra viene
+        riusata, non moltiplicata a ogni clic.
+        """
+        if self._finestra_aiuto is not None and self._finestra_aiuto.winfo_exists():
+            self._finestra_aiuto.deiconify()
+            self._finestra_aiuto.lift()
+            self._finestra_aiuto.focus_set()
+            return
+
+        finestra = tk.Toplevel(self)
+        self._finestra_aiuto = finestra
+        finestra.title("Il telefono non viene riconosciuto")
+        finestra.geometry("700x580")
+        finestra.transient(self.winfo_toplevel())
+        tema_finestra(finestra)
+        marca = tk.StringVar(value="Samsung")
+
+        testo = tk.Text(finestra, wrap="word", font=font(12), height=16)
+        tema_testo(testo)
+        testo.grid(row=0, column=0, sticky="nsew", padx=14, pady=(12, 6))
+
+        def mostra(con_marca: bool, *_args) -> None:
             testo.configure(state="normal")
             testo.delete("1.0", "end")
-            testo.insert("1.0", build_help_text(marca.get()))
+            testo.insert("1.0", build_help_text(marca.get()) if con_marca else build_help_text_generico())
             testo.configure(state="disabled")
+            testo.see("1.0")
 
+        ttk.Button(
+            finestra, text="Cosa provare adesso", style="Secondary.TButton", command=lambda: mostra(False)
+        ).grid(row=1, column=0, sticky="w", padx=14, pady=(0, 6))
+        ttk.Label(finestra, text="Oppure, come ultima possibilità, attiva il Debug USB:").grid(
+            row=2, column=0, sticky="w", padx=14
+        )
         selettore = ttk.Combobox(finestra, textvariable=marca, values=list(BRANDS_ORDINE), state="readonly")
-        selettore.grid(row=0, column=0, sticky="ew", padx=14, pady=12)
-        selettore.bind("<<ComboboxSelected>>", aggiorna)
+        selettore.grid(row=3, column=0, sticky="ew", padx=14, pady=(2, 8))
+        selettore.bind("<<ComboboxSelected>>", lambda _evento: mostra(True))
         ttk.Button(finestra, text="Ho capito", style="Secondary.TButton", command=finestra.destroy).grid(
-            row=2, column=0, pady=(0, 12)
+            row=4, column=0, pady=(0, 12)
         )
         finestra.columnconfigure(0, weight=1)
-        finestra.rowconfigure(1, weight=1)
-        aggiorna()
+        finestra.rowconfigure(0, weight=1)
+        mostra(False)
 
     def install_component(self) -> None:
         """Scarica il componente mancante mostrando l'avanzamento nel registro."""
         self.app.set_status("Sto scaricando il componente di collegamento…", kind="info")
         self.bottone_installa.state(["disabled"])
         self.app.log("Download del componente di collegamento in corso…")
+        # L'evento di annullamento è condiviso con le altre operazioni: qui va azzerato,
+        # altrimenti un annullamento precedente interromperebbe subito il download.
+        self.app.cancel_event.clear()
 
         def progresso(info: dict) -> None:
             totale = info.get("totale") or 0
             percentuale = f" ({info['ricevuti'] * 100 // totale}%)" if totale else ""
             self.app.log(f"  scaricati {info['ricevuti'] // 1024} KB{percentuale}")
 
-        self.app.run_task(installa_a_passi(on_progress=progresso), on_done=self._componente_pronto)
+        self.app.run_task(
+            installa_a_passi(on_progress=progresso, annulla=self.app.cancel_event),
+            on_done=self._componente_pronto,
+            on_error=self._componente_fallito,
+        )
+
+    def _componente_fallito(self, errore) -> None:
+        """Il download non è riuscito: il pulsante torna subito utilizzabile."""
+        self._aggiorna_bottone_installa()
+        self.set_message(errore.message, tono="avviso")
+        self.dettaglio.configure(text=errore.hint or "Riprova il download.")
 
     def _componente_pronto(self, percorso) -> None:
         self.app.log(f"Componente pronto: {percorso}")
@@ -312,15 +403,22 @@ class ConnectPage(ttk.Frame):
         self.check_now()
 
     def restart_connection(self) -> None:
+        """Riprova il collegamento: prima si ricontrolla quali modi sono disponibili.
+
+        È il primo rimedio da provare e non presuppone nessuna impostazione sul telefono: con
+        il collegamento diretto serve solo a scollegare e ricollegare il cavo.
+        """
         if self.app.remote is None:
-            self.app.set_status(
-                "Prima serve il componente di collegamento.",
-                hint="Premi «Installa componente mancante».",
-                kind="avviso",
-            )
-            return
-        self.app.set_status("Sto riavviando il collegamento…", kind="info")
-        self.app.log("Riavvio del collegamento richiesto.")
+            if not self.app.usa_collegamento_migliore():
+                self.app.set_status(
+                    "Non c'è nessun collegamento da riprovare su questo computer.",
+                    hint="Apri la diagnosi con «doctor» e segnala il risultato.",
+                    kind="avviso",
+                )
+                return
+            self._aggiorna_bottone_installa()
+        self.app.set_status("Sto riprovando il collegamento…", kind="info")
+        self.app.log("Collegamento riprovato.")
         self.app.run_task(self.app.remote.riavvia(), on_done=lambda _esito: self.check_now())
 
     def enable_demo(self) -> None:

@@ -27,7 +27,7 @@ def test_proposta_cartella_e_opzioni(app, tmp_path):
     opzioni = pagina.build_options()
     assert isinstance(opzioni, TransferOptions)
     assert opzioni.destination == tmp_path
-    assert opzioni.preserve_structure is True
+    assert opzioni.preserve_structure is False
     assert opzioni.skip_existing is True
 
 

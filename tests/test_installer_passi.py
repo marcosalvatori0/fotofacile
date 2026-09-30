@@ -34,7 +34,10 @@ def _risposta(dati: bytes):
     return lambda *_a, **_k: Risposta(dati)
 
 
-def test_installazione_a_passi_scarica_ed_estrae(tmp_path):
+def test_installazione_a_passi_scarica_ed_estrae(tmp_path, monkeypatch):
+    # Il controllo «archivio troppo piccolo» è pensato per un componente vero da ~10 MB:
+    # qui si prova il meccanismo a passi, quindi la soglia viene abbassata.
+    monkeypatch.setattr("fotofacile.core.installer.MIN_DIMENSIONE_ARCHIVIO", 1)
     archivio = _zip(tmp_path)
     visti = []
     generatore = installa_a_passi(

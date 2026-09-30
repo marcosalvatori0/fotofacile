@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts import crea_pacchetto_windows as modulo_pacchetto
 from scripts.crea_pacchetto_windows import NOME_CARTELLA, crea_pacchetto
 
 RADICE = Path(__file__).resolve().parent.parent
@@ -86,9 +87,36 @@ def test_leggimi_spiega_cosa_fare(pacchetto):
     testo = (pacchetto / "LEGGIMI - Windows.txt").read_text(encoding="utf-8")
     assert "Avvia FotoFacile.bat" in testo
     assert "Crea l'eseguibile per Windows.bat" in testo
-    assert "Debug USB" in testo  # la parte che serve per il telefono
     assert "python.org" in testo
     assert "SmartScreen" in testo
+
+
+def test_leggimi_non_obbliga_ad_attivare_il_debug_usb(pacchetto):
+    """Il Debug USB non deve mai sembrare un passaggio obbligato: è la richiesta principale
+    dell'utente e la vecchia versione delle istruzioni diceva l'opposto."""
+    testo = (pacchetto / "LEGGIMI - Windows.txt").read_text(encoding="utf-8")
+    assert "NON devi attivare il Debug USB" in testo
+    # Il Debug USB si nomina solo come ultima possibilità, non fra i primi passi.
+    posizione_primi_passi = testo.index("COLLEGARE IL TELEFONO")
+    posizione_fine_passi = testo.index("SE QUALCOSA NON FUNZIONA")
+    primi_passi = testo[posizione_primi_passi:posizione_fine_passi]
+    righe = [riga for riga in primi_passi.splitlines() if riga.strip()]
+    assert any("NON devi attivare" in riga for riga in righe[:8])
+    assert primi_passi.count("Debug USB") <= 2
+    # La copia piatta va spiegata: è il comportamento predefinito.
+    assert "senza ricreare le cartelle" in testo
+
+
+def test_il_pacchetto_porta_l_aiutante_per_windows(pacchetto):
+    """Senza `wpd_win.ps1` il collegamento diretto di Windows — cioè quello che non chiede
+    il Debug USB — non può funzionare nella versione distribuita."""
+    script = pacchetto / "fotofacile" / "aiutanti" / "wpd_win.ps1"
+    assert script.is_file(), "manca l'aiutante wpd_win.ps1"
+    dati = script.read_bytes()
+    assert dati.startswith(b"\xef\xbb\xbf"), "gli script .ps1 devono avere il BOM UTF-8"
+    assert (pacchetto / "fotofacile" / "aiutanti" / "wpd_win.py").is_file()
+    for modulo in ("trasporto.py", "trasporto_aiutante.py", "trasporto_win.py"):
+        assert (pacchetto / "fotofacile" / "core" / modulo).is_file(), f"manca {modulo}"
 
 
 def test_il_codice_copiato_funziona(pacchetto, tmp_path):
@@ -119,3 +147,75 @@ def test_il_pacchetto_non_contiene_file_di_sviluppo(pacchetto):
     for percorso in pacchetto.rglob("*"):
         assert "__pycache__" not in percorso.parts
         assert percorso.name != ".DS_Store"
+
+
+def test_rifiuta_di_cancellare_la_cartella_corrente(tmp_path, monkeypatch):
+    """«python3 scripts/crea_pacchetto_windows.py .» non deve svuotare la cartella corrente."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "fotofacile").mkdir()  # sembra un pacchetto, ma la cartella corrente è intoccabile
+    with pytest.raises(SystemExit) as errore:
+        crea_pacchetto(Path("."))
+    assert "sicurezza" in str(errore.value)
+    assert (tmp_path / "fotofacile").is_dir()
+
+
+def test_rifiuta_di_cancellare_la_cartella_personale(tmp_path, monkeypatch):
+    # home finta: se il controllo non funzionasse, il test non toccherebbe la home vera
+    finta_home = tmp_path / "home"
+    (finta_home / "fotofacile").mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: finta_home))
+    with pytest.raises(SystemExit):
+        crea_pacchetto(finta_home)
+    assert (finta_home / "fotofacile").is_dir()
+
+
+def test_rifiuta_di_cancellare_una_cartella_che_contiene_il_progetto(tmp_path, monkeypatch):
+    """Una cartella padre del repository non va mai cancellata (qui il repository è finto)."""
+    finto_repo = tmp_path / "repo" / "scripts"
+    finto_repo.mkdir(parents=True)
+    monkeypatch.setattr(modulo_pacchetto, "RADICE", finto_repo)
+    with pytest.raises(SystemExit):
+        crea_pacchetto(tmp_path / "repo")
+    assert (tmp_path / "repo").is_dir()
+
+
+def test_rifiuta_una_cartella_esistente_che_non_sembra_un_pacchetto(tmp_path):
+    cartella = tmp_path / "documenti"
+    cartella.mkdir()
+    (cartella / "tesi.txt").write_text("da non perdere")
+    with pytest.raises(SystemExit) as errore:
+        crea_pacchetto(cartella)
+    assert "--force" in str(errore.value)
+    assert (cartella / "tesi.txt").is_file()
+
+
+def test_la_riga_di_comando_senza_force_non_cancella_la_cartella(tmp_path):
+    cartella = tmp_path / "documenti"
+    cartella.mkdir()
+    (cartella / "tesi.txt").write_text("da non perdere")
+    esito = subprocess.run(
+        [sys.executable, str(RADICE / "scripts" / "crea_pacchetto_windows.py"), str(cartella)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=RADICE,
+    )
+    assert esito.returncode == 1, esito.stdout
+    assert "Errore" in esito.stderr
+    assert (cartella / "tesi.txt").is_file()
+
+
+def test_la_riga_di_comando_con_force_ricrea_la_cartella(tmp_path):
+    cartella = tmp_path / "vecchia"
+    cartella.mkdir()
+    (cartella / "residuo.txt").write_text("vecchio")
+    esito = subprocess.run(
+        [sys.executable, str(RADICE / "scripts" / "crea_pacchetto_windows.py"), "--force", str(cartella)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=RADICE,
+    )
+    assert esito.returncode == 0, esito.stderr
+    assert (cartella / "Avvia FotoFacile.bat").is_file()
+    assert not (cartella / "residuo.txt").exists()

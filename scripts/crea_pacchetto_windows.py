@@ -11,7 +11,11 @@ cartella risolve il problema in due modi:
    clic, e lo verifica subito con l'autocollaudo: quell'eseguibile poi funziona su qualsiasi
    PC Windows **senza installare nulla**.
 
-    python3 scripts/crea_pacchetto_windows.py [cartella_destinazione]
+    python3 scripts/crea_pacchetto_windows.py [--force] [cartella_destinazione]
+
+Con `--force` si accetta di cancellare una cartella esistente che non sembra un pacchetto
+creato in precedenza: senza di esso il programma si ferma invece di rischiare di cancellare
+per sbaglio dei dati dell'utente (vedi `_controlla_destinazione`).
 """
 
 from __future__ import annotations
@@ -22,11 +26,15 @@ from pathlib import Path
 
 RADICE = Path(__file__).resolve().parent.parent
 NOME_CARTELLA = "FotoFacile per Windows"
+# File/cartelle presenti in un pacchetto già creato: servono a riconoscerlo prima di
+# cancellarlo, così non si rischia di distruggere la cartella di lavoro di qualcun altro.
+MARCATORI_PACCHETTO = ("Avvia FotoFacile.bat", "LEGGIMI - Windows.txt", "fotofacile")
 CARTELLE_DA_COPIARE = ("fotofacile",)
 FILE_DA_COPIARE = (
     "fotofacile.py",
     "README.md",
     "requirements-dev.txt",
+    "requirements.txt",
     "scripts/build_app.py",
     "scripts/make_icon.py",
     "assets/fotofacile.ico",
@@ -313,16 +321,26 @@ Ci sono due modi di usarla. Scegli quello che ti serve.
   piu' semplice per farlo con un doppio clic.
 
 
-PRIMA VOLTA: fai autorizzare il telefono (una volta sola)
----------------------------------------------------------
+COLLEGARE IL TELEFONO (non serve attivare niente)
+-------------------------------------------------
 1. Collega il telefono con il cavo USB e sblocca lo schermo.
-2. Nel programma premi "Come si attiva il Debug USB?" e segui i passi della tua marca
-   (Samsung, Xiaomi, Google, Huawei, Oppo...).
-3. Quando il telefono chiede "Consentire il debug USB?", tocca "Consenti".
-4. Il programma scrive "Perfetto! Telefono collegato": premi Avanti e scegli le foto.
+2. Aspetta qualche secondo: il programma scrive "Perfetto! Telefono collegato".
+3. Premi Avanti e scegli quali foto e video copiare.
 
-Se il telefono non viene riconosciuto: prova un altro cavo USB (alcuni ricaricano soltanto),
-un'altra porta, e installa il driver USB del produttore del telefono.
+NON devi attivare il Debug USB e non devi cambiare nessuna impostazione: il programma usa
+il collegamento normale del telefono, lo stesso che vede Esplora file quando apri "Questo PC".
+Le foto arrivano direttamente nella cartella che scegli, senza ricreare le cartelle del
+telefono (se le vuoi, c'e' una casella per riattivarle).
+
+Se il telefono non viene riconosciuto, prova in quest'ordine:
+1. usa un altro cavo USB (alcuni cavi servono solo per ricaricare);
+2. cambia porta del computer (evita adattatori e hub);
+3. sblocca lo schermo del telefono e rispondi "Consenti" se compare una richiesta;
+4. scollega e ricollega il cavo tenendo il telefono sbloccato;
+5. se non basta, nel programma premi "Il telefono non viene riconosciuto?": spiega cos'e'
+   il Debug USB (e' l'ultima possibilita', non un passaggio obbligato);
+6. su Windows, se ancora niente: installa il driver USB del produttore del telefono
+   (Samsung, Xiaomi, Huawei... lo hanno sul loro sito).
 
 
 SE QUALCOSA NON FUNZIONA
@@ -330,6 +348,8 @@ SE QUALCOSA NON FUNZIONA
 - Diagnosi completa: apri il prompt dei comandi in questa cartella e scrivi
       py fotofacile.py doctor
   (oppure: python fotofacile.py doctor)
+  Nella riga "Modi di collegamento" vedi se il collegamento diretto e' disponibile:
+  se lo e', il Debug USB non serve assolutamente a niente.
 - Controllo della grafica:
       py fotofacile.py --selftest
   Se risponde {"ok": true, ...} la finestra funziona.
@@ -354,7 +374,9 @@ def _copia_albero(sorgente: Path, destinazione: Path) -> None:
         relativo = voce.relative_to(sorgente)
         if voce.is_dir():
             (destinazione / relativo).mkdir(parents=True, exist_ok=True)
-        elif voce.suffix in (".py", ".md", ".txt", ".ico", ".png"):
+        elif voce.suffix in (".py", ".md", ".txt", ".ico", ".png", ".ps1", ".json"):
+            # `.ps1` è indispensabile: è l'aiutante che permette di leggere il telefono
+            # **senza Debug USB** su Windows. Senza di esso il pacchetto non funziona.
             shutil.copy2(voce, destinazione / relativo)
 
 
@@ -366,9 +388,43 @@ def _scrivi_testo(percorso: Path, contenuto: str) -> Path:
     return percorso
 
 
-def crea_pacchetto(destinazione: Path | None = None) -> Path:
-    """Crea la cartella pronta per Windows e restituisce il percorso."""
+def _controlla_destinazione(cartella: Path, forza: bool) -> None:
+    """Ferma le cancellazioni pericolose prima che il pacchetto sovrascriva la destinazione."""
+    if not cartella.exists():
+        return
+    risolta = cartella.resolve()
+    radice_repo = RADICE.resolve()
+    if (
+        risolta == Path(risolta.anchor)  # radice del disco («/» oppure «C:\»)
+        or risolta == Path.cwd().resolve()  # cartella corrente
+        or risolta == Path.home().resolve()  # cartella personale
+        or risolta == radice_repo  # il progetto stesso
+        or risolta in radice_repo.parents  # una cartella che contiene il progetto
+    ):
+        raise SystemExit(
+            f"Errore: non cancello «{risolta}» per sicurezza "
+            "(è la radice del disco, la cartella corrente, la cartella personale "
+            "o una cartella che contiene il progetto FotoFacile).\n"
+            "Scegli una destinazione diversa, per esempio:\n"
+            "  python3 scripts/crea_pacchetto_windows.py ~/Desktop/FotoFacile-per-Windows"
+        )
+    if not forza and not any((risolta / nome).exists() for nome in MARCATORI_PACCHETTO):
+        raise SystemExit(
+            f"Errore: «{risolta}» esiste già e non sembra un pacchetto di FotoFacile "
+            "(mancano «Avvia FotoFacile.bat», «LEGGIMI - Windows.txt» e la cartella «fotofacile»).\n"
+            "Se sei sicuro di volerla cancellare, ripeti con --force:\n"
+            f'  python3 scripts/crea_pacchetto_windows.py --force "{risolta}"'
+        )
+
+
+def crea_pacchetto(destinazione: Path | None = None, forza: bool = False) -> Path:
+    """Crea la cartella pronta per Windows e restituisce il percorso.
+
+    `forza` permette di cancellare una cartella esistente che non sembra un pacchetto di
+    FotoFacile; senza di esso ci si ferma, per non cancellare per sbaglio dati altrui.
+    """
     cartella = Path(destinazione) if destinazione is not None else Path.home() / "Desktop" / NOME_CARTELLA
+    _controlla_destinazione(cartella, forza)
     if cartella.exists():
         shutil.rmtree(cartella)
     cartella.mkdir(parents=True, exist_ok=True)
@@ -404,8 +460,8 @@ def crea_pacchetto(destinazione: Path | None = None) -> Path:
     return cartella
 
 
-def main(destinazione: str | None = None) -> int:
-    cartella = crea_pacchetto(Path(destinazione) if destinazione else None)
+def main(destinazione: str | None = None, forza: bool = False) -> int:
+    cartella = crea_pacchetto(Path(destinazione) if destinazione else None, forza=forza)
     file_totali = sum(1 for _ in cartella.rglob("*") if _.is_file())
     peso = sum(_.stat().st_size for _ in cartella.rglob("*") if _.is_file()) / 1024 / 1024
     print(f"Cartella pronta: {cartella}")
@@ -418,4 +474,5 @@ def main(destinazione: str | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1] if len(sys.argv) > 1 else None))
+    argomenti = [argomento for argomento in sys.argv[1:] if argomento != "--force"]
+    raise SystemExit(main(argomenti[0] if argomenti else None, forza="--force" in sys.argv[1:]))

@@ -54,6 +54,31 @@ def test_nei_bat_non_ci_sono_caret_dentro_il_codice_python(pacchetto):
             assert "^" not in frammento, f"{percorso.name}: caret dentro lo snippet: {frammento!r}"
 
 
+def test_gli_snippet_python_dentro_gli_script_powershell_sono_validi():
+    """Anche i frammenti Python incorporati nei .ps1 devono essere compilabili davvero."""
+    trovati = 0
+    for percorso in sorted((RADICE / "installer" / "windows").glob("*.ps1")):
+        for frammento in SNIPPET.findall(percorso.read_text(encoding="utf-8")):
+            trovati += 1
+            try:
+                compile(frammento, percorso.name, "exec")
+            except SyntaxError as errore:  # pragma: no cover - solo se si rompe di nuovo
+                raise AssertionError(
+                    f"{percorso.name}: lo snippet Python non è valido ({errore}): {frammento!r}"
+                ) from errore
+            assert "^" not in frammento, f"{percorso.name}: caret dentro lo snippet: {frammento!r}"
+    assert trovati >= 1, "l'installer deve verificare Python prima di usarlo"
+
+
+def test_il_controllo_di_python_negli_script_powershell_non_aggiunge_argomenti_fantasma():
+    """PowerShell conta all'indietro: per un array di un solo elemento $a[1..0] restituisce
+    gli indici 1 e 0. Il probe riceveva così un argomento in più prima di -c e falliva
+    sempre: «python» e «python3» non venivano mai trovati."""
+    ps1 = (RADICE / "installer/windows/InstallaFotoFacile.ps1").read_text(encoding="utf-8")
+    assert "Select-Object -Skip 1" in ps1, "gli argomenti veri vanno passati con lo splat"
+    assert "[1..($candidato.Count - 1)]" not in ps1, "la sintassi [1..0] aggiunge argomenti fantasma"
+
+
 def test_i_bat_cercano_python_in_tutti_i_modi_utili(pacchetto):
     testo = (pacchetto / "Avvia FotoFacile.bat").read_text(encoding="utf-8")
     assert "py -3" in testo, "manca il launcher ufficiale"

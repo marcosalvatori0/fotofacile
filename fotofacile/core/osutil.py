@@ -21,6 +21,21 @@ def _system(system: str | None) -> str:
     return system or sys.platform
 
 
+def is_windows(system: str | None = None) -> bool:
+    """True su Windows (accetta anche «windows», oltre a «win32» e «cygwin»)."""
+    return _system(system).lower().startswith(("win", "cygwin"))
+
+
+def chiave_sistema(system: str | None = None) -> str:
+    """Nome del sistema normalizzato a «win32» / «darwin» / «linux»."""
+    grezzo = _system(system).lower()
+    if grezzo.startswith(("win", "cygwin")):
+        return "win32"
+    if grezzo.startswith("darwin") or grezzo.startswith("mac"):
+        return "darwin"
+    return grezzo
+
+
 def app_dir(env: Mapping[str, str] | None = None) -> Path:
     """Cartella dati dell'app: su Windows %USERPROFILE%, altrove la cartella personale."""
     ambiente = dict(env if env is not None else os.environ)
@@ -86,3 +101,32 @@ def flag_nascosta(system: str | None = None) -> int:
 def python_command(system: str | None = None) -> str:
     """Come si avvia Python da terminale su questo sistema."""
     return "py" if _system(system) == "win32" else "python3"
+
+
+def comando_se_stesso(*argomenti: str) -> list[str]:
+    """Come rilanciare **questo stesso programma** con un'opzione interna.
+
+    Serve alle operazioni che devono girare in un processo separato (per esempio
+    l'aiutante che parla con il telefono, o la prova che la finestra si apra).
+
+    Funziona in due situazioni molto diverse:
+
+    - **programma impacchettato** (PyInstaller): non esiste un interprete Python separato,
+      quindi si richiama l'eseguibile stesso;
+    - **dal sorgente**: si richiama il file di avvio del progetto.
+
+    Il percorso si calcola dalla posizione di questo pacchetto, **non** dalla cartella
+    corrente: così funziona anche se il programma è stato avviato da un'altra cartella.
+    """
+    if getattr(sys, "frozen", False):  # PyInstaller
+        return [sys.executable, *argomenti]
+    avvio = Path(__file__).resolve().parent.parent.parent / "fotofacile.py"
+    if avvio.is_file():
+        return [sys.executable, str(avvio), *argomenti]
+    # Ultima possibilità: il pacchetto è installato e raggiungibile come modulo.
+    return [sys.executable, "-m", "fotofacile", *argomenti]
+
+
+def cartella_progetto() -> Path:
+    """Cartella che contiene il pacchetto: serve a far ritrovare i moduli al processo figlio."""
+    return Path(__file__).resolve().parent.parent.parent

@@ -73,6 +73,7 @@ def test_salvataggio_resoconto_su_cartella_non_scrivilibile_usa_il_desktop(tmp_p
     bloccata.mkdir()
     bloccata.chmod(0o500)
     desktop = tmp_path / "Desktop"
+    desktop.mkdir()  # il ripiego vale solo se il Desktop esiste davvero
     monkeypatch.setenv("HOME", str(tmp_path))
     try:
         percorso = save_report("ciao", bloccata)

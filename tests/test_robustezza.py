@@ -163,7 +163,7 @@ def test_nome_con_maiuscole_diverse_non_viene_scambiato_per_lo_stesso_file(tmp_p
     (cartella / "FOTO.JPG").write_bytes(b"x" * 100)
     media = MediaFile("/sdcard/DCIM/Camera/foto.jpg", 100, 1, "photo")
     piano = build_plan(
-        [media], TransferOptions(destination=tmp_path), case_insensitive=True
+        [media], TransferOptions(destination=tmp_path, preserve_structure=True), case_insensitive=True
     )
     (previsto,) = piano.files
     assert previsto.dest_path.name == "foto (1).jpg"

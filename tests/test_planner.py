@@ -83,7 +83,10 @@ def test_collisione_stessa_dimensione_viene_saltata(tmp_path):
     cartella = tmp_path / "DCIM" / "Camera"
     cartella.mkdir(parents=True)
     (cartella / "a.jpg").write_bytes(b"x" * 100)
-    piano = build_plan([foto("/sdcard/DCIM/Camera/a.jpg", 100)], TransferOptions(destination=tmp_path))
+    piano = build_plan(
+        [foto("/sdcard/DCIM/Camera/a.jpg", 100)],
+        TransferOptions(destination=tmp_path, preserve_structure=True),
+    )
     assert piano.files == []
     assert piano.skipped_existing == 1
 
@@ -93,7 +96,10 @@ def test_collisione_dimensione_diversa_rinomina(tmp_path):
     cartella.mkdir(parents=True)
     (cartella / "a.jpg").write_bytes(b"x" * 50)
     (cartella / "a (1).jpg").write_bytes(b"x" * 60)
-    piano = build_plan([foto("/sdcard/DCIM/Camera/a.jpg", 100)], TransferOptions(destination=tmp_path))
+    piano = build_plan(
+        [foto("/sdcard/DCIM/Camera/a.jpg", 100)],
+        TransferOptions(destination=tmp_path, preserve_structure=True),
+    )
     (previsto,) = piano.files
     assert previsto.dest_path.name == "a (2).jpg"
 
@@ -147,7 +153,7 @@ def test_nome_con_maiuscole_diverse_e_un_file_diverso(tmp_path):
     (cartella / "FOTO.JPG").write_bytes(b"x" * 100)
     piano = build_plan(
         [foto("/sdcard/DCIM/Camera/foto.jpg", 100)],
-        TransferOptions(destination=tmp_path),
+        TransferOptions(destination=tmp_path, preserve_structure=True),
         case_insensitive=True,
     )
     (previsto,) = piano.files
@@ -161,7 +167,7 @@ def test_su_linux_le_maiuscole_contano(tmp_path):
     (cartella / "FOTO.JPG").write_bytes(b"x" * 100)
     piano = build_plan(
         [foto("/sdcard/DCIM/Camera/foto.jpg", 100)],
-        TransferOptions(destination=tmp_path),
+        TransferOptions(destination=tmp_path, preserve_structure=True),
         case_insensitive=False,
     )
     assert piano.file_count == 1
@@ -173,7 +179,7 @@ def test_rinomina_evita_anche_i_nomi_con_maiuscole_diverse(tmp_path):
     (cartella / "a.jpg").write_bytes(b"x" * 50)
     piano = build_plan(
         [foto("/sdcard/DCIM/Camera/a.jpg", 100)],
-        TransferOptions(destination=tmp_path),
+        TransferOptions(destination=tmp_path, preserve_structure=True),
         case_insensitive=True,
     )
     (previsto,) = piano.files

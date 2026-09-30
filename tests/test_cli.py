@@ -27,10 +27,19 @@ def test_diagnostica_riporta_tutte_le_voci(capsys):
     assert "Sistema:" in testo
     assert "Python:" in testo
     assert "Tkinter:" in testo
-    assert "Componente:" in testo
+    assert "Componente aggiuntivo (adb):" in testo
     assert "Telefoni collegati: nessuno" in testo
     assert "Cartella dati: /tmp/prova/.fotofacile" in testo
     assert "Scrittura:" in testo
+
+
+def test_diagnostica_dice_quali_collegamenti_sono_disponibili(capsys):
+    """La diagnosi deve dire subito se il collegamento **senza Debug USB** è disponibile."""
+    main(["doctor"], env={"HOME": "/tmp/prova", "PATH": ""})
+    testo = capsys.readouterr().out
+    assert "Modi di collegamento:" in testo
+    assert "Collegamento diretto" in testo
+    assert "Debug USB" in testo
 
 
 def test_costruzione_diagnostica_senza_componente():
@@ -47,10 +56,27 @@ def test_costruzione_diagnostica_senza_componente():
     assert "Sistema: darwin" in testo
     assert "Python: 3.14.7" in testo
     assert "Tkinter: 9.0" in testo
-    assert "Componente: non trovato" in testo
+    assert "Componente aggiuntivo (adb): non trovato" in testo
     assert "Telefoni collegati: nessuno" in testo
     assert "Scrittura: ok" in testo
     assert "Installa componente" in testo
+
+
+def test_costruzione_diagnostica_elenca_i_modi():
+    testo = build_doctor_report(
+        adb_path=None,
+        adb_version="",
+        system="darwin",
+        python_version="3.14.7",
+        tk_version="9.0",
+        devices=[],
+        app_folder="/tmp/.fotofacile",
+        writing_ok=True,
+        modi=[("Collegamento diretto", True), ("Collegamento rapido", False)],
+    )
+    assert "Collegamento diretto — disponibile" in testo
+    assert "Collegamento rapido — non disponibile" in testo
+    assert "Non serve attivare il Debug USB" in testo
 
 
 def test_costruzione_diagnostica_con_telefono_e_problemi():

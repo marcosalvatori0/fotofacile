@@ -1,4 +1,4 @@
-# FotoFacile — disinstallazione (PowerShell)
+﻿# FotoFacile — disinstallazione (PowerShell)
 #
 # Rimuove collegamenti, voce in «App e funzionalità» e la cartella del programma.
 # I file scaricati dall'app (componente di collegamento, cronologia, registro) restano in
