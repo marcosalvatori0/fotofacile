@@ -58,5 +58,5 @@ if ($testoDiagnosi -notmatch "diagnosi") { Fallisci "il rapporto della diagnosi 
 if ($testoDiagnosi -notmatch "Conversione WebP: disponibile") {
     Fallisci "Pillow non è dentro il pacchetto: la conversione WebP non sarebbe disponibile"
 }
-Write-Host "Verifica di $exe: tutto ok." -ForegroundColor Green
+Write-Host "Verifica di ${exe}: tutto ok." -ForegroundColor Green
 exit 0
