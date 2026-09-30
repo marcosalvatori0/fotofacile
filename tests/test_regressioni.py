@@ -1529,3 +1529,48 @@ def test_d27_un_registro_piccolo_continua_a_crescere(tmp_path):
     testo = percorso.read_text(encoding="utf-8")
     assert "prima" in testo and "seconda" in testo
     assert not percorso.with_name("avvio.log.1").exists()
+
+
+# ── D28 ────────────────────────────────────────────────────────────────────
+# Prima: `start_gui` e `avviso_visibile` scrivevano il registro di avvio fuori da ogni `try`.
+# Se non si poteva scrivere (disco pieno, cartella dei dati che non si crea perché al suo posto
+# c'è un file, cartella personale protetta) usciva un OSError grezzo: il programma **non si
+# apriva affatto**, e l'avviso che doveva spiegare il problema non compariva.
+@pytest.fixture(params=["cartella_impossibile", "file_impossibile"])
+def registro_non_scrivibile(request, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    if request.param == "cartella_impossibile":
+        (tmp_path / ".fotofacile").write_text("un file al posto della cartella", encoding="utf-8")
+    else:
+        (tmp_path / ".fotofacile" / "avvio.log").mkdir(parents=True)  # open("a") fallisce
+    return tmp_path
+
+
+def test_d28_il_programma_si_apre_anche_se_il_registro_non_si_scrive(registro_non_scrivibile, monkeypatch):
+    from fotofacile import cli
+
+    aperte = []
+
+    class AppFinta:
+        def __init__(self, **_kwargs):
+            pass
+
+        def mainloop(self):
+            aperte.append(True)
+
+    monkeypatch.setattr("fotofacile.ui.app.App", AppFinta, raising=False)
+    monkeypatch.setattr(cli, "contesto_grafico_dubbio", lambda *_a, **_k: False)
+    assert cli.start_gui() == 0
+    assert aperte == [True]
+
+
+def test_d28_l_avviso_compare_anche_se_il_registro_non_si_scrive(registro_non_scrivibile, capsys):
+    from fotofacile import cli
+
+    chiamate = []
+    cli.avviso_visibile(
+        "Non riesco ad aprire la finestra", system="darwin", runner=lambda comando, **_k: chiamate.append(comando)
+    )
+    assert chiamate and chiamate[0][0] == "osascript"
+    assert "Non riesco ad aprire la finestra" in capsys.readouterr().out

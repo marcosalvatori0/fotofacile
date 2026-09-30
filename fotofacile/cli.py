@@ -164,23 +164,29 @@ def selftest() -> int:
 LIMITE_LOG_AVVIO = 256 * 1024
 
 
-def scrivi_log_avvio(testo: str, env: Mapping[str, str] | None = None) -> Path:
+def scrivi_log_avvio(testo: str, env: Mapping[str, str] | None = None) -> Path | None:
     """Annota un messaggio nel registro di avvio (~/.fotofacile/avvio.log).
 
-    Se il programma non si apre, questo file dice sempre cosa è successo.
+    Se il programma non si apre, questo file dice sempre cosa è successo. Restituisce il
+    registro, oppure ``None`` se non si è potuto scrivere: il registro serve a spiegare i
+    problemi e non deve mai diventare lui il motivo per cui il programma non si apre
+    (disco pieno, cartella dei dati impossibile da creare).
     """
     from datetime import datetime
 
     percorso = app_dir(env) / "avvio.log"
     path_obj = Path(percorso)
-    path_obj.parent.mkdir(parents=True, exist_ok=True)
     try:
-        if path_obj.stat().st_size >= LIMITE_LOG_AVVIO:
-            path_obj.replace(path_obj.with_name(path_obj.name + ".1"))
-    except OSError:  # registro ancora assente, o copia in uso: si continua ad aggiungere
-        pass
-    with path_obj.open("a", encoding="utf-8") as uscita:
-        uscita.write(f"{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}  {testo}\n")
+        path_obj.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            if path_obj.stat().st_size >= LIMITE_LOG_AVVIO:
+                path_obj.replace(path_obj.with_name(path_obj.name + ".1"))
+        except OSError:  # registro ancora assente, o copia in uso: si continua ad aggiungere
+            pass
+        with path_obj.open("a", encoding="utf-8") as uscita:
+            uscita.write(f"{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}  {testo}\n")
+    except OSError:
+        return None
     return path_obj
 
 
